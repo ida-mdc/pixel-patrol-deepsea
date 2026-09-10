@@ -468,18 +468,26 @@ detector is in a cache it can reach — and re-submitting after any interruption
 where it stopped. `PROFILE=local` runs the same thing on one machine, which is the
 cheapest way to find out the environment is wrong before a queue tells you.
 
-`OUT` and `WORK` have to be on storage every compute node can see, and the script asks
-`df` what filesystem they are on rather than trusting the path: plenty of clusters call
-node-local disk `/scratch`, and a work directory that each node sees its own empty copy
-of fails the whole run at the first task. `nfs`, `lustre`, `gpfs` and `beegfs` pass;
-`ext4` and `xfs` do not, unless you know better and set `ALLOW_LOCAL=1`. It wants little
-space — a five-minute cruise recording makes 3 to 8 MB of parquet, so the ~290 recordings
-of a default run are a few gigabytes including the copy Nextflow keeps in `WORK`.
+`OUT` and `WORK` are yours to choose and both need to be visible from every compute
+node; they want little space, since a five-minute cruise recording makes 3 to 8 MB of
+parquet and the ~290 recordings of a default run are a few gigabytes including the copy
+Nextflow keeps in `WORK`. The video never lands there: one recording at a time is fetched
+into `$TMPDIR`, thinned, analysed and deleted, which wants a couple of gigabytes of
+node-local space per running task — 68 MB for a NOAA proxy recording, 906 MB for one of
+the Axial camera's, twice that while the thinned copy exists.
 
-The staging directory is the opposite ask, and it is `$TMPDIR`: one recording is fetched
-into it, thinned, analysed and deleted, so it should be node-local and needs a couple of
-gigabytes per running task — 68 MB for a NOAA proxy recording, 906 MB for one of the
-Axial camera's, twice that while the thinned copy exists.
+`nextflow/cluster-setup.sh` installs the environment, the detector weights, the pip cache
+and Nextflow's own home under one directory you name, rather than into `$HOME` where all
+four go by default:
+
+```bash
+BASE=/somewhere/with/room bash nextflow/cluster-setup.sh
+source /somewhere/with/room/env.sh
+```
+
+Budget about 8 GB. Most of it is `torch`, whose PyPI wheel depends on the CUDA runtime
+libraries on Linux whether or not there is a GPU — `TORCH_INDEX` picks a different build
+if you want one.
 
 Four things are worth knowing before submitting. `--dives`/`--perDive`/
 `--limit` default to *everything*, which for this catalogue is about eleven thousand

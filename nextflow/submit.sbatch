@@ -60,10 +60,40 @@ echo "   profile        : $PROFILE"
 echo "   choosing       : ${DIVES} dives, ${PER_DIVE} per dive, limit ${LIMIT:-0}"
 
 command -v nextflow >/dev/null 2>&1 || {
-  echo "nextflow is not on PATH. Try 'module load nextflow', or install it:" >&2
-  echo "  curl -s https://get.nextflow.io | bash && mv nextflow ~/bin/" >&2
+  echo "nextflow is not on PATH. Try 'module avail nextflow', or install one:" >&2
+  echo "  micromamba install -c conda-forge -c bioconda nextflow   # brings its own Java" >&2
   exit 1
 }
+
+# Which nextflow, not just whether. A cluster module called `nextflow` is often a
+# 2017-era one, and that generation fetches its own dependencies from Maven Central
+# at startup over a TLS version Maven no longer accepts. What that looks like is
+# forty lines of `CAPSULE: Transfer failed ... handshake_failure` and no mention of
+# a version anywhere, so it is worth naming here rather than leaving to a search.
+# `|| true` because that is the whole point: an old nextflow exits non-zero here,
+# and under `set -e` the failure would end the script before it could say why.
+version=$(nextflow -version 2>&1 | grep -oE 'version [0-9]+\.[0-9]+' | head -1 | cut -d' ' -f2 || true)
+if [ -z "$version" ]; then
+  echo "'nextflow -version' did not report a version. If it printed CAPSULE lines and" >&2
+  echo "handshake_failure, this is a pre-2018 Nextflow that cannot reach Maven Central" >&2
+  echo "over modern TLS - it is too old to run this workflow whatever the network does." >&2
+  echo >&2
+  echo "  module avail nextflow                                     # a newer module?" >&2
+  echo "  micromamba create -n nf -c conda-forge -c bioconda nextflow  # brings its own Java" >&2
+  echo "  curl -s https://get.nextflow.io | bash                    # needs Java 17+" >&2
+  echo >&2
+  echo "Or skip Nextflow entirely - the same collection as a SLURM array job:" >&2
+  echo "  OUT=$OUT $HERE/submit-array.sh" >&2
+  exit 1
+fi
+case "$version" in
+  0.*|1[0-9].*|2[0-2].*)
+    echo "nextflow $version is too old; this workflow needs 23.04 or newer." >&2
+    echo "A conda one brings its own Java:" >&2
+    echo "  micromamba create -n nf -c conda-forge -c bioconda nextflow" >&2
+    exit 1;;
+esac
+echo "   nextflow       : $version"
 
 # The checks worth doing before submitting a thousand jobs rather than after.
 # Each one is a failure that would otherwise show up as every task failing
@@ -85,46 +115,6 @@ if not detector.is_available():
 }
 
 mkdir -p "$OUT" "$WORK"
-# Nextflow stages every task through the work directory and the driver reads what
-# the tasks wrote, so a directory the nodes cannot see produces a run where
-# everything fails at once. The property that matters is not what the path is
-# called - plenty of clusters call node-local disk /scratch - but what filesystem
-# it is on, so that is what gets asked. Only a problem when the tasks are
-# elsewhere: a local run has one filesystem and node-local disk is the right place.
-shared_enough() {
-    local kind
-    kind=$(df -PT "$1" 2>/dev/null | awk 'NR==2 {print $2}')
-    case "$kind" in
-        nfs|nfs4|lustre|gpfs|beegfs|ceph|cephfs|panfs|fuse.beegfs|fuse.lustre|glusterfs|fuse.glusterfs|afs|smb3|cifs|9p|autofs)
-            return 0;;
-        "") return 0;;          # unreadable is not evidence; let the run say so
-        *)  echo "   $1 is on a $kind filesystem, which is local to one machine" >&2
-            return 1;;
-    esac
-}
-
-if [ "$PROFILE" = slurm ]; then
-    ok=true
-    shared_enough "$OUT" || ok=false
-    shared_enough "$WORK" || ok=false
-    if [ "$ok" = false ]; then
-        cat >&2 <<TXT
-
-Both OUT and WORK have to be on storage every compute node can see. Each task
-runs on a different machine, stages through WORK and publishes into OUT; on
-node-local disk they would each get their own empty copy and the run fails at
-the first task, or worse, half-succeeds.
-
-Find one with:   df -PT \$HOME /path/you/have; look for nfs, lustre, gpfs or beegfs
-Then:            OUT=/that/path/footage sbatch --partition=... \$0
-
-If it is genuinely shared and this check is wrong, set ALLOW_LOCAL=1.
-TXT
-        [ "${ALLOW_LOCAL:-}" = 1 ] || exit 1
-        echo "   ALLOW_LOCAL=1, carrying on" >&2
-    fi
-fi
-
 # The staging directory is the opposite ask. One recording is fetched into it,
 # thinned - so two copies briefly - analysed and deleted, and none of that needs
 # to leave the node. 68 MB for a NOAA proxy recording, 906 MB for one of the Axial
