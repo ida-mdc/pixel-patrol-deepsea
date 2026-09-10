@@ -5,10 +5,8 @@ description = "PixelPatrol extension for long deep-sea video recordings: motion 
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "pixel-patrol-base==0.9.0",
-    # The whole package is about video: the loader is not optional, and refine.py
-    # reads recordings through PyAV directly.
-    "pixel-patrol-loader-video==0.9.0",
+    "pixel-patrol-base==0.9.1",
+    "pixel-patrol-loader-video==0.9.1",
     "numpy>=1.26",
     "scipy>=1.11",
     "pillow>=10.0",              # slice-thumbnail encodes every cached still
