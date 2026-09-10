@@ -88,6 +88,49 @@ echo "== $REPO and its dependencies"
 echo "== the detector ($MODEL) into $XDG_CACHE_HOME"
 "$PY" -m pixel_patrol_deepsea.fetch_detector --model "$MODEL"
 
+# Nextflow, and the Java it needs, under BASE as well. A cluster module called
+# `nextflow` is often a 2017-era build that fetches its own dependencies from
+# Maven Central at startup over a TLS version Maven stopped accepting, which fails
+# as a wall of `CAPSULE: ... handshake_failure` - and the fix is not a newer
+# network, it is a newer Nextflow. Set WITH_NEXTFLOW=0 to skip all of this.
+java_version() {
+    "$1" -version 2>&1 | head -1 | grep -oE '"[0-9]+' | tr -d '"' || true
+}
+
+if [ "${WITH_NEXTFLOW:-1}" = 1 ]; then
+    JAVA=""
+    for candidate in "$BASE/jdk/bin/java" "${JAVA_HOME:-/nonexistent}/bin/java" java; do
+        command -v "$candidate" >/dev/null 2>&1 || continue
+        version=$(java_version "$candidate")
+        if [ -n "$version" ] && [ "$version" -ge 17 ] 2>/dev/null; then
+            JAVA=$(command -v "$candidate")
+            break
+        fi
+    done
+
+    if [ -z "$JAVA" ]; then
+        echo "== no Java 17+ anywhere; fetching one into $BASE/jdk"
+        mkdir -p "$BASE/jdk"
+        curl -sSL "https://api.adoptium.net/v3/binary/latest/21/ga/linux/x64/jdk/hotspot/normal/eclipse" \
+            | tar -xz -C "$BASE/jdk" --strip-components=1
+        JAVA="$BASE/jdk/bin/java"
+    fi
+    export JAVA_HOME=$(cd "$(dirname "$JAVA")/.." && pwd)
+    echo "   java       : $("$JAVA" -version 2>&1 | head -1)"
+
+    if ! "$BASE/env/bin/nextflow" -version >/dev/null 2>&1; then
+        echo "== nextflow into $BASE/env/bin"
+        ( cd "$BASE/tmp" && curl -s https://get.nextflow.io | bash >/dev/null 2>&1 \
+          && mv -f nextflow "$BASE/env/bin/nextflow" )
+        chmod +x "$BASE/env/bin/nextflow"
+    fi
+    NXF_HOME="$BASE/nextflow" PATH="$BASE/env/bin:$PATH" \
+        "$BASE/env/bin/nextflow" -version 2>&1 | grep -i version | head -2 || {
+            echo "nextflow still will not start; run without it, or investigate with" >&2
+            echo "  JAVA_HOME=$JAVA_HOME $BASE/env/bin/nextflow -version" >&2
+        }
+fi
+
 cat > "$BASE/env.sh" <<SH
 # Source this before submitting: it keeps every cache out of \$HOME and puts the
 # interpreter that has the package first on PATH.
@@ -97,6 +140,10 @@ export NXF_HOME="$BASE/nextflow"
 export PATH="$BASE/env/bin:\$PATH"
 export PY="$BASE/env/bin/python"
 SH
+if [ -x "$BASE/jdk/bin/java" ]; then
+    echo "export JAVA_HOME=\"$BASE/jdk\"" >> "$BASE/env.sh"
+    echo "export PATH=\"$BASE/jdk/bin:\$PATH\"" >> "$BASE/env.sh"
+fi
 
 echo
 echo "== done. $(du -sh "$BASE/env" | cut -f1) of environment, $(du -sh "$BASE/cache" | cut -f1) of caches."
