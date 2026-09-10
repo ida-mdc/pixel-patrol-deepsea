@@ -275,9 +275,10 @@ def _touches_edge(box: Sequence[int], width: int, height: int) -> bool:
 
 
 TRACK_IOU = 0.15        # boxes overlapping less than this are not obviously one animal
+RELABEL_IOU = 0.3       # ...but this much overlap outweighs the model changing its mind
 TRACK_GAP = 1.5         # seconds out of view before a track is closed, at least
 GAP_SAMPLES = 2.5       # ...or this many sampling intervals, whichever is longer
-DRIFT_SIZES = 1.5       # a box may move this many of its own widths and still be it
+DRIFT_SIZES = 3.0       # a box may move this many of its own widths and still be it
 BURST_WINDOW = 0.2      # frames closer together than this are one look, not two
 GAP_CEILING = 30.0      # however sparse the sampling, half a minute unseen is a new animal
 EDGE_MARGIN = 3         # px; a box this close to the frame boundary is touching it
@@ -314,6 +315,10 @@ def track_sightings(sightings: Sequence[Sighting], iou_gate: float = TRACK_IOU,
                     fresh = Track(recording, sighting.taxon, second, second, [sighting])
                     open_tracks.append(fresh)
                     tracks.append(fresh)
+    # A track that changed its mind is named by its best look at the animal rather
+    # than by whichever label happened to open it.
+    for track in tracks:
+        track.taxon = track.best.taxon
     return tracks
 
 
@@ -348,10 +353,31 @@ def _look_times(seconds: Sequence[float]) -> List[float]:
 
 
 def _extend_best_match(open_tracks: List[Track], sighting: Sighting, iou_gate: float) -> bool:
-    """Put this detection on the open track it best continues, if any does."""
-    candidates = [(_agreement(t.sightings[-1].box, sighting.box, iou_gate), t)
-                  for t in open_tracks
-                  if t.taxon == sighting.taxon and t.last_second < sighting.second]
+    """Put this detection on the open track it best continues, if any does.
+
+    The label is evidence, not identity. This checkpoint knows 499 classes and
+    cannot tell many of them apart - it is the reason suppression within a frame
+    ignores the label entirely - so one jellyfish called `trachylinae` at one look
+    and `scyphozoa` at the next is one jellyfish, and requiring the two to agree
+    counted it twice. Measured against DeepSea-MOT's own identities, insisting on
+    the label split the average animal across 2.8 tracks.
+
+    Ignoring it outright is worse in the other direction: on a crowded seabed two
+    animals of different kinds passing close by then merge. So the label may change
+    when the geometry is not in doubt - the boxes genuinely overlap - and not when
+    the match rests on proximity alone.
+    """
+    candidates = []
+    for track in open_tracks:
+        if track.last_second >= sighting.second:
+            continue
+        if track.taxon == sighting.taxon:
+            score = _agreement(track.sightings[-1].box, sighting.box, iou_gate)
+        else:
+            overlap = _iou(track.sightings[-1].box, sighting.box)
+            score = 1.0 + overlap if overlap >= RELABEL_IOU else 0.0
+        if score > 0:
+            candidates.append((score, track))
     best = max(candidates, key=lambda pair: pair[0], default=(0.0, None))
     if best[1] is None or best[0] <= 0:
         return False

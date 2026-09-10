@@ -96,11 +96,40 @@ def test_two_animals_in_the_same_frame_are_two_tracks():
     assert all(t.frames == 2 for t in tracks)
 
 
-def test_the_same_place_at_a_different_species_is_a_different_track():
+def test_the_same_box_under_a_different_name_is_one_animal_renamed():
+    """The model changing its mind is not a second animal arriving.
+
+    This checkpoint knows 499 classes and confuses many of them - which is why
+    suppression within a frame ignores the label - so a track that insists on the
+    label counts one jellyfish twice the moment the name flickers. Measured against
+    DeepSea-MOT's own identities, insisting split the average animal across 2.8
+    tracks; letting the name change where the boxes actually overlap brings that to
+    1.7 and costs a handful of merges. See examples/calibration/tracking.py.
+    """
     from pixel_patrol_deepsea.refine import track_sightings
 
     swapped = [_at(0.0, taxon="beroe"), _at(0.25, taxon="shrimp")]
-    assert len(track_sightings(swapped)) == 2
+    assert len(track_sightings(swapped)) == 1
+    assert track_sightings(swapped)[0].frames == 2
+
+
+def test_a_different_name_somewhere_else_is_still_a_different_animal():
+    """The boundary of that: a name may change, a name and a place may not.
+
+    Two animals of different kinds passing near each other is the error the loose
+    rule would make, and on a crowded seabed it is common. Proximity alone
+    continues a track only under the same name; a changed name has to be paid for
+    with real overlap.
+    """
+    from pixel_patrol_deepsea.refine import track_sightings
+
+    apart = [_at(0.0, taxon="beroe", box=(10, 10, 30, 30)),
+             _at(0.25, taxon="shrimp", box=(45, 10, 65, 30))]
+    assert len(track_sightings(apart)) == 2
+    # ...and the same two boxes under one name are one animal that moved.
+    together = [_at(0.0, taxon="beroe", box=(10, 10, 30, 30)),
+                _at(0.25, taxon="beroe", box=(45, 10, 65, 30))]
+    assert len(track_sightings(together)) == 1
 
 
 def test_an_animal_that_leaves_and_comes_back_later_is_counted_twice():
