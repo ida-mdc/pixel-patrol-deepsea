@@ -1,0 +1,49 @@
+[project]
+name = "pixel-patrol-deepsea"
+version = "0.9.0"
+description = "PixelPatrol extension for long deep-sea video recordings: motion and animal detection, cached stills, and footage triage widgets"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "pixel-patrol-base==0.9.0",
+    # The whole package is about video: the loader is not optional, and refine.py
+    # reads recordings through PyAV directly.
+    "pixel-patrol-loader-video==0.9.0",
+    "numpy>=1.26",
+    "scipy>=1.11",
+    "pillow>=10.0",              # slice-thumbnail encodes every cached still
+    "opencv-python-headless>=4.9",  # letterboxing frames for the detector
+    "torch>=2.2",
+    "torchvision>=0.17",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.5",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[build-system]
+requires = ["hatchling<1.27"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+package = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pixel_patrol_deepsea"]
+
+[project.entry-points."pixel_patrol.processor_plugins"]
+deepsea_processors = "pixel_patrol_deepsea.plugin_registry:register_processor_plugins"
+
+[project.entry-points."pixel_patrol.loader_plugins"]
+deepsea_loaders = "pixel_patrol_deepsea.plugin_registry:register_loader_plugins"
+
+[project.entry-points."pixel_patrol.viewer_extensions"]
+deepsea_viewer = "pixel_patrol_deepsea.plugin_registry:get_viewer_extension_dir"
+
+[tool.uv.sources]
+pixel-patrol-base = { path = "../pixel-patrol/packages/pixel-patrol-base" }
+pixel-patrol-loader-video = { path = "../pixel-patrol/packages/pixel-patrol-loader-video" }

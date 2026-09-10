@@ -1,0 +1,15 @@
+{
+  "name": "pixel-patrol-deepsea-widgets",
+  "version": "0.9.0",
+  "private": true,
+  "description": "Test harness for the deep-sea viewer widgets. The widgets themselves ship inside the Python package; this is only here so they can be unit-tested without the viewer repo.",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "happy-dom": "^20.9.0",
+    "vite": "^8.0.0",
+    "vitest": "^4.1.5"
+  }
+}

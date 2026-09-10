@@ -1,0 +1,188 @@
+# Expeditions we collect from. Adding one here is the whole of "collect this too":
+# the scheduler lists it, notices which of its videos have no parquet yet, and
+# processes those. Nothing is downloaded - the recordings are read where they are.
+#
+#   id        short, stable, used as the parquet name
+#   listing   a directory index to walk
+#   depth     directory levels between the listing and the videos
+#   pattern   which files in the leaf directory are the recordings
+#   location  how to find out where the footage was filmed - a recipe, not
+#             coordinates, because the answer differs per dive and per deployment
+#             and the archive is the one that knows it. See `locations`.
+
+- id: EX2107
+  name: Windows to the Deep 2021
+  archive: NOAA Ocean Exploration
+  vessel: NOAA Ship Okeanos Explorer, ROV Deep Discoverer
+  date: 2021-10
+  listing: https://www.ncei.noaa.gov/data/oceans/oer/video/EX2107/Video/
+  depth: 2
+  pattern: "*ROVHD_Low.mp4"
+  location:
+    kind: noaa-dive
+    data: https://oer.hpc.msstate.edu/okeanos/ex2107/
+  notes: Deep-sea coral and sponge habitats off the US southeast; 14 dives.
+
+- id: EX1903L2
+  name: Windows to the Deep 2019
+  archive: NOAA Ocean Exploration
+  vessel: NOAA Ship Okeanos Explorer, ROV Deep Discoverer
+  date: 2019-06
+  listing: https://www.ncei.noaa.gov/data/oceans/oer/video/EX1903L2/Video/
+  depth: 2
+  pattern: "*ROVHD_Low.mp4"
+  location:
+    kind: noaa-dive
+    data: https://oer.hpc.msstate.edu/okeanos/ex1903l2/
+  notes: 19 dives on the Blake Plateau and Blake Escarpment.
+
+- id: EX1605L1
+  name: Deepwater Exploration of the Marianas
+  archive: NOAA Ocean Exploration
+  vessel: NOAA Ship Okeanos Explorer, ROV Deep Discoverer
+  date: 2016-04
+  listing: https://www.ncei.noaa.gov/data/oceans/oer/video/EX1605L1/Video/
+  depth: 2
+  # This cruise published themed clips rather than one continuous tape, so the
+  # plain "*ROVHD_Low.mp4" that works for the others matched nothing at all here.
+  # The theme is in the name - ROVHD_FSH_Low is the fish, ROVHD_COR_Low the coral -
+  # which makes it a free label to check the detector's naming against.
+  pattern: "*ROVHD*_Low.mp4"
+  location:
+    kind: noaa-dive
+    data: https://oer.hpc.msstate.edu/okeanos/ex1605l1/
+  notes: Mariana Trench Marine National Monument; hydrothermal and seamount sites.
+
+# The one set here with per-frame ground truth: every animal in every frame is
+# boxed, in MOT format, in a gt.txt beside each recording. That makes it the only
+# expedition whose numbers can be checked rather than believed, which is why it is
+# worth processing first and looking at hardest.
+#
+# Four of the eleven published sequences have no gt.txt and are left out; the two
+# 4K ones are 2.2 GB each and left out for now.
+- id: DSMOT
+  name: MBARI DeepSea-MOT
+  archive: MBARI, via Hugging Face
+  vessel: MBARI ROVs Doc Ricketts and Ventana
+  date: "2023"
+  truth: gt.txt
+  notes: >-
+    A multi-object-tracking benchmark for deep-sea video. B* sequences are benthic
+    and M* midwater, which matters: a midwater detector scores nothing on the
+    benthic ones.
+  videos:
+    - https://huggingface.co/datasets/MBARI-org/DeepSea-MOT/resolve/main/data/MWD/MWD.mov
+    - https://huggingface.co/datasets/MBARI-org/DeepSea-MOT/resolve/main/data/MWS/MWS.mov
+    - https://huggingface.co/datasets/MBARI-org/DeepSea-MOT/resolve/main/data/MD_FLN/MD_FLN.mp4
+    - https://huggingface.co/datasets/MBARI-org/DeepSea-MOT/resolve/main/data/BD/BD.mov
+    - https://huggingface.co/datasets/MBARI-org/DeepSea-MOT/resolve/main/data/BS/BS.mov
+
+# ── deeper, and further apart ──────────────────────────────────────────────────
+#
+# Four more Okeanos Explorer cruises, chosen for depth and for being nowhere near
+# each other: the Central Pacific, the Gulf of Alaska, the Mid-Atlantic Ridge and
+# the US West Coast. Depths below are what each dive's own report states - read
+# with `locations.noaa_dive_summary`, which costs one ranged read of a text file,
+# not a download of the dive.
+#
+# All four publish a 1 Hz vehicle track, so their footage gets a position and a
+# depth per slice rather than one per dive. That is the reason to prefer these
+# over older cruises with the same footage and no navigation beside it.
+
+- id: EX2503
+  name: "Beyond the Blue: Papahanaumokuakea 2025"
+  archive: NOAA Ocean Exploration
+  vessel: NOAA Ship Okeanos Explorer, ROV Deep Discoverer
+  date: 2025-04
+  listing: https://www.ncei.noaa.gov/data/oceans/oer/video/EX2503/Video/
+  depth: 2
+  pattern: "*ROVHD_Low.mp4"
+  location:
+    kind: noaa-dive
+    data: https://oer.hpc.msstate.edu/okeanos/ex2503/
+  notes: >-
+    Seamounts and abyssal plain in and around Papahanaumokuakea, Central Pacific.
+    The deepest footage in this catalogue: dive 2 worked at 4859 m and dive 13 at
+    4599 m, out near the dateline.
+
+- id: EX2306
+  name: Seascape Alaska 5
+  archive: NOAA Ocean Exploration
+  vessel: NOAA Ship Okeanos Explorer, ROV Deep Discoverer
+  date: 2023-08
+  listing: https://www.ncei.noaa.gov/data/oceans/oer/video/EX2306/Video/
+  depth: 2
+  pattern: "*ROVHD_Low.mp4"
+  location:
+    kind: noaa-dive
+    data: https://oer.hpc.msstate.edu/okeanos/ex2306/
+  notes: >-
+    Gulf of Alaska seamounts and continental slope, 55-59 degrees north. Nineteen
+    dives, the deepest at 4262 m. Cold, high-latitude deep sea - a different fauna
+    from everything else here.
+
+- id: EX2205
+  name: Voyage to the Ridge 2
+  archive: NOAA Ocean Exploration
+  vessel: NOAA Ship Okeanos Explorer, ROV Deep Discoverer
+  date: 2022-07
+  listing: https://www.ncei.noaa.gov/data/oceans/oer/video/EX2205/Video/
+  depth: 2
+  pattern: "*ROVHD_Low.mp4"
+  location:
+    kind: noaa-dive
+    data: https://oer.hpc.msstate.edu/okeanos/ex2205/
+  notes: >-
+    The Mid-Atlantic Ridge and the Azores Plateau, mid-ocean rift valley and
+    fracture zones, to 3350 m. The only Atlantic-ridge footage in the catalogue.
+
+- id: EX2301
+  name: "EXPRESS 2023 - West Coast Exploration"
+  archive: NOAA Ocean Exploration
+  vessel: NOAA Ship Okeanos Explorer, ROV Deep Discoverer
+  date: 2023-04
+  listing: https://www.ncei.noaa.gov/data/oceans/oer/video/EX2301/Video/
+  depth: 2
+  pattern: "*ROVHD_Low.mp4"
+  location:
+    kind: noaa-dive
+    data: https://oer.hpc.msstate.edu/okeanos/ex2301/
+  notes: >-
+    California and Oregon margin, submarine canyons and seamounts to 3956 m.
+
+# ── the same place, ten years apart ───────────────────────────────────────────
+#
+# Everything above is an expedition: a ship goes somewhere once, and whatever it
+# filmed is the only footage of that spot there will ever be. This is the
+# opposite. CAMHDA301 is a high-definition camera bolted to the seafloor in the
+# ASHES hydrothermal vent field on Axial Seamount, 1542 m down, and it has filmed
+# fourteen minutes every three hours since 2015.
+#
+# So it can answer a question no cruise can: what changed. These five recordings
+# are the same camera on the same day of the year at the same hour, two years
+# apart each time - 2016, 2018, 2022, 2024, 2026. Merge their reports and the
+# comparison is a filter on one column. (2020 has no recording for that date.)
+#
+# Position comes from the observatory's own deployment register rather than being
+# written down here, because the camera is recovered and reinstalled and each
+# deployment has its own coordinates and depth: the 2016 recording resolves to
+# deployment 3 at 1543 m and the 2026 one to a later deployment a few metres away.
+- id: OOI_AXIAL_CAMHD
+  name: Axial Seamount ASHES vent field, 2016-2026
+  archive: Ocean Observatories Initiative Regional Cabled Array
+  vessel: Fixed camera CAMHDA301, cabled to shore
+  date: 2016/2026
+  location:
+    kind: ooi-deployment
+    reference: RS03ASHS-PN03B-06-CAMHDA301
+  notes: >-
+    A high-definition camera in the ASHES hydrothermal vent field on Axial
+    Seamount, 1542 m deep on the Juan de Fuca Ridge. It runs a scripted pan and
+    zoom over the sulphide chimneys and their tubeworm cover every three hours.
+    Five recordings a decade apart, same day of year, same hour.
+  videos:
+    - https://rawdata.oceanobservatories.org/files/RS03ASHS/PN03B/CAMHDA301/2016/08/15/CAMHDA301-20160815T030000Z.mp4
+    - https://rawdata.oceanobservatories.org/files/RS03ASHS/PN03B/CAMHDA301/2018/08/15/CAMHDA301-20180815T031500.mp4
+    - https://rawdata.oceanobservatories.org/files/RS03ASHS/PN03B/CAMHDA301/2022/08/15/CAMHDA301-20220815T031500.mp4
+    - https://rawdata.oceanobservatories.org/files/RS03ASHS/PN03B/CAMHDA301/2024/08/15/CAMHDA301-20240815T031500.mp4
+    - https://rawdata.oceanobservatories.org/files/RS03ASHS/PN03B/CAMHDA301/2026/08/15/CAMHDA301-20260815T031500.mp4

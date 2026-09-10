@@ -1,0 +1,6 @@
+{
+  "name": "Deep-Sea Extension",
+  "plugins": [
+    "./plugin_deepsea.js"
+  ]
+}
