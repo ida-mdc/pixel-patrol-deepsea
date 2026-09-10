@@ -325,7 +325,16 @@ def _process(folder: Path, output: Path, expedition_id: str, url: str,
         "PIXEL_PATROL_DETECTOR_EVERY": str(detect_every),
         "PIXEL_PATROL_DETECTOR_FRAMES": str(detector_frames),
     }
-    command = ["pixel-patrol", "process", str(folder), "-o", str(output),
+    # Run the pipeline through *this* interpreter rather than through whatever
+    # `pixel-patrol` PATH resolves to. They are not always the same install - a
+    # conda environment with an older copy of this package sitting ahead of the one
+    # that launched the run is an ordinary way to have a machine set up - and when
+    # they differ the failure is silent: the processors this package registers come
+    # from the other copy, so a processor added here is simply absent from the
+    # report, with no error anywhere. `--processors-include` for a name that does
+    # not exist there asks for nothing and gets it.
+    command = [sys.executable, "-m", "pixel_patrol_base.cli",
+               "process", str(folder), "-o", str(output),
                "--loader", "video", "--slice-size", f"T={slice_frames}",
                # Colour axis whole, so the detector works in RGB and its crops
                # need no second pass to become colour.
