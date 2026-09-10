@@ -186,7 +186,19 @@ def analyse_one(url: str, output: Path, expedition_id: str, fps: Optional[float]
     if not output.exists() or output.stat().st_size == 0:
         print(f"nothing was processed for {url} - no report written", file=sys.stderr)
         return 1
-    print(f"{output} written; the recording was not kept")
+    # Which detections are the same animal, decided here because this is the only
+    # place that holds a whole recording, and written into the report so the page,
+    # a notebook and anything else all read one answer instead of each deriving
+    # their own. See `identity`.
+    from pixel_patrol_deepsea.identity import identify
+
+    try:
+        animals = identify(output)
+    except Exception as exc:                 # a report is worth more than its ids
+        logger.warning("could not identify animals in %s: %s", output, exc)
+        animals = 0
+    print(f"{output} written; the recording was not kept"
+          + (f"; {animals} animals" if animals else ""))
     return 0
 
 
@@ -357,6 +369,37 @@ def _process(folder: Path, output: Path, expedition_id: str, url: str,
     for processor in PROCESSORS:
         command += ["--processors-include", processor]
     subprocess.run(command, check=True, env=environment)
+
+
+# ── identify ──────────────────────────────────────────────────────────────────
+
+def identify_reports(target: Path) -> int:
+    """Write animal ids into reports made before `collect one` wrote them itself.
+
+    Backfill, and only that: the ids are derived from the detections already in the
+    file, so a report analysed last week gets exactly the identity it would have
+    been given at the time. Nothing is re-read and no footage is touched.
+    """
+    from pixel_patrol_deepsea.identity import identify
+
+    reports = ([target] if target.is_file()
+               else sorted(p for p in target.rglob("*.parquet")
+                           if p.parent.name != "sightings"))
+    if not reports:
+        print(f"no reports under {target}", file=sys.stderr)
+        return 1
+    total = 0
+    for report in reports:
+        try:
+            animals = identify(report)
+        except Exception as exc:
+            print(f"{report}: {exc}", file=sys.stderr)
+            continue
+        total += animals
+        print(f"{report.relative_to(target) if target.is_dir() else report.name}: "
+              f"{animals} animals")
+    print(f"{len(reports)} reports, {total} animals")
+    return 0
 
 
 # ── score ─────────────────────────────────────────────────────────────────────
@@ -853,6 +896,11 @@ def main(argv=None) -> int:
     joining.add_argument("parts", nargs="+", type=Path)
     joining.add_argument("-o", "--output", type=Path, required=True)
 
+    naming = verbs.add_parser("identify", help="write animal ids into reports that "
+                                              "predate them")
+    naming.add_argument("target", type=Path,
+                        help="a parquet, or a collection root to walk")
+
     scoring = verbs.add_parser("score", help="check an expedition against its ground truth")
     scoring.add_argument("expedition")
     scoring.add_argument("root", type=Path)
@@ -876,6 +924,8 @@ def main(argv=None) -> int:
                               args.per_dive, args.most, args.fps or None,
                               args.slice_frames, args.detector, args.detector_frames,
                               args.detector_sizes, args.detect_every)
+    if args.verb == "identify":
+        return identify_reports(args.target)
     if args.verb == "merge":
         return merge(args.expedition, args.parts, args.output)
     if args.verb == "score":

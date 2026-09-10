@@ -197,6 +197,17 @@ confidence 0.02–0.05 lower in grey. Midwater footage is nearly monochrome to b
 What it does cost is the *look* of the crop, and that is what `merge_crops_into_report`
 swaps back after the fine pass.
 
+**Which detections are the same animal is written into the report**, not worked out
+again by whoever reads it. Every detection in `detections` carries an `animal`: an
+integer, unique within its recording, shared by every detection of that individual and
+by the clip frames cut for it, so `(name, animal)` is one animal wherever it is read —
+the collection page, a notebook, anything later. `collect one` decides it, because it is
+the only thing that holds a whole recording at a time; `collect identify collection/`
+backfills reports made before this, deriving the ids from the detections already in the
+file without touching any footage. There is deliberately no per-slice count of animals:
+a row is a slice and an individual spans many of them, so such a column could not be
+summed up the tree without counting most animals several times.
+
 `--refine` writes `sightings.parquet` and `sightings.csv` — **one row per animal**, not
 per slice — with taxon, confidence, box, frame and timecode, keyed by `name` and `dim_t`
 so it joins straight onto the report. The report itself stays one row per slice: it is an
