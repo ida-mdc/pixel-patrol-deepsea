@@ -62,6 +62,22 @@ params.detectEvery    = 1   // seconds between looks; independent of slice lengt
 // footage is worth the third.
 params.detectorSizes  = "640,960"
 
+// Where a recording is staged while it is analysed. Empty means the task's own
+// work directory, which is the only place a workflow can be sure of: it exists,
+// every node can see it, and Nextflow cleans it up.
+//
+// The tempting answer is the node's own /tmp, and on a cluster it is a trap. A
+// task asks for one core, so the scheduler packs as many of them onto a node as
+// it has cores, and every one of them stages a recording into the same /tmp at
+// the same time - 68 MB each for NOAA proxies, 906 MB for an Axial one. Thirty
+// tasks on a node with a few gigabytes of /tmp is
+//
+//     OSError: [Errno 28] No space left on device
+//
+// out of the fetch, after the download. Point this at node-local scratch if you
+// have some that is genuinely large; otherwise leave it alone.
+params.staging        = ""
+
 // Every process runs through this, so the workflow does not depend on the caller
 // having the right environment active. Override for a different install:
 //   --python "conda run -n myenv python"   or   --python /path/to/venv/bin/python
@@ -128,7 +144,9 @@ process ANALYSE {
 
     script:
     def thin = params.fps ? "--fps ${params.fps}" : "--fps 0"
+    def staging = params.staging ? "export TMPDIR='${params.staging}'" : 'export TMPDIR="$PWD"'
     """
+    ${staging}
     ${params.python} -m pixel_patrol_deepsea.collect one '${url}' \\
         -o ${name}.parquet -e ${expedition} ${thin} \\
         --slice-frames ${params.sliceFrames} --detector ${params.detector} \\
