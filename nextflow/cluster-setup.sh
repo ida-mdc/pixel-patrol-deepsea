@@ -85,6 +85,19 @@ fi
 echo "== $REPO and its dependencies"
 "$PY" -m pip install -e "$REPO"
 
+# ffmpeg thins every recording before it is analysed, and it is a program rather
+# than a library, so PyAV being installed is not the same as having one. conda has
+# a real build; a venv gets the static one imageio-ffmpeg carries.
+if ! "$PY" -c "from pixel_patrol_deepsea.collect import ffmpeg; ffmpeg()" 2>/dev/null; then
+    echo "== ffmpeg"
+    if command -v micromamba >/dev/null 2>&1 && [ -d "$BASE/env/conda-meta" ]; then
+        micromamba install -y -p "$BASE/env" -c conda-forge ffmpeg
+    else
+        "$PY" -m pip install imageio-ffmpeg
+    fi
+fi
+"$PY" -c "from pixel_patrol_deepsea.collect import ffmpeg; print('   ffmpeg     : ' + ffmpeg())"
+
 echo "== the detector ($MODEL) into $XDG_CACHE_HOME"
 "$PY" -m pixel_patrol_deepsea.fetch_detector --model "$MODEL"
 

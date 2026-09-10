@@ -125,6 +125,15 @@ echo "   nextflow       : $version"
   exit 1
 }
 "$PY" -c "
+from pixel_patrol_deepsea.collect import ffmpeg
+print('   ffmpeg         : ' + ffmpeg())
+" || {
+  echo "Install one into the environment the tasks will use:" >&2
+  echo "  micromamba install -c conda-forge ffmpeg" >&2
+  echo "  $PY -m pip install imageio-ffmpeg" >&2
+  exit 1
+}
+"$PY" -c "
 import sys
 from pixel_patrol_deepsea import detector
 if not detector.is_available():

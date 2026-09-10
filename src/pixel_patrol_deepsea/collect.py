@@ -21,9 +21,11 @@ either way; the difference is one recording of transient disk.
 """
 
 import argparse
+import functools
 import json
 import logging
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -259,6 +261,40 @@ def _frame_count_is_wrong(video: Path) -> bool:
         return False
 
 
+@functools.lru_cache(maxsize=1)
+def ffmpeg() -> str:
+    """The ffmpeg to thin recordings with, wherever this environment keeps one.
+
+    Not a hard dependency of the package and not something pip installs, so on a
+    cluster it is missing about as often as it is present - and what that looked
+    like was a FileNotFoundError from deep inside subprocess, once per task, after
+    the recording had already been fetched. PyAV's bundled libraries are no help
+    here: they are libraries, and this needs the program.
+
+    `PIXEL_PATROL_FFMPEG` wins, then PATH, then the static binary that comes with
+    imageio-ffmpeg if that happens to be installed.
+    """
+    stated = os.environ.get("PIXEL_PATROL_FFMPEG")
+    if stated:
+        return stated
+    found = shutil.which("ffmpeg")
+    if found:
+        return found
+    try:
+        from imageio_ffmpeg import get_ffmpeg_exe
+
+        return get_ffmpeg_exe()
+    except Exception:
+        pass
+    raise RuntimeError(
+        "no ffmpeg, which is what thins a recording before it is analysed. Install "
+        "one into this environment:\n"
+        "    micromamba install -c conda-forge ffmpeg\n"
+        "    pip install imageio-ffmpeg\n"
+        "or point PIXEL_PATROL_FFMPEG at one. Analysing without thinning (--fps 0) "
+        "still needs it wherever a container's frame count has to be repaired.")
+
+
 def _thin(video: Path, fps: float) -> Path:
     """Re-encode to a lower frame rate, in place of the original.
 
@@ -294,7 +330,7 @@ def _thin(video: Path, fps: float) -> Path:
                  "-preset", "veryfast"]
     else:
         codec = ["-c:v", "ffv1", "-f", "matroska"]
-    subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", str(video),
+    subprocess.run([ffmpeg(), "-nostdin", "-v", "error", "-y", "-i", str(video),
                     *codec, "-an", str(thinned)], check=True)
     video.unlink()
     thinned.rename(video)
