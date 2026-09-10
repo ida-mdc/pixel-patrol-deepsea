@@ -379,15 +379,17 @@ than a shell script:
   pattern: "*ROVHD_Low.mp4"
 ```
 
-Adding an entry there is the whole of "collect this too". Five verbs do the work, each
+Adding an entry there is the whole of "collect this too". Six verbs do the work, each
 one thing so a scheduler can redo only what changed:
 
 ```bash
-python -m pixel_patrol_deepsea.collect list  EX2107 -o manifests/EX2107.json
-python -m pixel_patrol_deepsea.collect one   <url>  -o parts/EX2107/<name>.parquet -e EX2107
-python -m pixel_patrol_deepsea.collect merge EX2107 parts/EX2107/*.parquet -o parquet/EX2107.parquet
-python -m pixel_patrol_deepsea.collect score EX2107 collection/
-python -m pixel_patrol_deepsea.collect site  collection/
+python -m pixel_patrol_deepsea.collect list   EX2107 -o manifests/EX2107.json
+python -m pixel_patrol_deepsea.collect choose EX2107 -m manifests/EX2107.json -o chosen/EX2107.json \
+    --dives 3 --per-dive 3
+python -m pixel_patrol_deepsea.collect one    <url>  -o parts/EX2107/<name>.parquet -e EX2107
+python -m pixel_patrol_deepsea.collect merge  EX2107 parts/EX2107/*.parquet -o parquet/EX2107.parquet
+python -m pixel_patrol_deepsea.collect score  EX2107 collection/
+python -m pixel_patrol_deepsea.collect site   collection/
 ```
 
 `run` is all of that for one expedition on one machine, and it differs from `one` in a
@@ -407,29 +409,59 @@ was, so `--dives 4` takes the four deepest and `--per-dive 6` takes six recordin
 across their bottom time. Reading that costs one ranged read of a text file per dive
 (`locations.noaa_dive_summary`), not a download of the dive.
 
+`choose` is the same decision as a step of its own, for when the scheduler is not this
+process — it writes the subset as a manifest of its own and leaves the listing alone,
+because the catalogue page counts what an expedition published, not what we picked out of
+it. **The archive writes those reports in two notations**: cruises from 2021 on say
+`Max Vehicle Depth` in decimal degrees, and 2016 to 2019 say `Max. depth` in
+degrees-and-minutes. Reading only the newer one does not give a cruise without depths, it
+gives a cruise whose descent is analysed — which is what happened to EX1903L2 and EX1605L1
+until both notations were read. EX1605L1 turned out to hold the deepest dive in the
+catalogue, 4996 m, which nothing here knew while its reports were unreadable.
+
 `--jobs` is bounded by memory, not cores: a worker running the fused detector on HD footage
 is resident at about 4.8 GB, so what fits at once is roughly RAM over five gigabytes.
 
-`examples/overnight.py` is a plan across all of it — eight expeditions, resumable, ground
+`examples/overnight.py` is a plan across all of it — the whole catalogue, resumable, ground
 truth first — and is the thing to read for how the settings differ per archive.
 
-`nextflow/main.nf` runs them: `LIST → ANALYSE → MERGE → SITE`, one parquet per recording
-merged into one per expedition. New work is found two ways, because they catch different
-things — `-resume` skips any `ANALYSE` whose inputs are unchanged, and a recording whose
-parquet is already published is skipped outright, so a manifest that grew by three dives
-means three tasks even on a fresh work directory.
+`nextflow/main.nf` runs them: `LIST → SELECT → ANALYSE → MERGE → SITE`, one parquet per
+recording merged into one per expedition. `SELECT` is `choose`, and it is there because
+without it a workflow has exactly one cheap way to sample a cruise — the first N
+recordings — and on a deep dive those are the vehicle descending. New work is found two
+ways, because they catch different things — `-resume` skips any `ANALYSE` whose inputs are
+unchanged, and a recording whose parquet is already published is skipped outright, so a
+manifest that grew by three dives means three tasks even on a fresh work directory.
 
 ```bash
 nextflow run nextflow/main.nf --outdir /data/footage -profile local -resume
 nextflow run nextflow/main.nf --outdir /data/footage --expeditions EX2107 --limit 20
+nextflow run nextflow/main.nf --outdir /data/footage -profile slurm --dives 3 --perDive 3
 ```
 
-Without Nextflow installed, `nextflow/collect.sh` runs the same four stages in plain
+On a cluster, four things are worth knowing before submitting. `--dives`/`--perDive`/
+`--limit` default to *everything*, which for this catalogue is about eleven thousand
+recordings and some nine hundred hours. The `slurm` profile asks for a two-hour walltime
+per task, because a queue whose default is shorter than a recording is how a long
+collection dies at 40%. The detector is a 200 MB cache under `$HOME/.cache/pixel-patrol`,
+and the workflow checks it is reachable before submitting anything rather than letting a
+thousand tasks discover it one at a time. And `cleanup` is off: a recording is deleted by
+its own task either way, so cleaning the work tree saves nothing and costs `-resume` the
+cache it exists for.
+
+Run against Nextflow 26.04.6 as well as 25.10, which needed two things the older parser
+accepted: a top-level helper has to be a function rather than a closure assigned to a
+name, and a `publishDir` whose path depends on an input value has to be a closure rather
+than a string, since 26 resolves the string when the process is defined and nothing is
+bound to it yet.
+
+Without Nextflow installed, `nextflow/collect.sh` runs the same five stages in plain
 shell with the same skip-what-is-done behaviour:
 
 ```bash
-LIMIT=5 nextflow/collect.sh collection/ EX2107      # five recordings, then the page
-nextflow/collect.sh collection/                     # the whole catalogue
+LIMIT=5 nextflow/collect.sh collection/ EX2107          # five recordings, spread
+DIVES=3 PER_DIVE=3 nextflow/collect.sh collection/      # three dives each, on the bottom
+nextflow/collect.sh collection/                         # the whole catalogue
 ```
 
 Merging is a concatenation, not a re-aggregation: in pixel-patrol a video file is one

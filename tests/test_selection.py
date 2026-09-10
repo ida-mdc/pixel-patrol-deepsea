@@ -88,3 +88,36 @@ def test_deepest_dives_first():
     # and Dive reports the number the archive stated, not one recomputed here
     assert Dive(number=2, summary=ON_BOTTOM).max_depth_m == 4859.0
     assert Dive(number=9).max_depth_m == 0.0
+
+
+def test_the_choice_is_a_step_a_scheduler_can_run_on_its_own(tmp_path):
+    """`choose` writes the subset as a manifest of its own, leaving the listing alone.
+
+    A workflow that cannot run this stage has only one cheap way to sample a
+    cruise - the first N recordings - and on a deep dive those are the vehicle
+    descending through open water.
+    """
+    import json
+
+    from pixel_patrol_deepsea.collect import choose_videos
+
+    listing = tmp_path / "DSMOT.json"
+    videos = [f"https://h/data/S{n}/S{n}.mov" for n in range(6)]
+    listing.write_text(json.dumps({"expedition": "DSMOT", "listed_at": "2026-09-10T00:00:00",
+                                   "videos": videos}))
+    chosen = tmp_path / "DSMOT.chosen.json"
+
+    assert choose_videos("DSMOT", chosen, listing, most=3) == 0
+
+    picked = json.loads(chosen.read_text())
+    assert picked["expedition"] == "DSMOT"
+    assert len(picked["videos"]) == 3
+    assert set(picked["videos"]) <= set(videos)
+    # the full listing is what the catalogue page counts against, so it is untouched
+    assert len(json.loads(listing.read_text())["videos"]) == 6
+
+
+def test_choosing_from_an_unknown_expedition_says_so_rather_than_listing_the_web(tmp_path):
+    from pixel_patrol_deepsea.collect import choose_videos
+
+    assert choose_videos("NOPE", tmp_path / "out.json") == 2

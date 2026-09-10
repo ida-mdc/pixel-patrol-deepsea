@@ -21,7 +21,10 @@
   location:
     kind: noaa-dive
     data: https://oer.hpc.msstate.edu/okeanos/ex2107/
-  notes: Deep-sea coral and sponge habitats off the US southeast; 14 dives.
+  notes: >-
+    Deep-sea coral and sponge habitats off the US southeast; 14 dives, the deepest
+    at 3650 m. Pairs with EX1903L2, which worked the same mounds two years earlier:
+    the only two cruises here that visited the same place twice.
 
 - id: EX1903L2
   name: Windows to the Deep 2019

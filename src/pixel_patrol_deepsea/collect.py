@@ -34,7 +34,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from pixel_patrol_deepsea.catalogue import (
-    catalogue_path, discover, find_expedition, load_catalogue,
+    Manifest, catalogue_path, discover, find_expedition, load_catalogue,
 )
 from pixel_patrol_deepsea import locations
 from pixel_patrol_deepsea.remote_file import open_with_retry
@@ -103,6 +103,47 @@ def list_videos(expedition_id: str, output: Path) -> int:
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(manifest.to_json())
     print(f"{expedition.title}: {len(manifest.videos)} recordings -> {output}")
+    return 0
+
+
+# ── choose ────────────────────────────────────────────────────────────────────
+
+def choose_videos(expedition_id: str, output: Path, manifest: Optional[Path] = None,
+                  dives: int = 0, per_dive: int = 0, most: int = 0) -> int:
+    """Which of an expedition's recordings are worth analysing, as its own manifest.
+
+    `run` makes this choice inside itself, which is right when one machine does a
+    whole expedition. A scheduler needs it as a step: a stage that turns the full
+    listing into the subset worth fanning out. Without one, "the first N
+    recordings" is the only cheap answer a workflow can give, and on a deep cruise
+    the first N recordings are the vehicle descending through open water.
+
+    The output is manifest-shaped, so everything downstream reads it exactly like
+    the full listing - and the full listing is left alone, because the catalogue
+    page counts what an expedition published, not what we picked out of it.
+    """
+    from pixel_patrol_deepsea import selection
+
+    catalogue = load_catalogue(catalogue_path())
+    try:
+        expedition = find_expedition(catalogue, expedition_id)
+    except LookupError:
+        known = ", ".join(e.id for e in catalogue)
+        print(f"no expedition {expedition_id!r}; the catalogue has: {known}", file=sys.stderr)
+        return 2
+
+    if manifest and manifest.is_file():
+        listed = json.loads(manifest.read_text())
+        videos, listed_at = listed["videos"], listed.get("listed_at", "")
+    else:
+        found = discover(expedition)
+        videos, listed_at = found.videos, found.listed_at
+
+    chosen = selection.choose(expedition, videos, dives=dives, per_dive=per_dive, most=most)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(Manifest(expedition=expedition_id, videos=chosen,
+                               listed_at=listed_at).to_json())
+    print(f"{selection.report(expedition, videos, chosen)} -> {output}")
     return 0
 
 
@@ -750,6 +791,18 @@ def main(argv=None) -> int:
     listing.add_argument("expedition")
     listing.add_argument("-o", "--output", type=Path, required=True)
 
+    choosing = verbs.add_parser("choose", help="the recordings of one expedition "
+                                              "worth analysing, as a manifest")
+    choosing.add_argument("expedition")
+    choosing.add_argument("-o", "--output", type=Path, required=True)
+    choosing.add_argument("-m", "--manifest", type=Path,
+                          help="a manifest from `list`; listed afresh when absent")
+    choosing.add_argument("--dives", type=int, default=0,
+                          help="how many dives to take, deepest first (0 for all)")
+    choosing.add_argument("--per-dive", type=int, default=0,
+                          help="recordings per dive, spread over its bottom time")
+    choosing.add_argument("--most", type=int, default=0, help="cap on recordings overall")
+
     single = verbs.add_parser("one", help="analyse one recording, keeping no copy")
     single.add_argument("url")
     single.add_argument("-o", "--output", type=Path, required=True)
@@ -801,6 +854,9 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
     if args.verb == "list":
         return list_videos(args.expedition, args.output)
+    if args.verb == "choose":
+        return choose_videos(args.expedition, args.output, args.manifest,
+                             args.dives, args.per_dive, args.most)
     if args.verb == "one":
         return analyse_one(args.url, args.output, args.expedition,
                            args.fps or None, args.slice_frames, args.detector,

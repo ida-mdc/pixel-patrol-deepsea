@@ -30,6 +30,10 @@ every minute of it.
 the ASHES vent field on Axial Seamount, two years apart each time. No cruise can
 answer what changed; this can, and it is the reason the reports carry a timestamp
 and a position at all.
+
+The cruise pair is the same question asked of a ship: EX1903L2 and EX2107 worked
+the same Blake Plateau coral mounds two years apart, which is as close to a repeat
+visit as a research vessel gets.
 """
 
 import argparse
@@ -108,9 +112,9 @@ class Leg:
 # So the plan trades footage per cruise for cruises. Three dives and three
 # recordings each is 45 minutes of footage from a cruise rather than two hours, and
 # what that buys is that the Central Pacific, the Gulf of Alaska, the Mid-Atlantic
-# Ridge, the West Coast, the Blake Plateau and the Marianas are all in the
-# collection rather than the first two of them. Diversity was the ask; depth of
-# sampling within one cruise was not.
+# Ridge, the West Coast, the Blake Plateau - twice, nine years apart - and the
+# Marianas are all in the collection rather than the first two of them. Diversity
+# was the ask; depth of sampling within one cruise was not.
 #
 # Raising these is the first thing to do with a spare afternoon - the run is
 # resumable, so it costs only the recordings that are new.
@@ -131,7 +135,7 @@ PLAN: List[Leg] = [
         why="the same hydrothermal vent, 1542 m down, on the same day of the year in "
             "2016, 2018, 2022, 2024 and 2026"),
     Leg("EX2503", jobs=10, dives=DIVES, per_dive=PER_DIVE, detector_sizes=PROXY_SIZES,
-        why="the deepest footage in the catalogue - 4859 m in Papahanaumokuakea"),
+        why="4859 m in Papahanaumokuakea, the deepest of the modern cruises"),
     Leg("EX2306", jobs=10, dives=DIVES, per_dive=PER_DIVE, detector_sizes=PROXY_SIZES,
         why="Gulf of Alaska seamounts to 4262 m; cold, high-latitude deep sea"),
     Leg("EX2205", jobs=10, dives=DIVES, per_dive=PER_DIVE, detector_sizes=PROXY_SIZES,
@@ -141,9 +145,13 @@ PLAN: List[Leg] = [
     Leg("EX2107", jobs=10, dives=DIVES, per_dive=PER_DIVE, detector_sizes=PROXY_SIZES,
         why="Blake Plateau coral mounds; a 1 Hz vehicle track, so every slice has "
             "its own position and depth"),
+    Leg("EX1903L2", jobs=10, dives=DIVES, per_dive=PER_DIVE, detector_sizes=PROXY_SIZES,
+        why="the same coral mounds two years earlier - the one pair of cruises here "
+            "that visited the same place twice"),
     Leg("EX1605L1", jobs=10, most=9, detector_sizes=PROXY_SIZES,
-        why="the Marianas, and the one cruise that published its clips by subject - "
-            "ROVHD_FSH is the fish, which is a label the detector never saw"),
+        why="the Marianas and the deepest footage here, 4996 m; the one cruise that "
+            "published its clips by subject - ROVHD_FSH is the fish, which is a "
+            "label the detector never saw"),
 ]
 
 

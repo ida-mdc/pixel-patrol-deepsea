@@ -1,8 +1,13 @@
 #!/bin/sh
-# The same four stages as main.nf, in plain shell, for running without Nextflow.
+# The same five stages as main.nf, in plain shell, for running without Nextflow.
 #
-#   ./collect.sh <outdir> [expedition ...]        every listed recording
-#   LIMIT=5 ./collect.sh <outdir> EX2107          the first 5 not yet done
+#   ./collect.sh <outdir> [expedition ...]              every listed recording
+#   LIMIT=5 ./collect.sh <outdir> EX2107                5 recordings, spread
+#   DIVES=3 PER_DIVE=3 ./collect.sh <outdir> EX2503     3 deepest dives, 3 each
+#
+# LIMIT, DIVES and PER_DIVE go to `collect choose`, which reads each dive's own
+# report to find the deepest dives and the hours the vehicle was actually on the
+# bottom. Without them a deep cruise spends most of its compute on the descent.
 #
 # Recordings whose parquet already exists are skipped, so re-running after a
 # cruise gains three dives costs three recordings of work. Nothing is kept but
@@ -12,9 +17,15 @@ set -eu
 OUT=${1:?usage: collect.sh <outdir> [expedition ...]}
 shift
 LIMIT=${LIMIT:-0}
+DIVES=${DIVES:-0}
+PER_DIVE=${PER_DIVE:-0}
 FPS=${FPS:-10}
-DETECTOR=${DETECTOR:-fish}
-SLICE=${SLICE:-50}
+# The same defaults as `collect` itself: 499 classes rather than the one-class
+# "fish", which calls sponges fish, and one-second slices.
+DETECTOR=${DETECTOR:-general}
+SLICE=${SLICE:-10}
+SIZES=${SIZES:-640,960}
+DETECT_EVERY=${DETECT_EVERY:-1}
 ENV_NAME=${PIXEL_PATROL_ENV:-pixel-patrol}
 
 # Run in the environment that has the package, without the caller having to know
@@ -53,21 +64,27 @@ EXPEDITIONS=${*:-$(sed -n 's/^- id:[[:space:]]*//p' "$CATALOGUE")}
 
 for expedition in $EXPEDITIONS; do
   echo "== $expedition"
-  mkdir -p "$OUT/manifests" "$OUT/parts/$expedition"
+  mkdir -p "$OUT/manifests" "$OUT/chosen" "$OUT/parts/$expedition"
   $PY -m pixel_patrol_deepsea.collect list "$expedition" -o "$OUT/manifests/$expedition.json"
 
-  done_count=0
+  picks=""
+  [ "$DIVES" -gt 0 ] && picks="$picks --dives $DIVES"
+  [ "$PER_DIVE" -gt 0 ] && picks="$picks --per-dive $PER_DIVE"
+  [ "$LIMIT" -gt 0 ] && picks="$picks --most $LIMIT"
+  # shellcheck disable=SC2086
+  $PY -m pixel_patrol_deepsea.collect choose "$expedition" \
+      -m "$OUT/manifests/$expedition.json" -o "$OUT/chosen/$expedition.json" $picks
+
   for url in $($PY -c "
 import json,sys
-print('\n'.join(json.load(open(sys.argv[1]))['videos']))" "$OUT/manifests/$expedition.json"); do
+print('\n'.join(json.load(open(sys.argv[1]))['videos']))" "$OUT/chosen/$expedition.json"); do
     name=$(basename "$url" .mp4)
     [ -s "$OUT/parts/$expedition/$name.parquet" ] && continue
-    [ "$LIMIT" -gt 0 ] && [ "$done_count" -ge "$LIMIT" ] && break
     echo "-- $name"
     $PY -m pixel_patrol_deepsea.collect one "$url" \
         -o "$OUT/parts/$expedition/$name.parquet" -e "$expedition" \
-        --fps "$FPS" --slice-frames "$SLICE" --detector "$DETECTOR" < /dev/null
-    done_count=$((done_count + 1))
+        --fps "$FPS" --slice-frames "$SLICE" --detector "$DETECTOR" \
+        --detector-sizes "$SIZES" --detect-every "$DETECT_EVERY" < /dev/null
   done
 
   parts=$(ls "$OUT/parts/$expedition"/*.parquet 2>/dev/null || true)
