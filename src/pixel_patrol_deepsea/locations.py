@@ -174,16 +174,17 @@ class Track:
 def one_place(fix: Fix, source: str, when: float = 0.0, footprint: str = "") -> Track:
     """A single fix that holds for a whole recording.
 
-    It gets a footprint even when there is no path to draw - a Point at the fix -
-    because the map widget in pixel-patrol-geospatial asks for latitude, longitude
-    *and* footprint and shows nothing unless all three are there. A camera bolted
-    to the seafloor genuinely is a point, so saying so is both true and what makes
-    it appear on the map beside the dives.
+    It gets a footprint even when there is no path to draw, because the map widget
+    in pixel-patrol-geospatial asks for latitude, longitude *and* footprint and
+    shows nothing unless all three are there. A camera bolted to the seafloor
+    genuinely is a point, and a `Point` is the one geometry that reader handles
+    even worse than a line - it tries to iterate a number - so the point is
+    written the same way a path is, as a ring standing still. It encloses nothing
+    and draws nothing; what puts the camera on the map is its latitude and
+    longitude, which is the honest answer for a thing that does not move.
     """
     return Track([(when, fix)], source, constant=True,
-                 footprint=footprint or json.dumps(
-                     {"type": "Point",
-                      "coordinates": [round(fix.longitude, 6), round(fix.latitude, 6)]}))
+                 footprint=footprint or _path_polygon([(fix.longitude, fix.latitude)]))
 
 
 def _number(value) -> Optional[float]:
@@ -321,7 +322,7 @@ def _read_rov_track(text: str, source: str) -> Optional[Track]:
     # positions that the footage is actually joined to, so the line on the map and
     # the points on it cannot disagree.
     return Track(fixes, source,
-                 footprint=_line_geojson([(fix.longitude, fix.latitude) for _, fix in fixes]))
+                 footprint=_path_polygon([(fix.longitude, fix.latitude) for _, fix in fixes]))
 
 
 # ── NOAA: the dive path, when there is no track ────────────────────────────────
@@ -348,7 +349,7 @@ def noaa_dive_path(data_url: str, dive: int) -> Optional[Track]:
     source = f"NOAA dive path ({Path(name).name}), whole-dive position"
     middle = points[len(points) // 2]
     return one_place(Fix(latitude=middle[1], longitude=middle[0], source=source),
-                     source, footprint=_line_geojson(points))
+                     source, footprint=_path_polygon(points))
 
 
 def _kml_points(text: str) -> List[Tuple[float, float]]:
@@ -364,19 +365,34 @@ def _kml_points(text: str) -> List[Tuple[float, float]]:
     return points
 
 
-def _line_geojson(points: Sequence[Tuple[float, float]], most: int = 400) -> str:
-    """The dive path as GeoJSON, thinned to something a map can draw.
+def _path_polygon(points: Sequence[Tuple[float, float]], most: int = 400) -> str:
+    """A path as GeoJSON the map widget can read: a polygon, drawn there and back.
 
     A dive is tens of thousands of navigation fixes and drawing all of them in a
-    browser is slower than it is informative, so the line is subsampled. The
+    browser is slower than it is informative, so the path is subsampled. The
     endpoints are kept whatever the step lands on.
+
+    It is a `Polygon` and not the `LineString` it describes because the map widget
+    in pixel-patrol-geospatial reads every footprint as one - it takes
+    `coordinates[0]` as the outer ring - and a LineString handed to that yields one
+    position whose two numbers get destructured as if they were pairs. The throw
+    happens inside the map's load handler and takes the whole map with it.
+
+    Tracing the ring out along the path and back gives that reader the pairs it
+    expects, encloses no area, and comes out of the line layer looking like the
+    path it is. The turn-around point repeats, which nothing minds, and a ring of
+    no area is not a shape GeoJSON really means you to write - the alternative is
+    a report with no map on it.
     """
     step = max(1, len(points) // most)
     thinned = list(points[::step])
     if thinned[-1] != points[-1]:
         thinned.append(points[-1])
-    return json.dumps({"type": "LineString",
-                       "coordinates": [[round(x, 6), round(y, 6)] for x, y in thinned]})
+    ring = thinned + thinned[::-1]
+    while len(ring) < 4:                     # a ring wants four positions, and one
+        ring = ring + ring                   # fix on its own only has two
+    return json.dumps({"type": "Polygon",
+                       "coordinates": [[[round(x, 6), round(y, 6)] for x, y in ring]]})
 
 
 # ── a cabled camera that does not move ────────────────────────────────────────

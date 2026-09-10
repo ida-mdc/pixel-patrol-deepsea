@@ -22,6 +22,20 @@ from typing import Dict, List, Optional
 
 from pixel_patrol_deepsea.catalogue import catalogue_path, load_catalogue
 
+# What a deep-sea report does not open on. The viewer reads `hidden=` as a
+# dot-separated list of widget ids, so this decides what a reader lands on and
+# nothing more: every one of them is still listed in the sidebar, one click away.
+# `sunburst` is the file-and-folder hierarchy, and an expedition is one directory of
+# recordings - a single ring restating the directory's name, sitting among widgets
+# that measured something. Choosing it here, on the links this page writes, is what
+# keeps the preference out of pixel-patrol's viewer.
+HIDDEN_WIDGETS = ("sunburst",)
+
+
+def _report_url(parquet: str) -> str:
+    """A link into the static viewer beside this page, opened on what is worth reading."""
+    return f"viewer/index.html?data={parquet}&hidden={'.'.join(HIDDEN_WIDGETS)}"
+
 
 @dataclass
 class Progress:
@@ -377,7 +391,7 @@ def _everything_link(rows: List[Progress]) -> str:
     with_reports = [r for r in rows if r.report is not None]
     if len(with_reports) < 2:
         return ""
-    target = f"viewer/index.html?data=../parquet/{EVERYTHING}.parquet"
+    target = _report_url(f"../parquet/{EVERYTHING}.parquet")
     hours = _clock(sum(r.seconds for r in with_reports))
     return f"""
     <section class="everything">
@@ -617,7 +631,7 @@ def _clock(seconds: float) -> str:
 def _link(row: Progress) -> str:
     if row.report is None:
         return '<span class="muted small">no report yet</span>'
-    target = f"viewer/index.html?data=../parquet/{row.id}.parquet"
+    target = _report_url(f"../parquet/{row.id}.parquet")
     return f'<a class="open" href="{html.escape(target, quote=True)}">Open report &rarr;</a>'
 
 

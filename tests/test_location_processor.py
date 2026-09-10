@@ -17,7 +17,7 @@ from pixel_patrol_deepsea.location_processor import SliceLocationProcessor
 TRACK = "\n".join([
     "unixtime,latitude,longitude,depth_m,altitude_m,constant,footprint,source",
     # 12:00:00Z, 12:00:10Z and 12:00:20Z on 2021-10-27
-    "1635336000.0,31.2100,-77.8500,800.0,1.5,0,\"{\"\"type\"\":\"\"LineString\"\"}\",a track",
+    "1635336000.0,31.2100,-77.8500,800.0,1.5,0,\"{\"\"type\"\":\"\"Polygon\"\"}\",a track",
     "1635336010.0,31.2110,-77.8510,810.0,1.4,0,,a track",
     "1635336020.0,31.2120,-77.8520,820.0,1.3,0,,a track",
 ])
@@ -62,7 +62,7 @@ def test_and_the_position_the_vehicle_was_at_then(staged):
 def test_the_dive_outline_comes_along_for_the_map(staged):
     row = SliceLocationProcessor().run_chunk(_slice(dim_t=0))
     # the map widget wants latitude, longitude AND footprint or it shows nothing
-    assert "LineString" in row["footprint"]
+    assert "Polygon" in row["footprint"]
 
 
 def test_a_slice_outside_the_track_keeps_its_time_and_loses_its_place(staged):

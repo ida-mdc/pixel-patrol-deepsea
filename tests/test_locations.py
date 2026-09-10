@@ -14,7 +14,7 @@ import pytest
 
 from pixel_patrol_deepsea.locations import (
     Fix, Track, dive_number, one_place, recorded_at, working_window,
-    _kml_points, _line_geojson, _read_rov_track,
+    _kml_points, _path_polygon, _read_rov_track,
 )
 
 ROV_TRACK = "\n".join([
@@ -79,7 +79,11 @@ def test_a_single_fix_gets_a_footprint_so_the_map_will_show_it():
     # the map widget asks for latitude, longitude AND footprint, and shows nothing
     # unless all three are present
     fixed = one_place(Fix(latitude=45.9, longitude=-130.0), "register")
-    assert json.loads(fixed.footprint) == {"type": "Point", "coordinates": [-130.0, 45.9]}
+    geometry = json.loads(fixed.footprint)
+    # A ring standing still, not a Point: the map reads coordinates[0] as an outer
+    # ring, and a Point handed to that makes it iterate a number.
+    assert geometry["type"] == "Polygon"
+    assert geometry["coordinates"] == [[[-130.0, 45.9]] * 4]
 
 
 def test_both_kinds_survive_being_written_and_read_back():
@@ -94,11 +98,23 @@ def test_both_kinds_survive_being_written_and_read_back():
 
 def test_the_dive_outline_is_thinned_but_keeps_its_ends():
     points = [(float(i), float(i) * 2) for i in range(5000)]
-    line = json.loads(_line_geojson(points, most=100))
-    assert line["type"] == "LineString"
-    assert len(line["coordinates"]) <= 102
-    assert line["coordinates"][0] == [0.0, 0.0]
-    assert line["coordinates"][-1] == [4999.0, 9998.0]
+    outline = json.loads(_path_polygon(points, most=100))
+    ring = outline["coordinates"][0]
+    assert outline["type"] == "Polygon"
+    assert len(ring) <= 204                      # there and back
+    assert ring[0] == [0.0, 0.0]
+    assert ring[len(ring) // 2 - 1] == [4999.0, 9998.0]
+
+
+def test_the_outline_is_a_ring_the_map_can_read_as_one():
+    # Closed, four positions at the least, and enclosing no area - so the line
+    # layer draws the path and the fill layer draws nothing.
+    ring = json.loads(_path_polygon([(0.0, 0.0), (1.0, 1.0), (2.0, 0.0)]))["coordinates"][0]
+    assert ring[0] == ring[-1]
+    assert len(ring) >= 4
+    assert all(isinstance(position, list) and len(position) == 2 for position in ring)
+    assert ring == [[0.0, 0.0], [1.0, 1.0], [2.0, 0.0],
+                    [2.0, 0.0], [1.0, 1.0], [0.0, 0.0]]
 
 
 def test_reads_coordinates_out_of_a_kml_line():

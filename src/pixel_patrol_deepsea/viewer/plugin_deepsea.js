@@ -2429,6 +2429,11 @@ export function trunkOf(name, lineage, taxonomy) {
  * repeats a colour.
  */
 export function taxonColour(ctx, name) {
+  // The host builds a scale from whatever palette it is asked for but does not say
+  // which one the reader has chosen, so this asks for tab20 by name: twenty hues,
+  // from the viewer's own default family, and the same twenty on every reload. The
+  // cost is that switching the report's palette leaves a taxonomy where it was,
+  // which is a cheaper thing to give up than a change to the viewer.
   const palette = ctx.color?.getColors?.(ctx.color.palette ?? 'tab20', TAXON_HUES)
     ?? PHYLUM_FALLBACK;
   return palette[nameHash(String(name)) % palette.length];

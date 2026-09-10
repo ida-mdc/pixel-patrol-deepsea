@@ -93,6 +93,15 @@ def test_links_the_report_through_the_viewer_with_a_data_parameter(tmp_path):
     assert "viewer/index.html?data=../parquet/EX2107.parquet" in page
 
 
+def test_the_link_opens_the_report_without_the_folder_sunburst(tmp_path):
+    # A widget nobody wants to land on is switched off by the link rather than by
+    # the viewer, so the preference lives in this extension and not in
+    # pixel-patrol. Escaped, because an ampersand in an href is written &amp;.
+    _collection(tmp_path, listed=10, parts=4, report_rows=_slices())
+    page = render(read_progress(tmp_path))
+    assert "&amp;hidden=sunburst" in page
+
+
 def test_says_so_rather_than_linking_a_report_that_is_not_built(tmp_path):
     _collection(tmp_path, listed=10, parts=2)
     page = render(read_progress(tmp_path))
