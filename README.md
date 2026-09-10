@@ -464,10 +464,22 @@ per recording and waits. Submitting that rather than running it on a login node 
 difference between a collection that survives a dropped session and one that does not.
 It checks the things that would otherwise show up as a thousand identical failures
 twenty minutes into a queue — that the interpreter can import the package, that the
-detector is in a cache it can reach, that the work directory is not node-local — and
-re-submitting after any interruption picks up where it stopped. `PROFILE=local` runs the
-same thing on one machine, which is the cheapest way to find out the environment is
-wrong before a queue tells you.
+detector is in a cache it can reach — and re-submitting after any interruption picks up
+where it stopped. `PROFILE=local` runs the same thing on one machine, which is the
+cheapest way to find out the environment is wrong before a queue tells you.
+
+`OUT` and `WORK` have to be on storage every compute node can see, and the script asks
+`df` what filesystem they are on rather than trusting the path: plenty of clusters call
+node-local disk `/scratch`, and a work directory that each node sees its own empty copy
+of fails the whole run at the first task. `nfs`, `lustre`, `gpfs` and `beegfs` pass;
+`ext4` and `xfs` do not, unless you know better and set `ALLOW_LOCAL=1`. It wants little
+space — a five-minute cruise recording makes 3 to 8 MB of parquet, so the ~290 recordings
+of a default run are a few gigabytes including the copy Nextflow keeps in `WORK`.
+
+The staging directory is the opposite ask, and it is `$TMPDIR`: one recording is fetched
+into it, thinned, analysed and deleted, so it should be node-local and needs a couple of
+gigabytes per running task — 68 MB for a NOAA proxy recording, 906 MB for one of the
+Axial camera's, twice that while the thinned copy exists.
 
 Four things are worth knowing before submitting. `--dives`/`--perDive`/
 `--limit` default to *everything*, which for this catalogue is about eleven thousand

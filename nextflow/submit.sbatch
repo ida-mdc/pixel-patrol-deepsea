@@ -85,18 +85,53 @@ if not detector.is_available():
 }
 
 mkdir -p "$OUT" "$WORK"
-# Nextflow stages every task through the work directory, so a node that cannot see
-# it produces a run where every task fails to start. Cheaper to say so here. Only
-# a problem when the tasks are on other machines: a local run has one filesystem
-# and node-local scratch is the right place for it.
+# Nextflow stages every task through the work directory and the driver reads what
+# the tasks wrote, so a directory the nodes cannot see produces a run where
+# everything fails at once. The property that matters is not what the path is
+# called - plenty of clusters call node-local disk /scratch - but what filesystem
+# it is on, so that is what gets asked. Only a problem when the tasks are
+# elsewhere: a local run has one filesystem and node-local disk is the right place.
+shared_enough() {
+    local kind
+    kind=$(df -PT "$1" 2>/dev/null | awk 'NR==2 {print $2}')
+    case "$kind" in
+        nfs|nfs4|lustre|gpfs|beegfs|ceph|cephfs|panfs|fuse.beegfs|fuse.lustre|glusterfs|fuse.glusterfs|afs|smb3|cifs|9p|autofs)
+            return 0;;
+        "") return 0;;          # unreadable is not evidence; let the run say so
+        *)  echo "   $1 is on a $kind filesystem, which is local to one machine" >&2
+            return 1;;
+    esac
+}
+
 if [ "$PROFILE" = slurm ]; then
-  case "$WORK" in
-    /tmp/*|/dev/shm/*|/scratch/local/*)
-      echo "WORK is $WORK, which is usually node-local storage: the compute nodes" >&2
-      echo "would each see a different empty directory. Point it at shared storage." >&2
-      exit 1;;
-  esac
+    ok=true
+    shared_enough "$OUT" || ok=false
+    shared_enough "$WORK" || ok=false
+    if [ "$ok" = false ]; then
+        cat >&2 <<TXT
+
+Both OUT and WORK have to be on storage every compute node can see. Each task
+runs on a different machine, stages through WORK and publishes into OUT; on
+node-local disk they would each get their own empty copy and the run fails at
+the first task, or worse, half-succeeds.
+
+Find one with:   df -PT \$HOME /path/you/have; look for nfs, lustre, gpfs or beegfs
+Then:            OUT=/that/path/footage sbatch --partition=... \$0
+
+If it is genuinely shared and this check is wrong, set ALLOW_LOCAL=1.
+TXT
+        [ "${ALLOW_LOCAL:-}" = 1 ] || exit 1
+        echo "   ALLOW_LOCAL=1, carrying on" >&2
+    fi
 fi
+
+# The staging directory is the opposite ask. One recording is fetched into it,
+# thinned - so two copies briefly - analysed and deleted, and none of that needs
+# to leave the node. 68 MB for a NOAA proxy recording, 906 MB for one of the Axial
+# camera's, so a couple of gigabytes of node-local space per running task. Left to
+# the scheduler's own TMPDIR where there is one, because that is the thing the
+# cluster already cleans up after a job.
+echo "   staging via     : ${TMPDIR:-/tmp} (node-local is right for this one)"
 
 config=$(mktemp)
 trap 'rm -f "$config"' EXIT
