@@ -29,10 +29,20 @@ REPO=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 TORCH_INDEX=${TORCH_INDEX:-}
 MODEL=${MODEL:-general}
 
-mkdir -p "$BASE"/{cache,nextflow}
+mkdir -p "$BASE"/{cache,nextflow,tmp}
 BASE=$(cd "$BASE" && pwd)
 
 echo "== installing into $BASE"
+
+# pip unpacks every wheel into TMPDIR before installing it, and on a cluster node
+# TMPDIR is /tmp: a few gigabytes, often a tmpfs sized as a fraction of RAM. torch
+# and the CUDA libraries do not fit, and what that looks like is
+#
+#   ERROR: Could not install packages due to an OSError: [Errno 28] No space left
+#
+# with df reporting terabytes free on the directory being installed into, because
+# the filesystem that ran out is a third one nobody was looking at.
+export TMPDIR="$BASE/tmp"
 
 export PIP_CACHE_DIR="$BASE/cache/pip"
 export XDG_CACHE_HOME="$BASE/cache"
@@ -90,6 +100,11 @@ SH
 
 echo
 echo "== done. $(du -sh "$BASE/env" | cut -f1) of environment, $(du -sh "$BASE/cache" | cut -f1) of caches."
+echo
+echo "   Note: the jobs stage one recording at a time into TMPDIR - 68 MB for a NOAA"
+echo "   proxy recording, 906 MB for an Axial one, twice that while it is thinned."
+echo "   Check 'df -h /tmp' on a compute node; if it is small, set TMPDIR=$BASE/tmp"
+echo "   for the run too, at the cost of the staging going over shared storage."
 echo
 echo "   source $BASE/env.sh"
 echo "   OUT=$BASE/footage sbatch --partition=yours $REPO/nextflow/submit.sbatch"
