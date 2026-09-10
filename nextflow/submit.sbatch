@@ -81,9 +81,6 @@ if [ -z "$version" ]; then
   echo "  module avail nextflow                                     # a newer module?" >&2
   echo "  micromamba create -n nf -c conda-forge -c bioconda nextflow  # brings its own Java" >&2
   echo "  curl -s https://get.nextflow.io | bash                    # needs Java 17+" >&2
-  echo >&2
-  echo "Or skip Nextflow entirely - the same collection as a SLURM array job:" >&2
-  echo "  OUT=$OUT $HERE/submit-array.sh" >&2
   exit 1
 fi
 case "$version" in

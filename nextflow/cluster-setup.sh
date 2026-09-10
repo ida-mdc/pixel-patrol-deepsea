@@ -8,8 +8,9 @@
 # Four things otherwise go to $HOME, and a full home is a bad way to find that
 # out: a JVM whose temporary files cannot be written segfaults rather than
 # complaining, and an environment half-written into a full quota produces
-# binaries that crash on start. Budget about 8 GB - the environment is ~6.3 GB,
-# most of it torch and the CUDA libraries its PyPI wheel depends on.
+# binaries that crash on start. Budget about 10 GB - measured, 6.5 GB of
+# environment and 3.4 GB of caches, most of the first being torch and the CUDA
+# libraries its PyPI wheel depends on.
 #
 # What this leaves behind, all under BASE:
 #
@@ -92,6 +93,3 @@ echo "== done. $(du -sh "$BASE/env" | cut -f1) of environment, $(du -sh "$BASE/c
 echo
 echo "   source $BASE/env.sh"
 echo "   OUT=$BASE/footage sbatch --partition=yours $REPO/nextflow/submit.sbatch"
-echo
-echo "   ...or without Nextflow, one array task per recording:"
-echo "   OUT=$BASE/footage $REPO/nextflow/submit-array.sh"

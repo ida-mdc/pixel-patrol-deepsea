@@ -485,7 +485,7 @@ BASE=/somewhere/with/room bash nextflow/cluster-setup.sh
 source /somewhere/with/room/env.sh
 ```
 
-Budget about 8 GB. Most of it is `torch`, whose PyPI wheel depends on the CUDA runtime
+Budget about 10 GB — 6.5 GB of environment and 3.4 GB of caches. Most of the first is `torch`, whose PyPI wheel depends on the CUDA runtime
 libraries on Linux whether or not there is a GPU — `TORCH_INDEX` picks a different build
 if you want one.
 
