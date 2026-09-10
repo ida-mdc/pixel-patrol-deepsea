@@ -33,7 +33,31 @@
 
 set -euo pipefail
 
-HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# Where main.nf is. Not simply "next to this script": sbatch copies the submit
+# script into SLURM's spool directory and runs it from there, so inside a job
+# $BASH_SOURCE is /var/spool/slurm/job1234/slurm_script and the workflow is not
+# beside it. The submitting directory is, usually - and REPO settles it outright
+# for the case where it is not.
+find_workflow() {
+    local candidate
+    for candidate in "${REPO:-}/nextflow" "${REPO:-}" \
+                     "$(dirname "${BASH_SOURCE[0]}")" \
+                     "${SLURM_SUBMIT_DIR:-}/nextflow" "${SLURM_SUBMIT_DIR:-}"; do
+        [ -n "$candidate" ] || continue
+        if [ -f "$candidate/main.nf" ]; then
+            (cd "$candidate" && pwd)
+            return 0
+        fi
+    done
+    return 1
+}
+
+if ! HERE=$(find_workflow); then
+    echo "cannot find main.nf." >&2
+    echo "Submit from the repository, or say where it is:" >&2
+    echo "  REPO=/path/to/pixel-patrol-deepsea sbatch --partition=... \$0" >&2
+    exit 1
+fi
 REPO=$(cd "$HERE/.." && pwd)
 OUT=${OUT:-$PWD/footage}
 WORK=${WORK:-$OUT/work}

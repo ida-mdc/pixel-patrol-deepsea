@@ -465,10 +465,14 @@ nextflow run nextflow/main.nf --outdir /data/footage -profile slurm --dives 3 --
 On a cluster, `nextflow/submit.sbatch` is the whole of it:
 
 ```bash
-python -m pip install -e .                                  # into the env the nodes use
-python -m pixel_patrol_deepsea.fetch_detector --model general   # once, to a shared cache
-OUT=/scratch/$USER/footage sbatch --partition=yours nextflow/submit.sbatch
+BASE=/somewhere/with/room bash nextflow/cluster-setup.sh   # env, detector, nextflow, java
+source /somewhere/with/room/env.sh
+OUT=/somewhere/with/room/footage sbatch --partition=yours nextflow/submit.sbatch
 ```
+
+Submit it from the repository, or pass `REPO=/path/to/pixel-patrol-deepsea`: `sbatch`
+copies the submit script into SLURM's spool directory and runs it from there, so the
+script cannot find the workflow by looking next to itself.
 
 The job it submits is the *driver*: one core running Nextflow, which submits one job
 per recording and waits. Submitting that rather than running it on a login node is the
