@@ -85,8 +85,8 @@ DETECTOR_SIZES = "640,960,1280"
 # with a one-second interval is read at five moments spread through it.
 DETECT_EVERY = 1
 PROCESSORS = ("raster-temporal", "raster-motion", "slice-thumbnail",
-              "slice-colour", "slice-location", "raster-detections",
-              "raster-basic")
+              "slice-colour", "slice-colour-spread", "slice-location",
+              "raster-detections", "raster-basic")
 
 
 # ── list ──────────────────────────────────────────────────────────────────────

@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from pixel_patrol_deepsea import detector
+from pixel_patrol_deepsea.colour_processor import SliceColourSpreadProcessor
 from pixel_patrol_deepsea.location_processor import SliceLocationProcessor
 from pixel_patrol_deepsea.motion_processor import MovingObjectProcessor
 from pixel_patrol_deepsea.particle_processor import BrightParticleProcessor
@@ -18,7 +19,8 @@ def register_processor_plugins():
     """
     processors = [TemporalMetricsProcessor, BrightParticleProcessor,
                   MovingObjectProcessor, SliceThumbnailProcessor,
-                  SliceColourProcessor, SliceLocationProcessor]
+                  SliceColourProcessor, SliceColourSpreadProcessor,
+                  SliceLocationProcessor]
     if detector.is_available():
         from pixel_patrol_deepsea.detector_processor import FathomNetDetectorProcessor
         processors.append(FathomNetDetectorProcessor)

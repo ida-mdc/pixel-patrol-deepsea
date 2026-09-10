@@ -63,6 +63,18 @@ npm install && npm test
   (0.85 precision, 0.39 recall against DeepSea-MOT). Near a lit seafloor they are marine
   snow and the measure inverts. It is a particulate-load measure, not an animal detector;
   the module docstring records both measurements.
+- **`slice-colour-spread`** — the colour *distribution* of each slice, where `slice-colour`
+  writes its mean: a twelve-bin hue histogram weighted by saturation, an eight-bin
+  saturation histogram, and Hasler and Susstrunk's colourfulness score. Twenty-three floats
+  a slice, about a hundred bytes, so "how colourful is this recording, and in what way" is
+  a column scan over the report rather than a second pass over the footage — and it cannot
+  be recovered later from a mean or a thumbnail, which is why it is computed while the
+  pixels are in hand. Bleaching moves *saturation*, not hue: a bleached colony stays bright
+  and loses its chroma, so `colour_saturated_fraction` is the axis to plot. Read the two
+  warnings in `colour_numpy_metrics` first — below the photic zone the lighting is the
+  vehicle's own, so backing the ROV off a colony lowers colourfulness with nothing having
+  changed. On MBARI's midwater sequence the measurement comes out entirely cyan, 150–240°,
+  with no red weight at all, which is what water absorbing red within metres looks like.
 - **`slice-location`** — where and when each slice was filmed: `latitude`, `longitude`,
   `depth_m`, `altitude_m`, `recorded_at`, `footprint`, and `location_source` saying which
   published record the fix came from. The one processor here that looks at no pixels at
