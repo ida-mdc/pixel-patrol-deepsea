@@ -451,7 +451,25 @@ nextflow run nextflow/main.nf --outdir /data/footage --expeditions EX2107 --limi
 nextflow run nextflow/main.nf --outdir /data/footage -profile slurm --dives 3 --perDive 3
 ```
 
-On a cluster, four things are worth knowing before submitting. `--dives`/`--perDive`/
+On a cluster, `nextflow/submit.sbatch` is the whole of it:
+
+```bash
+python -m pip install -e .                                  # into the env the nodes use
+python -m pixel_patrol_deepsea.fetch_detector --model general   # once, to a shared cache
+OUT=/scratch/$USER/footage sbatch --partition=yours nextflow/submit.sbatch
+```
+
+The job it submits is the *driver*: one core running Nextflow, which submits one job
+per recording and waits. Submitting that rather than running it on a login node is the
+difference between a collection that survives a dropped session and one that does not.
+It checks the things that would otherwise show up as a thousand identical failures
+twenty minutes into a queue — that the interpreter can import the package, that the
+detector is in a cache it can reach, that the work directory is not node-local — and
+re-submitting after any interruption picks up where it stopped. `PROFILE=local` runs the
+same thing on one machine, which is the cheapest way to find out the environment is
+wrong before a queue tells you.
+
+Four things are worth knowing before submitting. `--dives`/`--perDive`/
 `--limit` default to *everything*, which for this catalogue is about eleven thousand
 recordings and some nine hundred hours. The `slurm` profile asks for a two-hour walltime
 per task, because a queue whose default is shorter than a recording is how a long
