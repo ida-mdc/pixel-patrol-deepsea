@@ -227,8 +227,8 @@ see it.
 
 ### What the pipeline actually does
 
-End to end, `collect run DSMOT` over all five annotated sequences at every slice —
-288 frames, 4,433 detections against 5,878 annotated animals:
+End to end, `collect run DSMOT` over the five annotated sequences the catalogue held at
+the time, at every slice — 288 frames, 4,433 detections against 5,878 annotated animals:
 
 | | detections | annotated | precision | recall |
 | --- | --- | --- | --- | --- |
@@ -243,6 +243,12 @@ End to end, `collect run DSMOT` over all five annotated sequences at every slice
 finds ten points more of the animals. `BS` moved from 0.51 to 0.52 and will not move
 further — a third of its annotations are never proposed at any confidence, which is
 the model rather than a threshold. The three others had never been scored at all.
+
+`MD_BTL` is a sixth sequence now and not in these numbers. All eleven sequences MBARI
+publishes carry ground truth — four of them in the `gt/` directory the MOT format
+specifies rather than beside the recording, which is the only reason this one looked for
+a while like it had none. It is 10 MB with 374 boxes; the five that are still left out are
+4K and 2.2 GB each, and two of those five are the same footage under two names.
 
 `MD_FLN` is the one that does badly, and it fails for the same reason full resolution
 does. Its animals fill the frame — the largest annotated box is 1164×1080 — and a model
@@ -495,6 +501,16 @@ climbs 172 → 201 → 230 → 866 m over the first hour, and `altitude_m` drops
 two once the vehicle is flying the bottom — which is a decent proxy for whether a slice
 shows the seabed or open water. It is read out of a 16 MB zip over range requests, for the
 one member wanted, in about five seconds.
+
+**Both of these come in two notations, and reading only the newer one is silent.** The
+2016 cruises head their track `time (unix sec), lat (dec. deg.), ... depth (m)` and put
+depth after longitude; the 2019-and-later ones head it `UNIXTIME,DEPTH,ALT,LAT_DD,LON_DD`.
+Their dive reports differ the same way — `Max. depth` and `28°, 15.148' N` against
+`Max Vehicle Depth` and `28.2525`. A parser that knows one of the two does not announce
+that it is looking at the other; it returns a cruise with no depth, no bottom time and no
+position, and the pipeline goes on to analyse its descent. So the columns are matched by
+name rather than by position, both notations of a coordinate are read, and a moment whose
+position is `N/A` keeps its time rather than being dropped whole.
 
 The recipe lives in the catalogue rather than in code, because the answer differs per dive
 and per deployment and the archive is the one that knows it:

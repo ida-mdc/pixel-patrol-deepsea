@@ -122,11 +122,28 @@ def _entries(url: str) -> List[str]:
             if not href.startswith(("/", "http", "..", "?"))]
 
 
-def truth_url(expedition: Expedition, video: str) -> Optional[str]:
-    """Where the ground truth for one recording lives, if the expedition has any."""
+def truth_urls(expedition: Expedition, video: str) -> List[str]:
+    """Where the ground truth for one recording may live, likeliest first.
+
+    A MOT dataset puts it in one of two places, and DeepSea-MOT uses both: some
+    sequences keep `gt.txt` beside the recording and the rest keep it in the `gt/`
+    directory the format specifies. Which of the two a sequence chose is not
+    something a catalogue entry should have to state per recording, so both are
+    offered and the caller takes the one that answers.
+    """
     if not expedition.truth:
-        return None
-    return video.rsplit("/", 1)[0] + "/" + expedition.truth
+        return []
+    folder = video.rsplit("/", 1)[0]
+    candidates = [f"{folder}/{expedition.truth}"]
+    if "/" not in expedition.truth:
+        candidates.append(f"{folder}/gt/{expedition.truth}")
+    return candidates
+
+
+def truth_url(expedition: Expedition, video: str) -> Optional[str]:
+    """The first place to look for one recording's ground truth."""
+    candidates = truth_urls(expedition, video)
+    return candidates[0] if candidates else None
 
 
 def video_size(url: str) -> int:

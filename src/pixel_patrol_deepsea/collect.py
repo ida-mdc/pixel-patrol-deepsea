@@ -317,7 +317,7 @@ def score(expedition_id: str, root: Path) -> int:
 
     import polars as pl
 
-    from pixel_patrol_deepsea.catalogue import truth_url
+    from pixel_patrol_deepsea.catalogue import truth_urls
     from pixel_patrol_deepsea.groundtruth import (
         FLOORS, first_annotated_frame, pool, read_mot, score_recording)
     from pixel_patrol_deepsea.remote_file import open_with_retry
@@ -339,7 +339,7 @@ def score(expedition_id: str, root: Path) -> int:
         detections = found.get(name)
         if not detections:
             continue
-        truth = read_mot(_fetch_text(truth_url(expedition, video)))
+        truth = _read_truth(expedition, video, read_mot)
         if not truth:
             continue
         # The original recording's frame rate, read from its header over one range
@@ -418,6 +418,25 @@ def _fps_of(video: str) -> float:
     except Exception as exc:
         logger.warning("cannot read the frame rate of %s: %s", video, exc)
         return 0.0
+
+
+def _read_truth(expedition, video: str, read_mot):
+    """The ground truth beside one recording, from wherever that archive keeps it.
+
+    Both layouts are tried before giving up, and a recording with none is a
+    recording that is not scored - not a failure of the expedition.
+    """
+    from pixel_patrol_deepsea.catalogue import truth_urls
+
+    for url in truth_urls(expedition, video):
+        try:
+            truth = read_mot(_fetch_text(url))
+        except Exception as exc:                     # 404 on the layout it does not use
+            logger.debug("no ground truth at %s: %s", url, exc)
+            continue
+        if truth:
+            return truth
+    return {}
 
 
 def _fetch_text(url: str) -> str:

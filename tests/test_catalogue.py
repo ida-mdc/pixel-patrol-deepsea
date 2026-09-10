@@ -106,3 +106,27 @@ def test_the_shipped_catalogue_has_one_scoreable_expedition():
     scoreable = [e for e in catalogue if e.truth]
     assert scoreable, "no expedition ships per-frame ground truth"
     assert all(e.videos for e in scoreable)
+
+
+def test_ground_truth_is_looked_for_in_both_layouts_a_mot_dataset_uses():
+    from pixel_patrol_deepsea.catalogue import truth_urls
+
+    # DeepSea-MOT uses both: seven sequences keep gt.txt beside the recording and
+    # four keep it in the gt/ directory the MOT format specifies. Knowing which is
+    # which per recording is not a thing a catalogue entry should have to state.
+    scored = Expedition(id="B", videos=["http://b/MD_BTL/MD_BTL.mp4"], truth="gt.txt")
+    assert truth_urls(scored, scored.videos[0]) == [
+        "http://b/MD_BTL/gt.txt", "http://b/MD_BTL/gt/gt.txt"]
+
+
+def test_a_truth_path_with_a_directory_in_it_is_taken_as_given():
+    from pixel_patrol_deepsea.catalogue import truth_urls
+
+    stated = Expedition(id="B", videos=["http://b/x/x.mov"], truth="labels/gt.txt")
+    assert truth_urls(stated, stated.videos[0]) == ["http://b/x/labels/gt.txt"]
+
+
+def test_an_expedition_without_ground_truth_points_at_nothing():
+    from pixel_patrol_deepsea.catalogue import truth_urls
+
+    assert truth_urls(Expedition(id="B", videos=["http://b/x.mov"]), "http://b/x.mov") == []

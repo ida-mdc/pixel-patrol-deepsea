@@ -13,8 +13,8 @@ import json
 import pytest
 
 from pixel_patrol_deepsea.locations import (
-    Fix, Track, dive_number, one_place, recorded_at, working_window,
-    _kml_points, _path_polygon, _read_rov_track,
+    Fix, Track, dive_number, one_place, read_dive_summary, recorded_at,
+    working_window, _kml_points, _path_polygon, _read_rov_track,
 )
 
 ROV_TRACK = "\n".join([
@@ -134,3 +134,108 @@ def test_the_working_window_is_the_bottom_time_only():
 def test_no_window_when_the_report_does_not_say():
     assert working_window({}) is None
     assert working_window({"on_bottom_at": "not a time", "off_bottom_at": "either"}) is None
+
+
+# ── the two generations of the dive report ────────────────────────────────────
+#
+# Both of these are the real thing, trimmed: the first is EX1903L2_DIVE01.txt as
+# the 2019 cruise published it, the second EX2107_DIVE06.txt from 2021. The
+# archive changed notation between them - "Max. depth" became "Max Vehicle Depth",
+# degrees-and-minutes became decimal degrees - and reading only the newer one is
+# not a cruise with no depths. It is a cruise whose descent gets analysed, because
+# nothing knows when it reached the bottom.
+
+OLD_REPORT = "\r\n".join([
+    "\t  Dive Summary:\tEX1903L2_DIVE01",
+    "^" * 52,
+    "In Water:\t\t 2019-06-21T12:50:53.109671",
+    "\t\t\t 28°, 15.064' N ; 79°, 36.072' W",
+    "",
+    "On Bottom:\t\t 2019-06-21T14:38:19.051810",
+    "\t\t\t 28°, 15.148' N ; 79°, 35.923' W",
+    "",
+    "Off Bottom:\t\t 2019-06-21T20:05:00.878717",
+    "\t\t\t 28°, 14.808' N ; 79°, 35.793' W",
+    "",
+    "Dive duration:\t\t 7:55:28",
+    "",
+    "Max. depth: \t\t 805.0 m",
+    "",
+])
+
+NEW_REPORT = "\r\n".join([
+    "      Dive Summary:  EX2107_DIVE06",
+    "^" * 41,
+    "Dive Type:  Normal",
+    "",
+    "In Water:   2021-11-03T12:44:56.946453",
+    "            30.191408243835685 ; -76.16497038526963",
+    "",
+    "On Bottom:  2021-11-03T15:21:39.434243",
+    "            30.19140840883748 ; -76.16348021710911",
+    "",
+    "Off Bottom: 2021-11-03T18:27:00.230753",
+    "            30.19048589432155 ; -76.16497938083789",
+    "",
+    "Max Vehicle Depth:     3650.3 m",
+    "",
+    "Min Seafloor Depth:    3594.3 m",
+    "",
+])
+
+
+def test_reads_the_depth_out_of_either_generation_of_report():
+    assert read_dive_summary(OLD_REPORT)["max_depth_m"] == pytest.approx(805.0)
+    assert read_dive_summary(NEW_REPORT)["max_depth_m"] == pytest.approx(3650.3)
+
+
+def test_degrees_and_minutes_are_the_same_position_as_decimal_degrees():
+    old = read_dive_summary(OLD_REPORT)
+    # 28 deg 15.148' N, 79 deg 35.923' W, west of Greenwich and so negative
+    assert old["latitude"] == pytest.approx(28 + 15.148 / 60)
+    assert old["longitude"] == pytest.approx(-(79 + 35.923 / 60))
+    assert read_dive_summary(NEW_REPORT)["latitude"] == pytest.approx(30.19140840883748)
+
+
+def test_the_bottom_time_is_read_from_the_older_report_too():
+    # The reason the notation matters at all: without this window every hour of
+    # descent through open water is analysed like the seafloor.
+    start, stop = working_window(read_dive_summary(OLD_REPORT))
+    assert start.isoformat() == "2019-06-21T14:38:19.051810+00:00"
+    assert stop.isoformat() == "2019-06-21T20:05:00.878717+00:00"
+
+
+def test_a_moment_with_no_position_keeps_its_time():
+    # EX1605L1 dive 12: the navigation was not recorded when the vehicle entered
+    # the water. That is one missing coordinate, not a missing dive.
+    report = OLD_REPORT.replace("28°, 15.064' N ; 79°, 36.072' W", "N/A ; N/A")
+    summary = read_dive_summary(report)
+    assert summary["in_water_at"].startswith("2019-06-21T12:50:53")
+    assert "in_water_latitude" not in summary
+    assert summary["on_bottom_latitude"] == pytest.approx(28 + 15.148 / 60)
+
+
+# The 2016 cruises head their track differently and put depth after longitude
+# rather than before it. Reading the header rather than the column order is what
+# makes both files the same thing to everything downstream.
+OLD_ROV_TRACK = "\n".join([
+    "date(mm/dd/yyyy),time(HH:MM:SS.SSS),time (unix sec),lat (dec. deg.),"
+    " lon (dec. deg.), depth (m), alt (m)  ",
+    "04/20/2016,20:47:00.000,1461185220.000,12.860403590961,144.301759555744,  49.6,  nan ",
+    "04/20/2016,21:47:00.000,1461188820.000,12.860516666666,144.304116666666,  634.2,  3.1 ",
+])
+
+
+def test_a_track_is_read_by_its_header_not_its_column_order():
+    track = _read_rov_track(OLD_ROV_TRACK, "test")
+    assert len(track) == 2
+    fix = track.at(1461188820.0)
+    assert fix.latitude == pytest.approx(12.8605166)
+    assert fix.longitude == pytest.approx(144.3041166)
+    # published positive here and negative on the newer cruises; depth either way
+    assert fix.depth_m == pytest.approx(634.2)
+    assert fix.altitude_m == pytest.approx(3.1)
+
+
+def test_a_track_with_no_position_columns_is_no_track():
+    assert _read_rov_track("a,b\n1,2\n", "test") is None

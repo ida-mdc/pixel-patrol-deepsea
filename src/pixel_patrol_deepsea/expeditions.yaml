@@ -34,7 +34,9 @@
   location:
     kind: noaa-dive
     data: https://oer.hpc.msstate.edu/okeanos/ex1903l2/
-  notes: 19 dives on the Blake Plateau and Blake Escarpment.
+  notes: >-
+    19 dives on the Blake Plateau and Blake Escarpment, the deepest at 3498 m. The
+    earlier half of the only repeat visit in this catalogue - see EX2107.
 
 - id: EX1605L1
   name: Deepwater Exploration of the Marianas
@@ -51,15 +53,25 @@
   location:
     kind: noaa-dive
     data: https://oer.hpc.msstate.edu/okeanos/ex1605l1/
-  notes: Mariana Trench Marine National Monument; hydrothermal and seamount sites.
+  notes: >-
+    Mariana Trench Marine National Monument; hydrothermal and seamount sites.
+    Nineteen dives, and dive 3 worked at 4996 m - the deepest footage in this
+    catalogue, which is not something the collection knew until its dive reports
+    could be read.
 
 # The one set here with per-frame ground truth: every animal in every frame is
-# boxed, in MOT format, in a gt.txt beside each recording. That makes it the only
+# boxed, in MOT format, in a gt.txt for each recording. That makes it the only
 # expedition whose numbers can be checked rather than believed, which is why it is
 # worth processing first and looking at hardest.
 #
-# Four of the eleven published sequences have no gt.txt and are left out; the two
-# 4K ones are 2.2 GB each and left out for now.
+# All eleven published sequences carry ground truth - checked against the archive,
+# not assumed. Seven keep it beside the recording and four in the `gt/`
+# subdirectory the MOT format specifies, so both places are looked in (see
+# `catalogue.truth_urls`). What decides what is listed here is size, not truth:
+# the six HD sequences are all here, and the five 4K ones are 2.2 GB each and left
+# out for now. Two of those five, MD_CAN and MD_CLS, are the same footage under
+# two names - identical video and byte-identical annotations - so they would be
+# one sequence, not two.
 - id: DSMOT
   name: MBARI DeepSea-MOT
   archive: MBARI, via Hugging Face
@@ -69,11 +81,16 @@
   notes: >-
     A multi-object-tracking benchmark for deep-sea video. B* sequences are benthic
     and M* midwater, which matters: a midwater detector scores nothing on the
-    benthic ones.
+    benthic ones. Recorded at 1920x1080 and 25 to 60 frames a second - a different
+    camera from the 640x360 proxies every NOAA cruise here is read at, which is
+    the standing caveat on every number scored against it.
   videos:
     - https://huggingface.co/datasets/MBARI-org/DeepSea-MOT/resolve/main/data/MWD/MWD.mov
     - https://huggingface.co/datasets/MBARI-org/DeepSea-MOT/resolve/main/data/MWS/MWS.mov
     - https://huggingface.co/datasets/MBARI-org/DeepSea-MOT/resolve/main/data/MD_FLN/MD_FLN.mp4
+    # 10 MB and 374 annotated boxes, with its ground truth in `gt/` rather than
+    # beside it - which is the only reason it used to look like it had none.
+    - https://huggingface.co/datasets/MBARI-org/DeepSea-MOT/resolve/main/data/MD_BTL/MD_BTL.mp4
     - https://huggingface.co/datasets/MBARI-org/DeepSea-MOT/resolve/main/data/BD/BD.mov
     - https://huggingface.co/datasets/MBARI-org/DeepSea-MOT/resolve/main/data/BS/BS.mov
 
@@ -86,8 +103,15 @@
 # not a download of the dive.
 #
 # All four publish a 1 Hz vehicle track, so their footage gets a position and a
-# depth per slice rather than one per dive. That is the reason to prefer these
-# over older cruises with the same footage and no navigation beside it.
+# depth per slice rather than one per dive.
+#
+# That used to be written down here as the reason to prefer them over the older
+# cruises. It was wrong: EX1903L2 and EX1605L1 publish the same 1 Hz track and the
+# same dive reports, in an older notation - "Max. depth" and degrees-and-minutes
+# rather than "Max Vehicle Depth" and decimal degrees - that this package could
+# not read, so they arrived with no depth and no on-bottom window and quietly had
+# their descent footage analysed. `locations` reads both notations now. What is
+# actually newer about these four is the footage, not the navigation.
 
 - id: EX2503
   name: "Beyond the Blue: Papahanaumokuakea 2025"
@@ -102,8 +126,8 @@
     data: https://oer.hpc.msstate.edu/okeanos/ex2503/
   notes: >-
     Seamounts and abyssal plain in and around Papahanaumokuakea, Central Pacific.
-    The deepest footage in this catalogue: dive 2 worked at 4859 m and dive 13 at
-    4599 m, out near the dateline.
+    Dive 2 worked at 4859 m and dive 13 at 4599 m, out near the dateline - the
+    deepest of the four cruises in this section, and second only to EX1605L1.
 
 - id: EX2306
   name: Seascape Alaska 5

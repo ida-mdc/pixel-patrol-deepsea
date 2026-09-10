@@ -234,19 +234,61 @@ def noaa_rov_track(data_url: str, dive: int) -> Optional[Track]:
 # What the dive's own report states about itself. Read rather than recomputed: the
 # vehicle's operators decided when it was on the bottom, and that is not something
 # to infer from a depth trace.
+# Two generations of this report say the same things in different words. Cruises
+# from 2021 on write "Max Vehicle Depth" and decimal degrees; 2016 to 2019 write
+# "Max. depth" and degrees-and-minutes. Both are read, because the older cruises
+# are a third of this catalogue and a summary that does not parse is not a
+# cruise without depths - it is a cruise whose transit footage gets analysed.
 SUMMARY_FIELDS = {
-    "max_depth_m": re.compile(r"Max Vehicle Depth:\s*([0-9.]+)"),
-    "seafloor_depth_m": re.compile(r"Min Seafloor Depth:\s*([0-9.]+)"),
-    "distance_m": re.compile(r"Distance Travelled:\s*([0-9.]+)"),
+    "max_depth_m": re.compile(r"Max(?:\.|imum)?\s*(?:Vehicle\s*)?depth:\s*([0-9.]+)",
+                              re.IGNORECASE),
+    "seafloor_depth_m": re.compile(r"Min Seafloor Depth:\s*([0-9.]+)", re.IGNORECASE),
+    "distance_m": re.compile(r"Distance Travelled:\s*([0-9.]+)", re.IGNORECASE),
 }
 # Each of the dive's four moments, with the position it happened at. The pair that
 # matters is on-bottom and off-bottom: everything before the first and after the
 # second is the vehicle in transit through empty water, which is most of a deep
 # dive's footage and none of its interest.
-EVENT = r"{label}:\s*(\S+)\s*\n\s*([-0-9.]+)\s*;\s*([-0-9.]+)"
+#
+# The time and the position are matched separately and the position is optional.
+# They arrive on two lines and the second one is the fragile half - it is
+# degrees-and-minutes on the older cruises and literally "N/A ; N/A" where the
+# navigation dropped out - and losing a whole dive's on-bottom *window* because
+# its coordinates are written in another notation would be the expensive kind of
+# strictness.
+EVENT = r"{label}:[ \t]*(\S+)[ \t]*\r?\n[ \t]*([^\r\n]*)"
 EVENTS = {name: re.compile(EVENT.format(label=label)) for name, label in (
     ("in_water", "In Water"), ("on_bottom", "On Bottom"),
     ("off_bottom", "Off Bottom"), ("out_water", "Out Water"))}
+
+DECIMAL_POSITION = re.compile(r"^\s*(-?[0-9.]+)\s*;\s*(-?[0-9.]+)\s*$")
+# 28°, 15.064' N ; 79°, 36.072' W - degrees, decimal minutes, hemisphere.
+DMS_POSITION = re.compile(
+    r"(\d+)\s*°?,?\s*([0-9.]+)'\s*([NSEW])\s*;\s*(\d+)\s*°?,?\s*([0-9.]+)'\s*([NSEW])")
+
+
+def _position(line: str) -> Optional[Tuple[float, float]]:
+    """Latitude and longitude from the line under one of the dive's moments.
+
+    Both notations the archive uses, and None for the rows that say "N/A" - a
+    dive whose in-water fix was never recorded still has an on-bottom one.
+    """
+    decimal = DECIMAL_POSITION.match(line)
+    if decimal:
+        return float(decimal.group(1)), float(decimal.group(2))
+    minutes = DMS_POSITION.search(line)
+    if not minutes:
+        return None
+    first, second = [], []
+    for degrees, minute, hemisphere in ((minutes.group(1), minutes.group(2), minutes.group(3)),
+                                        (minutes.group(4), minutes.group(5), minutes.group(6))):
+        value = float(degrees) + float(minute) / 60.0
+        if hemisphere in ("S", "W"):
+            value = -value
+        (first if hemisphere in ("N", "S") else second).append(value)
+    if len(first) != 1 or len(second) != 1:
+        return None
+    return first[0], second[0]
 
 
 def noaa_dive_summary(data_url: str, dive: int) -> Optional[dict]:
@@ -260,6 +302,16 @@ def noaa_dive_summary(data_url: str, dive: int) -> Optional[dict]:
     if found is None:
         return None
     name, text = found
+    return read_dive_summary(text, dive, name)
+
+
+def read_dive_summary(text: str, dive: int = 0, name: str = "") -> dict:
+    """One dive report, read in whichever notation the cruise wrote it in.
+
+    Separate from fetching it so the two generations of the format can be tested
+    against the real thing without a network - which is the only way to know that
+    the older one parses, since what it looks like is the whole question.
+    """
     out = {"dive": dive, "summary": name}
     for field_name, pattern in SUMMARY_FIELDS.items():
         match = pattern.search(text)
@@ -267,10 +319,12 @@ def noaa_dive_summary(data_url: str, dive: int) -> Optional[dict]:
             out[field_name] = float(match.group(1))
     for field_name, pattern in EVENTS.items():
         match = pattern.search(text)
-        if match:
-            out[f"{field_name}_at"] = match.group(1)
-            out[f"{field_name}_latitude"] = float(match.group(2))
-            out[f"{field_name}_longitude"] = float(match.group(3))
+        if not match:
+            continue
+        out[f"{field_name}_at"] = match.group(1)
+        where = _position(match.group(2))
+        if where is not None:
+            out[f"{field_name}_latitude"], out[f"{field_name}_longitude"] = where
     # The dive's position, plainly: where the vehicle was when it reached the
     # bottom and started working.
     if "on_bottom_latitude" in out:
@@ -296,24 +350,60 @@ def working_window(summary: dict) -> Optional[Tuple[datetime, datetime]]:
         return None
 
 
+# What each column of a 1 Hz track is, whatever the cruise called it. The newer
+# files head it DATE,TIME,UNIXTIME,DEPTH,ALT,LAT_DD,LON_DD; the 2016 ones write
+# "time (unix sec)", "lat (dec. deg.)" and put depth after longitude instead of
+# before it. Reading the header rather than the column order is what makes both
+# the same file to everything downstream.
+TRACK_COLUMNS = (
+    ("when", lambda name: "unix" in name),
+    ("latitude", lambda name: name.startswith("lat")),
+    ("longitude", lambda name: name.startswith("lon")),
+    ("depth", lambda name: name.startswith("depth")),
+    ("altitude", lambda name: name.startswith("alt")),
+)
+
+
+def _track_columns(fieldnames: Optional[Sequence[str]]) -> Dict[str, str]:
+    """Which raw header holds each thing a fix needs."""
+    found: Dict[str, str] = {}
+    for raw in fieldnames or []:
+        name = (raw or "").strip().lower()
+        for role, matches in TRACK_COLUMNS:
+            if role not in found and matches(name):
+                found[role] = raw
+                break
+    return found
+
+
 def _read_rov_track(text: str, source: str) -> Optional[Track]:
-    """DATE,TIME,UNIXTIME,DEPTH,ALT,LAT_DD,LON_DD, skipping the rows with no fix.
+    """A unix time, a position and a depth per second, skipping the rows with no fix.
 
     The surface and descent rows have empty coordinates, and DEPTH is published as
-    a negative number - metres below the surface, signed as an elevation. It is
-    turned positive here because everything downstream, and every reader, means
-    depth as a positive number of metres down.
+    a negative number on the newer cruises - metres below the surface, signed as an
+    elevation - and a positive one on the older cruises. It is turned positive here
+    because everything downstream, and every reader, means depth as a positive
+    number of metres down.
     """
+    rows = csv.DictReader(io.StringIO(text))
+    columns = _track_columns(rows.fieldnames)
+    if not {"when", "latitude", "longitude"} <= set(columns):
+        logger.warning("%s: no time and position columns in %s", source, rows.fieldnames)
+        return None
+
+    def value(row: dict, role: str) -> Optional[float]:
+        return _number(row.get(columns[role])) if role in columns else None
+
     fixes: List[Tuple[float, Fix]] = []
-    for row in csv.DictReader(io.StringIO(text)):
-        when = _number(row.get("UNIXTIME"))
-        latitude, longitude = _number(row.get("LAT_DD")), _number(row.get("LON_DD"))
+    for row in rows:
+        when = value(row, "when")
+        latitude, longitude = value(row, "latitude"), value(row, "longitude")
         if when is None or latitude is None or longitude is None:
             continue
-        depth = _number(row.get("DEPTH"))
+        depth = value(row, "depth")
         fixes.append((when, Fix(latitude=latitude, longitude=longitude,
                                 depth_m=None if depth is None else abs(depth),
-                                altitude_m=_number(row.get("ALT")), source=source)))
+                                altitude_m=value(row, "altitude"), source=source)))
     if not fixes:
         return None
     logger.info("%s: %d fixes", source, len(fixes))
