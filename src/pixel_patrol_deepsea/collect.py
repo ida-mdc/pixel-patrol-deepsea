@@ -22,6 +22,7 @@ either way; the difference is one recording of transient disk.
 
 import argparse
 import functools
+import hashlib
 import json
 import logging
 import os
@@ -893,12 +894,48 @@ def build_site(root: Path) -> int:
     # collection root rather than the folder it is about to create.
     viewer = root / "viewer"
     api.build_viewer(root)
+    _stamp_plugin_urls(viewer)
     print(f"viewer -> {viewer}")
     combine(root)
     _write_taxonomy(root)
     page = write_catalogue_page(root)
     print(f"catalogue -> {page}")
     return 0
+
+
+def _stamp_plugin_urls(viewer: Path) -> None:
+    """Put each plugin's own content hash in the URL the viewer asks for.
+
+    The viewer reads `pp_extension_urls.json` with `no-store` and then fetches the
+    manifests and plugins it names as ordinary URLs. Those paths never change, so a
+    browser that has seen `plugin_deepsea.js` once keeps serving the copy it has:
+    the page rebuilds, `index.html` is new because it is written inline, and the
+    widgets are yesterday's - which looks exactly like a build that did not pick up
+    the change, and was one afternoon spent proving that it had.
+
+    A hash in the query string makes the URL change when the file does and stay put
+    when it does not, so the browser reloads a rebuilt plugin and keeps a cached
+    unchanged one. Done here rather than in the manifest the package ships, because
+    it is a fact about a built copy and not about the source.
+    """
+    for manifest in sorted(viewer.glob("extensions/*/extension.json")):
+        try:
+            listed = json.loads(manifest.read_text())
+        except Exception:
+            continue
+        stamped, changed = [], False
+        for plugin in listed.get("plugins", []):
+            name = str(plugin).split("?", 1)[0]
+            beside = manifest.parent / name
+            if not beside.is_file():
+                stamped.append(plugin)
+                continue
+            digest = hashlib.sha256(beside.read_bytes()).hexdigest()[:12]
+            stamped.append(f"{name}?v={digest}")
+            changed = True
+        if changed:
+            listed["plugins"] = stamped
+            manifest.write_text(json.dumps(listed, indent=2))
 
 
 def _write_taxonomy(root: Path) -> None:

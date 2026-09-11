@@ -191,3 +191,43 @@ def test_no_ffmpeg_anywhere_says_how_to_get_one(monkeypatch):
     with pytest.raises(RuntimeError, match="conda-forge ffmpeg"):
         collect.ffmpeg()
     collect.ffmpeg.cache_clear()
+
+
+def test_a_rebuilt_plugin_gets_a_url_the_browser_treats_as_new(tmp_path):
+    """The failure this prevents looks exactly like a build that did not work.
+
+    The viewer fetches each plugin from a path that never changes, so a browser
+    that has seen one keeps serving its copy: the page rebuilds, index.html is new
+    because it is written inline, and the widgets are yesterday's.
+    """
+    from pixel_patrol_deepsea.collect import _stamp_plugin_urls
+
+    extension = tmp_path / "extensions" / "00-viewer"
+    extension.mkdir(parents=True)
+    (extension / "plugin_deepsea.js").write_text("export const one = 1;\n")
+    (extension / "extension.json").write_text(
+        json.dumps({"name": "Deep-Sea Extension", "plugins": ["./plugin_deepsea.js"]}))
+
+    _stamp_plugin_urls(tmp_path)
+    first = json.loads((extension / "extension.json").read_text())["plugins"][0]
+    assert first.startswith("./plugin_deepsea.js?v=")
+
+    # Rebuilding an unchanged plugin keeps the URL, so the cache is still used...
+    _stamp_plugin_urls(tmp_path)
+    assert json.loads((extension / "extension.json").read_text())["plugins"][0] == first
+
+    # ...and changing it changes the URL, so the browser fetches the new one.
+    (extension / "plugin_deepsea.js").write_text("export const one = 2;\n")
+    _stamp_plugin_urls(tmp_path)
+    assert json.loads((extension / "extension.json").read_text())["plugins"][0] != first
+
+
+def test_a_manifest_naming_a_plugin_that_is_not_there_is_left_alone(tmp_path):
+    from pixel_patrol_deepsea.collect import _stamp_plugin_urls
+
+    extension = tmp_path / "extensions" / "00-viewer"
+    extension.mkdir(parents=True)
+    (extension / "extension.json").write_text(
+        json.dumps({"plugins": ["./absent.js"]}))
+    _stamp_plugin_urls(tmp_path)
+    assert json.loads((extension / "extension.json").read_text())["plugins"] == ["./absent.js"]
