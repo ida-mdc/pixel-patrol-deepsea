@@ -159,7 +159,13 @@ function timelineColumns(ctx, { only } = {}) {
   // the hours of work on the bottom, the ascent - and the UTC stamp is the only
   // thing that can put this recording beside one from another decade.
   const depth = has('depth_m', 'depth') ? `, ${q('depth_m')} AS depth` : ', NULL AS depth';
-  const clock = has('recorded_at', 'at') ? `, ${q('recorded_at')} AS at` : ', NULL AS at';
+  // Aliased `stamp`, never `at`. `at` opens `AT TIME ZONE` in DuckDB's grammar, so
+  // a query selecting `AS at` does not fail to find a column, it fails to parse -
+  // and in the browser's wasm build a DuckDB parse error arrives as `_setThrew is
+  // not defined` with the message gone, which is what made this take a day to find
+  // twice before. The rows are renamed back to `at` on the way out, because that
+  // is what reads them. Third time in this file.
+  const clock = has('recorded_at', 'at') ? `, ${q('recorded_at')} AS stamp` : ', NULL AS stamp';
   return `${extra}${structure}${objects}${detections}${movers}${depth}${clock}`;
 }
 
@@ -170,7 +176,12 @@ async function fetchTimeline(ctx, recording) {
   const rows = await ctx.queryRows(`
     SELECT ${q('dim_t')} AS t, ${q('frame_difference')} AS movement${timelineColumns(ctx)}
     FROM ${sliceTable(ctx)} WHERE ${parts.join(' AND ')} ORDER BY t`);
-  return rows.filter(r => Number.isFinite(Number(r.movement)));
+  return rows.filter(r => Number.isFinite(Number(r.movement))).map(withClock);
+}
+
+/** `stamp` back to `at`, which is what every reader of a timeline row calls it. */
+function withClock(row) {
+  return 'stamp' in row && !('at' in row) ? { ...row, at: row.stamp } : row;
 }
 
 /** Every recording's timeline, in one query rather than one query each.
@@ -216,7 +227,7 @@ export async function fetchTimelines(ctx, recordings, { only } = {}) {
       const name = String(row.rec);
       if (!wanted.has(name)) continue;
       if (!byRecording.has(name)) byRecording.set(name, []);
-      byRecording.get(name).push(row);
+      byRecording.get(name).push(withClock(row));
     }
   }
   for (const timeline of byRecording.values()) {

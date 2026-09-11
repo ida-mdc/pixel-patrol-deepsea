@@ -1305,7 +1305,11 @@ describe('a timeline is asked for the columns it will read', () => {
     const asked = [];
     await fetchTimelines(ctxFor(asked), [{ name: 'a' }, { name: 'b' }]);
     expect(asked[0]).toContain('"depth_m" AS depth');
-    expect(asked[0]).toContain('"recorded_at" AS at');
+    // `AS stamp`, never `AS at`: `at` opens `AT TIME ZONE` in DuckDB's grammar, so
+    // the query fails to parse, and the browser's wasm build reports that as
+    // `_setThrew is not defined` with the message gone.
+    expect(asked[0]).toContain('"recorded_at" AS stamp');
+    expect(asked[0]).not.toMatch(/\bAS at\b/);
   });
 
   it('sends nulls for the columns the caller has no use for', async () => {
@@ -1316,11 +1320,33 @@ describe('a timeline is asked for the columns it will read', () => {
     await fetchTimelines(ctxFor(asked), [{ name: 'a' }, { name: 'b' }],
                          { only: ['structure', 'detections', 'movers', 'top_class'] });
     expect(asked[0]).toContain('NULL AS depth');
-    expect(asked[0]).toContain('NULL AS at');
+    expect(asked[0]).toContain('NULL AS stamp');
     expect(asked[0]).toContain('NULL AS peak');
     // ...and still fetches what was asked for
     expect(asked[0]).toContain('"std_intensity" AS structure');
     expect(asked[0]).toContain('"detection_count" AS detections');
     expect(asked[0]).toContain('"moving_object_count" AS movers');
+  });
+});
+
+describe('nothing is ever aliased `at`', () => {
+  // Three times now. `at` opens `AT TIME ZONE` in DuckDB's grammar, so a query
+  // selecting `AS at` does not fail to find a column - it fails to parse. In the
+  // browser's wasm build that arrives as `_setThrew is not defined` with the
+  // message discarded, which is a day to find and one line to fix.
+  it('keeps the clock under a name the parser has no opinion about', async () => {
+    const asked = [];
+    const ctx = {
+      sql: { q: n => `"${n}"`, dimSubsetWhere: () => ['1=1'], groupCol: () => null },
+      schema: { allCols: ['frame_difference', 'recorded_at', 'name', 'dim_t'],
+                dimCols: ['dim_t'] },
+      state: { groupCol: null }, where: '',
+      async queryRows(sql) { asked.push(sql); return [{ rec: 'a', t: 0, movement: 1,
+                                                        stamp: '2021-11-03T15:24:59' }]; },
+    };
+    const got = await fetchTimelines(ctx, [{ name: 'a' }, { name: 'b' }]);
+    expect(asked.every(sql => !/\bAS at\b/.test(sql))).toBe(true);
+    // ...and the rows still arrive under the name every reader uses
+    expect(got.get('a')[0].at).toBe('2021-11-03T15:24:59');
   });
 });
