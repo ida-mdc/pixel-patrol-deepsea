@@ -116,40 +116,50 @@ const sliceTable = (ctx) => ctx.schema.allTable ?? 'pp_all';
  * for. Shared by the one-recording and the whole-collection queries so the two
  * cannot drift into returning different shapes of row.
  */
-function timelineColumns(ctx) {
+function timelineColumns(ctx, { only } = {}) {
   const { q } = ctx.sql;
-  const extra = ctx.schema.allCols.includes('frame_difference_max') ? `, ${q('frame_difference_max')} AS peak` : ', NULL AS peak';
+  // A column the caller has no use for is sent as a null rather than dropped, so
+  // every row has the same shape however it was asked for and nothing downstream
+  // has to know which query it came from. The saving is the values: the triage and
+  // taxonomy widgets read six of these thirteen, over every slice of every
+  // recording, and the rest was a third of a million numbers crossing the wasm
+  // boundary to be ignored.
+  const wanted = only ? new Set(only) : null;
+  const has = (column, name) => (!wanted || wanted.has(name))
+    && ctx.schema.allCols.includes(column);
+  const extra = has('frame_difference_max', 'peak') ? `, ${q('frame_difference_max')} AS peak` : ', NULL AS peak';
   // Something has to stand in for "is there anything in the frame": a camera parked
   // on a coral colony and one parked on open water move exactly alike. Laplacian
   // variance separates them best - by two orders of magnitude on real footage - but
   // it comes from raster-quality, whose spectral_slope costs more per slice than the
   // detector does. Where that was skipped, intensity spread is the cheap stand-in:
   // weaker, but it still tells a lit subject from empty water.
-  const detailColumn = ['laplacian_variance', 'std_intensity']
-    .find(column => ctx.schema.allCols.includes(column));
+  const detailColumn = (!wanted || wanted.has('structure'))
+    ? ['laplacian_variance', 'std_intensity'].find(c => ctx.schema.allCols.includes(c))
+    : null;
   const structure = detailColumn ? `, ${q(detailColumn)} AS structure` : ', NULL AS structure';
   // Present only when raster-particles ran. Small bright particles: the animals in
   // midwater footage, marine snow near a lit seafloor - the scene decides which.
-  const objects = ctx.schema.allCols.includes('bright_particle_count')
+  const objects = has('bright_particle_count', 'objects')
     ? `, ${q('bright_particle_count')} AS objects` : ', NULL AS objects';
   // Present only when a detector ran. This is the one signal here that knows what an
   // animal is, so it takes precedence over the particle count wherever it exists.
-  const detections = ctx.schema.allCols.includes('detection_count')
+  const detections = has('detection_count', 'detections')
     ? `, ${q('detection_count')} AS detections, ${q('detection_top_class')} AS top_class`
       + `, ${q('detection_confidence')} AS confidence`
     : ', NULL AS detections, NULL AS top_class, NULL AS confidence';
   // Present only when raster-motion ran. Unlike every other signal here this one
   // needs no model, so it is the only thing that can flag an animal no detector has
   // a class for - and the two together say more than either does alone.
-  const movers = ctx.schema.allCols.includes('moving_object_count')
+  const movers = has('moving_object_count', 'movers')
     ? `, ${q('moving_object_count')} AS movers, ${q('camera_speed')} AS camera_speed`
     : ', NULL AS movers, NULL AS camera_speed';
   // Present only when slice-location ran, which needs the archive to publish
   // navigation beside the video. A dive's shape is its depth trace - the descent,
   // the hours of work on the bottom, the ascent - and the UTC stamp is the only
   // thing that can put this recording beside one from another decade.
-  const depth = ctx.schema.allCols.includes('depth_m') ? `, ${q('depth_m')} AS depth` : ', NULL AS depth';
-  const clock = ctx.schema.allCols.includes('recorded_at') ? `, ${q('recorded_at')} AS at` : ', NULL AS at';
+  const depth = has('depth_m', 'depth') ? `, ${q('depth_m')} AS depth` : ', NULL AS depth';
+  const clock = has('recorded_at', 'at') ? `, ${q('recorded_at')} AS at` : ', NULL AS at';
   return `${extra}${structure}${objects}${detections}${movers}${depth}${clock}`;
 }
 
@@ -182,7 +192,7 @@ async function fetchTimeline(ctx, recording) {
 // single one is an outlier.
 const TIMELINES_PER_QUERY = 64;
 
-export async function fetchTimelines(ctx, recordings) {
+export async function fetchTimelines(ctx, recordings, { only } = {}) {
   const { q } = ctx.sql;
   if (recordings.length <= 1) {
     const only = recordings[0];
@@ -199,7 +209,7 @@ export async function fetchTimelines(ctx, recordings) {
     // ask a browser to do, and the rows have to be split by recording here anyway.
     // Sorting each recording's own few hundred afterwards costs nothing.
     const rows = await ctx.queryRows(`
-      SELECT ${recordingKey(ctx)} AS rec, ${q('dim_t')} AS t, ${q('frame_difference')} AS movement${timelineColumns(ctx)}
+      SELECT ${recordingKey(ctx)} AS rec, ${q('dim_t')} AS t, ${q('frame_difference')} AS movement${timelineColumns(ctx, { only })}
       FROM ${sliceTable(ctx)} WHERE ${parts.join(' AND ')}`);
     for (const row of rows) {
       if (!Number.isFinite(Number(row.movement))) continue;
@@ -1605,16 +1615,33 @@ function triageHeadline(summaries) {
 }
 
 
+// Everything `findWindows` and `summariseRecording` read, and nothing else. The
+// rest of a timeline row - the peak, the confidence, the camera speed, the depth,
+// the clock - belongs to the widgets that draw them, and over every slice of a
+// collection it is a third of a million values fetched to be ignored.
+const SUMMARY_FIELDS = ['structure', 'detections', 'movers', 'top_class'];
+
+let summariesFor = null;        // one report's summaries, kept while it is open
+
 async function collectSummaries(ctx) {
+  // The preview asks for these and then the preview plot asks again, which was
+  // the same twelve queries twice over on a collection.
+  if (summariesFor && summariesFor.key === summaryKey(ctx)) return summariesFor.value;
   const recordings = await fetchRecordings(ctx);
-  const timelines = await fetchTimelines(ctx, recordings);
+  const timelines = await fetchTimelines(ctx, recordings, { only: SUMMARY_FIELDS });
   const summaries = [];
   for (const recording of recordings) {
     const timeline = timelines.get(String(recording.name)) ?? [];
     if (!timeline.length) continue;
     summaries.push(summariseRecording(recording, timeline, findWindows(timeline)));
   }
+  summariesFor = { key: summaryKey(ctx), value: summaries };
   return summaries;
+}
+
+/** What makes one report's summaries different from another's. */
+function summaryKey(ctx) {
+  return [sliceTable(ctx), ctx.where ?? '', ctx.state?.groupCol ?? ''].join('|');
 }
 
 // ── plugins ─────────────────────────────────────────────────────────────────

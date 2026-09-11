@@ -1287,3 +1287,40 @@ describe('a collection is read in one query, not one per recording', () => {
     expect(got.get('a.mp4').map(r => r.t)).toEqual([0, 1]);
   });
 });
+
+describe('a timeline is asked for the columns it will read', () => {
+  const ctxFor = (asked) => ({
+    sql: { q: n => `"${n}"`, dimSubsetWhere: () => ['1=1'], groupCol: () => null },
+    schema: { allCols: ['frame_difference', 'frame_difference_max', 'std_intensity',
+                        'detection_count', 'detection_top_class', 'detection_confidence',
+                        'moving_object_count', 'camera_speed', 'depth_m', 'recorded_at',
+                        'name', 'dim_t'],
+              dimCols: ['dim_t'] },
+    state: { groupCol: null },
+    where: '',
+    async queryRows(sql) { asked.push(sql); return []; },
+  });
+
+  it('fetches everything when the caller does not say', async () => {
+    const asked = [];
+    await fetchTimelines(ctxFor(asked), [{ name: 'a' }, { name: 'b' }]);
+    expect(asked[0]).toContain('"depth_m" AS depth');
+    expect(asked[0]).toContain('"recorded_at" AS at');
+  });
+
+  it('sends nulls for the columns the caller has no use for', async () => {
+    // The shape of a row stays the same however it was asked for, so nothing
+    // downstream has to know which query it came from - what is saved is the
+    // values, over every slice of every recording.
+    const asked = [];
+    await fetchTimelines(ctxFor(asked), [{ name: 'a' }, { name: 'b' }],
+                         { only: ['structure', 'detections', 'movers', 'top_class'] });
+    expect(asked[0]).toContain('NULL AS depth');
+    expect(asked[0]).toContain('NULL AS at');
+    expect(asked[0]).toContain('NULL AS peak');
+    // ...and still fetches what was asked for
+    expect(asked[0]).toContain('"std_intensity" AS structure');
+    expect(asked[0]).toContain('"detection_count" AS detections');
+    expect(asked[0]).toContain('"moving_object_count" AS movers');
+  });
+});
