@@ -17,14 +17,11 @@
 
 const MIN_WINDOW_ROWS = 2;     // ignore single-slice blips when grouping runs
 const MERGE_GAP_ROWS  = 10;    // bridge same-kind runs separated by less than this
-const EMPTY_DETAIL_RATIO = 0.2;  // below this share of a recording's usual detail, nothing is in frame
 // Lossy compression means a frozen frame never differs by exactly zero - codec
 // noise keeps it just above. On a real dive tape the dead tail topped out at
 // 0.0045 intensity levels while the quietest live footage sat at 0.133, so
 // anything below this threshold is "nothing is changing", not "a still camera".
 const FROZEN_BELOW      = 0.01;
-const DWELL_PERCENTILE  = 15;  // below this = camera holding still
-const ACTIVE_PERCENTILE = 90;  // above this = camera or scene moving hard
 
 export const WINDOW_KINDS = {
   frozen: { label: 'Frozen',   color: '#dc3545', desc: 'Effectively no change between frames - duplicated, dropped, or frozen footage.' },
@@ -111,6 +108,27 @@ export function recordingKey(ctx) {
 
 const sliceTable = (ctx) => ctx.schema.allTable ?? 'pp_all';
 
+/** The columns `triage.describe` writes, and the only place this file names them.
+ *
+ * What a slice was doing, and how many seconds of each verdict a recording holds,
+ * are decided in Python by `pixel_patrol_deepsea.triage` - once, while the whole
+ * recording is in hand, because two of the thresholds are percentiles of that
+ * recording's own movement. This file reads them and does not recompute them:
+ * there was one rule in two languages, and the JavaScript copy is gone.
+ *
+ * A report written before that has none of these columns. It is not a report this
+ * can judge, and it says so rather than guessing - `collect identify` writes them
+ * from what is already in the file.
+ */
+const VERDICT_KINDS = ['frozen', 'subject', 'unnamed', 'dwell', 'empty', 'active'];
+const SLICE_VERDICT = 'slice_verdict';
+const FOOTAGE_SECONDS = 'footage_seconds';
+const verdictSeconds = (kind) => `verdict_seconds_${kind}`;
+
+function hasVerdicts(schema) {
+  return schema.allCols.includes(SLICE_VERDICT) && schema.allCols.includes(FOOTAGE_SECONDS);
+}
+
 /** One row per T slice of one recording: the whole timeline, scalars only. */
 /** The optional columns a timeline reads, named the same way however it is asked
  * for. Shared by the one-recording and the whole-collection queries so the two
@@ -166,7 +184,10 @@ function timelineColumns(ctx, { only } = {}) {
   // twice before. The rows are renamed back to `at` on the way out, because that
   // is what reads them. Third time in this file.
   const clock = has('recorded_at', 'at') ? `, ${q('recorded_at')} AS stamp` : ', NULL AS stamp';
-  return `${extra}${structure}${objects}${detections}${movers}${depth}${clock}`;
+  // What the report says this slice was doing. Read, never derived.
+  const verdict = ctx.schema.allCols.includes(SLICE_VERDICT)
+    ? `, ${q(SLICE_VERDICT)} AS verdict` : ', NULL AS verdict';
+  return `${extra}${structure}${objects}${detections}${movers}${depth}${clock}${verdict}`;
 }
 
 async function fetchTimeline(ctx, recording) {
@@ -242,16 +263,11 @@ export async function fetchTimelines(ctx, recordings, { only } = {}) {
 export function findWindows(timeline) {
   if (timeline.length < MIN_WINDOW_ROWS) return [];
   const values = timeline.map(r => Number(r.movement));
-  const dwellBelow  = percentile(values.filter(v => v >= FROZEN_BELOW), DWELL_PERCENTILE);
-  const activeAbove = percentile(values, ACTIVE_PERCENTILE);
-  const detail = detailBaseline(timeline);
   const runs = [];
   for (const [index, row] of timeline.entries()) {
-    const kind = classify(Number(row.movement), Number(row.structure), Number(row.detections),
-                          dwellBelow, activeAbove, detail, Number(row.movers));
+    const kind = row.verdict || null;
     // A named animal is part of the run's identity, not just a label on it: two
-    // different species one after another are two sightings, and merging them would
-    // hide every species but the first.
+    // species one after the other are two finds, not one long one.
     const label = kind === 'subject' ? (row.top_class ?? '') : null;
     const open = runs[runs.length - 1];
     if (open && open.kind === kind && open.label === label && open.endIndex === index - 1) {
@@ -317,38 +333,8 @@ function stillOpen(merged, run) {
   return null;
 }
 
-function classify(value, structure, detections, dwellBelow, activeAbove, detail, movers) {
-  // Frozen first: dead footage is dead whatever else is true of it.
-  if (value < FROZEN_BELOW) return 'frozen';
-  // Then anything a detector actually recognised. Movement only ever says the
-  // camera moved; a named animal is the thing someone came to find, so where both
-  // apply the animal wins.
-  if (detections > 0) return 'subject';
-  // Then something that moved independently of the camera without being recognised.
-  // Below a named animal because a name is more information, above everything else
-  // because nothing else here can point at a species that has no name yet.
-  if (movers > 0) return 'unnamed';
-  if (value <= dwellBelow) return isEmpty(structure, detail) ? 'empty' : 'dwell';
-  if (value >= activeAbove) return 'active';
-  return null;
-}
 
-/** True when the frame holds far less detail than this recording usually does.
- *
- * The comparison has to be relative: two cameras on the same dive differed
- * eightfold in baseline detail, so any absolute cutoff would call one of them
- * empty throughout. Against its own median an empty frame is unmistakable -
- * open water measured 0.06 of the recording's median where a coral colony
- * measured 1.6.
- */
-function isEmpty(structure, detail) {
-  return detail > 0 && Number.isFinite(structure) && structure < detail * EMPTY_DETAIL_RATIO;
-}
 
-function detailBaseline(timeline) {
-  const values = timeline.map(r => Number(r.structure)).filter(Number.isFinite);
-  return values.length ? percentile(values, 50) : 0;
-}
 
 function describeWindow(run, timeline, values) {
   const slice = values.slice(run.startIndex, run.endIndex + 1);
@@ -386,16 +372,6 @@ function mostConfidentClass(rows) {
   return label;
 }
 
-/** Every species named in these rows, most confident first. */
-function speciesIn(rows) {
-  const best = new Map();
-  for (const row of rows) {
-    if (!row.top_class) continue;
-    const score = Number(row.confidence) || Number(row.detections) || 0;
-    best.set(row.top_class, Math.max(best.get(row.top_class) ?? 0, score));
-  }
-  return [...best.entries()].sort((a, b) => b[1] - a[1]).map(([name]) => name);
-}
 
 function maxOf(values) {
   const usable = values.filter(Number.isFinite);
@@ -1596,22 +1572,6 @@ function escapeHtmlText(value) {
 
 const DEAD_FOOTAGE_WARN = 0.05;   // flag a recording once this much of it is dead
 
-/** Per-recording totals: how much of it is dead, held, busy, and how many events. */
-export function summariseRecording(recording, timeline, windows) {
-  const fps = Number(recording.fps) || null;
-  const seconds = (kind) => windows
-    .filter(w => w.kind === kind)
-    .reduce((total, w) => total + toSeconds(w.toT - w.fromT, fps), 0);
-  const total = toSeconds(timeline.length * stepFrames(timeline), fps);
-  return {
-    recording, fps, total, events: windows.length,
-    dead: seconds('frozen'), held: seconds('dwell'),
-    empty: seconds('empty'), busy: seconds('active'),
-    animals: meanOf(timeline.map(r => Number(r.detections))),
-    topClass: mostConfidentClass(timeline),
-    species: speciesIn(timeline),
-  };
-}
 
 /** Frames between consecutive slices, so a row count can be turned into a duration. */
 function stepFrames(timeline) {
@@ -1635,17 +1595,34 @@ const SUMMARY_FIELDS = ['structure', 'detections', 'movers', 'top_class'];
 let summariesFor = null;        // one report's summaries, kept while it is open
 
 async function collectSummaries(ctx) {
-  // The preview asks for these and then the preview plot asks again, which was
-  // the same twelve queries twice over on a collection.
+  // Read, not computed. What each recording spent in each verdict is decided by
+  // `pixel_patrol_deepsea.triage` while the recording is in hand and written onto
+  // the recording's own row, so this is a query over one row per recording rather
+  // than every slice of every one of them - which is what it used to be, and what
+  // made a collection of 287 recordings take minutes to judge.
   if (summariesFor && summariesFor.key === summaryKey(ctx)) return summariesFor.value;
-  const recordings = await fetchRecordings(ctx);
-  const timelines = await fetchTimelines(ctx, recordings, { only: SUMMARY_FIELDS });
-  const summaries = [];
-  for (const recording of recordings) {
-    const timeline = timelines.get(String(recording.name)) ?? [];
-    if (!timeline.length) continue;
-    summaries.push(summariseRecording(recording, timeline, findWindows(timeline)));
-  }
+  if (!hasVerdicts(ctx.schema)) return [];
+  const { q } = ctx.sql;
+  const fps = ctx.schema.allCols.includes('fps') ? q('fps') : 'NULL';
+  const seconds = VERDICT_KINDS
+    .map(kind => `, ${q(verdictSeconds(kind))} AS ${kind}`).join('');
+  const rows = await ctx.queryRows(`
+    SELECT ${recordingKey(ctx)} AS name, ${groupExpr(ctx)} AS grp, ${fps} AS fps,
+           ${q(FOOTAGE_SECONDS)} AS total${seconds}
+    FROM ${sliceTable(ctx)}
+    WHERE ${q('dim_t')} IS NULL AND ${q(FOOTAGE_SECONDS)} IS NOT NULL
+    ORDER BY total DESC`);
+  const summaries = rows.map(row => ({
+    recording: { name: row.name, group: row.grp },
+    fps: Number(row.fps) || null,
+    total: Number(row.total) || 0,
+    dead: Number(row.frozen) || 0,
+    held: Number(row.dwell) || 0,
+    empty: Number(row.empty) || 0,
+    busy: Number(row.active) || 0,
+    subject: Number(row.subject) || 0,
+    unnamed: Number(row.unnamed) || 0,
+  })).filter(summary => summary.total > 0);
   summariesFor = { key: summaryKey(ctx), value: summaries };
   return summaries;
 }
@@ -2116,7 +2093,7 @@ const triageWidget = {
   async overviewPlot(container, ctx) {
     const distribution = ctx.plot.engine?.renderDistribution;
     if (!distribution) return false;
-    const source = verdictSource(await collectSummaries(ctx), WINDOW_KINDS.frozen.label);
+    const source = verdictSource(ctx, 'frozen');
     if (!source) return false;
     return distribution(container, ctx, {
       numCol:          'share',
@@ -2263,52 +2240,30 @@ function sliceSource(ctx) {
  * and a box once there are more points than are worth sending to the browser.
  * Doing that by hand is how you end up with a violin of one observation.
  */
-/** The four verdicts as a table the engine can plot, without creating anything.
+/** Where a verdict's per-recording shares come from: the report, by name.
  *
- * The classification uses per-recording percentile thresholds, so it is computed
- * in JavaScript from the windows rather than in SQL - reimplementing "dead" in
- * two places is two definitions waiting to disagree. The engine needs a table,
- * though, and this was a `CREATE OR REPLACE TEMP VIEW`: a DDL statement issued
- * from a widget, which assumes the widget and the engine share one connection
- * and that the connection accepts DDL at all. Neither is a widget's business.
+ * This used to carry the numbers themselves. The verdicts were computed in the
+ * browser, so the only way to plot them was to write them into the SQL as an
+ * inlined VALUES list - 287 recordings became 1,148 rows and 99 KB of statement
+ * per plot, four plots over, and duckdb-wasm could not run it. Decided in Python
+ * and written into the report, they are a column, and this is the same few hundred
+ * bytes whether the collection holds ten recordings or ten thousand.
  *
- * A derived table costs nothing and assumes nothing. `grp` rather than `"group"`
- * so no reserved word is quoted into every query built on top of it, and the
- * share is cast, because `VALUES` with decimal literals infers DECIMAL and every
- * other column the engine plots is a double.
+ * The shape is unchanged - a table expression and a WHERE naming one verdict - so
+ * the engine cannot tell the difference.
  */
-export function verdictSource(summaries, verdict) {
-  const rows = [];
-  for (const summary of summaries) {
-    if (!(summary.total > 0)) continue;
-    for (const [kind, field] of Object.entries(VERDICT_FIELD)) {
-      // Only the verdict being plotted. This used to emit all four for each of
-      // them and let the `WHERE` throw three quarters away, which on a collection
-      // of 287 recordings meant 1,148 inlined rows and 99 KB of SQL text per plot,
-      // four times over - and that is what broke it. In the browser's duckdb-wasm
-      // a statement that size failed to run, and failed as `_setThrew is not
-      // defined`, because that build reports a DuckDB error by losing it. Cut to
-      // the rows actually drawn - 287, 25 KB - the widget works.
-      //
-      // Worth keeping in mind for any widget that follows: the engine's own plots
-      // name a column and send nothing, so their size is the table's problem. This
-      // one computes its numbers in the browser and has to carry them, which makes
-      // the length of the statement its own problem, and a browser's parser has
-      // far less room than the one on your machine. Native DuckDB parses the 99 KB
-      // version without complaint, which is why this cannot be found locally.
-      if (WINDOW_KINDS[kind].label !== verdict) continue;
-      const share = 100 * summary[field] / summary.total;
-      if (!Number.isFinite(share)) continue;
-      rows.push(`(${literal(shortName(summary.recording.name))}, `
-        + `${literal(String(summary.recording.group ?? ''))}, `
-        + `${literal(WINDOW_KINDS[kind].label)}, ${share.toFixed(4)})`);
-    }
-  }
-  if (!rows.length) return null;
+export function verdictSource(ctx, kind) {
+  if (!hasVerdicts(ctx.schema)) return null;
+  const { q } = ctx.sql;
+  const label = WINDOW_KINDS[kind]?.label ?? kind;
   return {
-    table: `(SELECT recording, grp, verdict, CAST(share AS DOUBLE) AS share
-             FROM (VALUES ${rows.join(', ')}) AS v(recording, grp, verdict, share)) AS verdicts`,
-    where: `WHERE verdict = ${literal(verdict)}`,
+    table: `(SELECT ${recordingKey(ctx)} AS recording, ${groupExpr(ctx)} AS grp,
+                    ${literal(label)} AS verdict,
+                    100.0 * ${q(verdictSeconds(kind))} / ${q(FOOTAGE_SECONDS)} AS share
+             FROM ${sliceTable(ctx)}
+             WHERE ${q('dim_t')} IS NULL AND ${q(FOOTAGE_SECONDS)} > 0
+               AND ${q(verdictSeconds(kind))} IS NOT NULL) AS verdicts`,
+    where: `WHERE verdict = ${literal(label)}`,
   };
 }
 
@@ -2327,7 +2282,7 @@ async function renderVerdictShares(host, ctx, summaries) {
   const { wrap, flexBasisPct } = flexGrid(host, 2);
   for (const kind of ['frozen', 'dwell', 'empty', 'active']) {
     const meta = WINDOW_KINDS[kind];
-    const source = verdictSource(summaries, meta.label);
+    const source = verdictSource(ctx, kind);
     if (!source) return;
     const cell = appendDiv(wrap,
       `flex:0 0 ${flexBasisPct}%;min-width:300px;margin-bottom:20px;box-sizing:border-box`);

@@ -30,6 +30,7 @@ it is four columns on a recording's own row, and a plot is a column name.
 import logging
 import math
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Dict, List, Optional, Sequence
 
 logger = logging.getLogger(__name__)
@@ -220,3 +221,109 @@ def summarise(timeline: Sequence[Slice], fps: Optional[float]) -> Verdicts:
     return Verdicts(per_slice=verdict_per_slice(timeline), windows=windows,
                     seconds=seconds,
                     total_seconds=to_seconds(len(timeline) * step))
+
+
+# The columns a report carries once this has run. One string per slice, and one
+# number per verdict on the recording's own row - which is where a fact about a
+# recording belongs, and means a plot of "how much of each recording was dead" is
+# a column name rather than the data itself travelling into the query.
+SLICE_VERDICT = "slice_verdict"
+FOOTAGE_SECONDS = "footage_seconds"
+
+
+def seconds_column(kind: str) -> str:
+    return f"verdict_seconds_{kind}"
+
+
+VERDICT_COLUMNS = (FOOTAGE_SECONDS,) + tuple(seconds_column(k) for k in VERDICTS)
+
+
+def _recording_column(columns: Sequence[str]) -> str:
+    return "child_id" if "child_id" in columns else "name"
+
+
+def describe(report: Path) -> int:
+    """Judge every slice in a report and write the verdicts into it.
+
+    Returns how many recordings were judged. Per slice, what it was doing; per
+    recording, how many seconds each verdict accounts for, on the aggregate row
+    the pipeline already writes for it. Rewritten through arrow so the `pp_*`
+    metadata survives, for the same reason `identity` does it that way.
+    """
+    import polars as pl
+    import pyarrow.parquet as pq
+
+    table = pl.read_parquet(report)
+    needed = {"dim_t", "frame_difference", "obs_level"}
+    if not needed <= set(table.columns):
+        return 0
+    key = _recording_column(table.columns)
+    detail = next((c for c in ("laplacian_variance", "std_intensity")
+                   if c in table.columns), None)
+
+    def column(name):
+        return table.get_column(name).to_list() if name in table.columns else [None] * table.height
+
+    names = [str(v) if v is not None else "" for v in column(key)]
+    moments = column("dim_t")
+    movement = column("frame_difference")
+    structure = column(detail) if detail else [None] * table.height
+    detections = column("detection_count")
+    movers = column("moving_object_count")
+    top = column("detection_top_class")
+    rates = column("fps")
+    levels = column("obs_level")
+
+    # Slices by recording, in the order they were filmed, remembering which row
+    # each came from so the verdict can be written back to it.
+    lines: Dict[str, List[tuple]] = {}
+    for row in range(table.height):
+        if moments[row] is None or movement[row] is None:
+            continue
+        lines.setdefault(names[row], []).append((row, Slice(
+            t=int(moments[row]), movement=float(movement[row]),
+            structure=None if structure[row] is None else float(structure[row]),
+            detections=None if detections[row] is None else float(detections[row]),
+            movers=None if movers[row] is None else float(movers[row]),
+            top_class=None if top[row] is None else str(top[row]))))
+
+    per_slice: List[Optional[str]] = [None] * table.height
+    per_recording: Dict[str, Verdicts] = {}
+    for recording, rows in lines.items():
+        rows.sort(key=lambda pair: pair[1].t)
+        timeline = [pair[1] for pair in rows]
+        fps = next((float(rates[pair[0]]) for pair in rows if rates[pair[0]]), None)
+        verdicts = summarise(timeline, fps)
+        per_recording[recording] = verdicts
+        for (row, _slice), verdict in zip(rows, verdicts.per_slice):
+            per_slice[row] = verdict
+
+    if not per_recording:
+        return 0
+
+    # The seconds go on the recording's own aggregate row - the one with no slice
+    # index - and nowhere else: repeated down every slice they would be summed by
+    # something eventually, and a recording's total is not a sum over its slices.
+    totals = {name: [None] * table.height for name in VERDICT_COLUMNS}
+    for row in range(table.height):
+        if levels[row] != 0:
+            continue
+        found = per_recording.get(names[row])
+        if not found:
+            continue
+        totals[FOOTAGE_SECONDS][row] = found.total_seconds
+        for kind in VERDICTS:
+            totals[seconds_column(kind)][row] = found.seconds.get(kind, 0.0)
+
+    table = table.with_columns([
+        pl.Series(SLICE_VERDICT, per_slice, dtype=pl.Utf8),
+        *[pl.Series(name, values, dtype=pl.Float64) for name, values in totals.items()],
+    ])
+    arrow = table.to_arrow()
+    arrow = arrow.replace_schema_metadata({
+        **(pq.read_schema(report).metadata or {}),
+        **(arrow.schema.metadata or {}),
+    })
+    pq.write_table(arrow, report)
+    logger.info("%s: %d recordings judged", report.name, len(per_recording))
+    return len(per_recording)

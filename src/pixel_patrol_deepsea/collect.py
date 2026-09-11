@@ -195,12 +195,20 @@ def analyse_one(url: str, output: Path, expedition_id: str, fps: Optional[float]
     # a notebook and anything else all read one answer instead of each deriving
     # their own. See `identity`.
     from pixel_patrol_deepsea.identity import identify
+    from pixel_patrol_deepsea.triage import describe
 
     try:
         animals = identify(output)
     except Exception as exc:                 # a report is worth more than its ids
         logger.warning("could not identify animals in %s: %s", output, exc)
         animals = 0
+    # What each slice was doing, decided here for the same reason: two of its
+    # thresholds are percentiles of this recording's own movement, so it cannot be
+    # judged one slice at a time. See `triage`.
+    try:
+        describe(output)
+    except Exception as exc:
+        logger.warning("could not judge the footage in %s: %s", output, exc)
     print(f"{output} written; the recording was not kept"
           + (f"; {animals} animals" if animals else ""))
     return 0
@@ -455,13 +463,15 @@ def _process(folder: Path, output: Path, expedition_id: str, url: str,
 # ── identify ──────────────────────────────────────────────────────────────────
 
 def identify_reports(target: Path) -> int:
-    """Write animal ids into reports made before `collect one` wrote them itself.
+    """Bring reports up to date with what `collect one` writes now.
 
-    Backfill, and only that: the ids are derived from the detections already in the
-    file, so a report analysed last week gets exactly the identity it would have
-    been given at the time. Nothing is re-read and no footage is touched.
+    Two things, both derived from what is already in the file - the animals its
+    detections belong to, and what each slice of footage was doing. A report
+    analysed last week gets exactly what it would have been given at the time.
+    Nothing is re-read and no footage is touched.
     """
     from pixel_patrol_deepsea.identity import identify
+    from pixel_patrol_deepsea.triage import describe
 
     reports = ([target] if target.is_file()
                else sorted(p for p in target.rglob("*.parquet")
@@ -469,17 +479,19 @@ def identify_reports(target: Path) -> int:
     if not reports:
         print(f"no reports under {target}", file=sys.stderr)
         return 1
-    total = 0
+    total = judged = 0
     for report in reports:
         try:
             animals = identify(report)
+            recordings = describe(report)
         except Exception as exc:
             print(f"{report}: {exc}", file=sys.stderr)
             continue
         total += animals
+        judged += recordings
         print(f"{report.relative_to(target) if target.is_dir() else report.name}: "
-              f"{animals} animals")
-    print(f"{len(reports)} reports, {total} animals")
+              f"{animals} animals, {recordings} recordings judged")
+    print(f"{len(reports)} reports, {total} animals, {judged} recordings judged")
     return 0
 
 

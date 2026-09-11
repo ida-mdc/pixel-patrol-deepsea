@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { findWindows, WINDOW_KINDS, eventsToCsv, summariseRecording, renderSpeciesFilter,
+import { findWindows, WINDOW_KINDS, eventsToCsv, renderSpeciesFilter,
          sliceAt, describeMoment, animateStills, keptByKind, reportFindsThings,
          keptByQuality, parseAnimals, animalFrames, sunburstOf, lineageOf, trunkOf,
          branchColours, scaleColour, measuredColours, oneEach, asRate, verdictSource,
@@ -12,60 +12,74 @@ import { findWindows, WINDOW_KINDS, eventsToCsv, summariseRecording, renderSpeci
 const timeline = (values, step = 30) =>
   values.map((movement, i) => ({ t: i * step, movement }));
 
+/** A timeline of verdicts, which is what a report now carries.
+ *
+ * What a slice was doing is decided in Python, by `pixel_patrol_deepsea.triage`,
+ * and written into the report; the viewer reads it. So a test about *grouping*
+ * states the verdicts outright, and the rules that produce them are tested where
+ * they live, in tests/test_triage.py.
+ */
+/** The verdict a report would carry for a row a test states.
+ *
+ * A fixture, not a rule: the rule lives in `pixel_patrol_deepsea.triage` and is
+ * tested there. This only saves every row in this file from spelling out a
+ * verdict that follows from what it already says - a slice with a detection in it
+ * is a `subject`, one with nothing moving is `frozen`. A row that states its own
+ * verdict keeps it.
+ */
+const verdictFor = (row) => {
+  if (Number(row.movement) === 0) return 'frozen';
+  if (Number(row.detections) > 0) return 'subject';
+  if (Number(row.movers) > 0) return 'unnamed';
+  return 'active';
+};
+
+const judged = (verdicts, step = 30) =>
+  verdicts.map((verdict, i) => ({ t: i * step, movement: verdict === 'frozen' ? 0 : 5,
+                                  verdict }));
+
 describe('footage timeline windows', () => {
-  it('marks a run of zero movement as frozen footage', () => {
-    const windows = findWindows(timeline([5, 6, 5, 0, 0, 0, 0, 5, 6]));
-    const frozen = windows.filter(w => w.kind === 'frozen');
+  const F = 'frozen', A = 'active', D = 'dwell';
+
+  it('groups a run of one verdict into a single window', () => {
+    const frozen = findWindows(judged([A, A, A, F, F, F, F, A, A]))
+      .filter(w => w.kind === 'frozen');
     expect(frozen).toHaveLength(1);
-    expect(frozen[0].fromT).toBe(90);
-    expect(frozen[0].toT).toBe(180);
-    expect(frozen[0].slices).toBe(4);
+    expect([frozen[0].fromT, frozen[0].toT, frozen[0].slices]).toEqual([90, 180, 4]);
   });
 
   it('does not call a single odd slice a window', () => {
-    // One lone zero between busy slices is a blip, not a stretch worth opening.
-    const windows = findWindows(timeline([5, 5, 5, 0, 5, 5, 5]));
-    expect(windows.some(w => w.kind === 'frozen')).toBe(false);
+    // One lone frozen slice between busy ones is a blip, not a stretch worth
+    // opening. A named animal is the exception, and has its own test.
+    expect(findWindows(judged([A, A, A, F, A, A, A])).some(w => w.kind === 'frozen'))
+      .toBe(false);
   });
 
-  it('separates a still camera from a moving one', () => {
-    const values = [...Array(10).fill(5), ...Array(6).fill(0.1), ...Array(10).fill(5), 90, 95];
-    const kinds = new Set(findWindows(timeline(values)).map(w => w.kind));
-    expect(kinds.has('dwell')).toBe(true);
-    expect(kinds.has('active')).toBe(true);
+  it('keeps different verdicts in different windows', () => {
+    const kinds = new Set(findWindows(judged([A, A, D, D, D, A, A])).map(w => w.kind));
+    expect(kinds).toEqual(new Set(['active', 'dwell']));
   });
 
   it('reports the mean movement of each window', () => {
-    const [window] = findWindows(timeline([0, 0, 0, 0]));
+    const [window] = findWindows(judged([F, F, F, F]));
     expect(window.movement).toBe(0);
   });
 
+  it('says nothing about a slice the report did not judge', () => {
+    // A recording analysed before the verdicts existed, or one whose measurements
+    // were missing. Not a window, and not a guess either.
+    expect(findWindows([{ t: 0, movement: 5 }, { t: 30, movement: 5 }])).toEqual([]);
+  });
+
   it('returns nothing for a timeline too short to have a run', () => {
-    expect(findWindows(timeline([5]))).toEqual([]);
+    expect(findWindows(judged([A]))).toEqual([]);
     expect(findWindows([])).toEqual([]);
   });
 
   it('every window kind it can emit is described for the legend', () => {
-    const values = [...Array(10).fill(5), ...Array(6).fill(0.1), ...Array(4).fill(0), 90, 95];
-    for (const w of findWindows(timeline(values))) expect(WINDOW_KINDS[w.kind]).toBeTruthy();
-  });
-});
-
-describe('frozen footage on lossy video', () => {
-  it('treats codec-noise-level movement as frozen, not as a still camera', () => {
-    // A real dive tape's dead tail sat around 0.0001-0.0045; live footage never
-    // went below 0.13. Exact-zero matching missed the whole dead stretch.
-    const values = [...Array(10).fill(5), ...Array(8).fill(0.0004), ...Array(10).fill(5)];
-    const frozen = findWindows(timeline(values)).filter(w => w.kind === 'frozen');
-    expect(frozen).toHaveLength(1);
-    expect(frozen[0].slices).toBe(8);
-  });
-
-  it('still calls genuinely quiet live footage a dwell, not frozen', () => {
-    const values = [...Array(10).fill(5), ...Array(6).fill(0.2), ...Array(10).fill(5)];
-    const kinds = findWindows(timeline(values)).map(w => w.kind);
-    expect(kinds).toContain('dwell');
-    expect(kinds).not.toContain('frozen');
+    for (const w of findWindows(judged([A, A, D, D, F, F]))) {
+      expect(WINDOW_KINDS[w.kind]).toBeTruthy();
+    }
   });
 });
 
@@ -92,61 +106,6 @@ describe('timecode export', () => {
   });
 });
 
-describe('per-recording triage totals', () => {
-  const recording = { name: 'dive.mp4', fps: 30 };
-
-  it('totals each kind of stretch in seconds of footage', () => {
-    // 30 slices of one second each: 10 busy, 8 frozen, 12 ordinary.
-    const values = [...Array(10).fill(9), ...Array(8).fill(0.0002), ...Array(12).fill(1)];
-    const line = timeline(values);
-    const summary = summariseRecording(recording, line, findWindows(line));
-    expect(Math.round(summary.total)).toBe(30);
-    expect(summary.dead).toBeGreaterThan(6);
-    expect(summary.busy).toBeGreaterThan(0);
-    expect(summary.events).toBeGreaterThan(0);
-  });
-
-  it('reports a length even when no stretch stands out', () => {
-    const line = timeline(Array(20).fill(1));
-    const summary = summariseRecording(recording, line, findWindows(line));
-    expect(Math.round(summary.total)).toBe(20);
-    expect(summary.dead).toBe(0);
-  });
-
-  it('never totals more of a kind than the recording is long', () => {
-    const line = timeline(Array(40).fill(0.0001));
-    const summary = summariseRecording(recording, line, findWindows(line));
-    expect(summary.dead).toBeLessThanOrEqual(summary.total);
-  });
-});
-
-describe('empty frames versus real dwells', () => {
-  // Same movement in both cases - only the amount of detail differs, which is
-  // exactly the case a motion-only classifier gets wrong.
-  const held = (detail) => Array.from({ length: 8 }, () => ({ movement: 0.3, structure: detail }));
-  const busy = (detail) => Array.from({ length: 10 }, () => ({ movement: 5, structure: detail }));
-  const withTimes = (rows) => rows.map((r, i) => ({ ...r, t: i * 30 }));
-
-  it('calls a still camera on a detailed scene a dwell', () => {
-    const kinds = findWindows(withTimes([...busy(1200), ...held(1900), ...busy(1200)])).map(w => w.kind);
-    expect(kinds).toContain('dwell');
-    expect(kinds).not.toContain('empty');
-  });
-
-  it('calls a still camera on open water empty, not a dwell', () => {
-    const kinds = findWindows(withTimes([...busy(150), ...held(9), ...busy(150)])).map(w => w.kind);
-    expect(kinds).toContain('empty');
-    expect(kinds).not.toContain('dwell');
-  });
-
-  it('falls back to dwell when no detail metric was recorded', () => {
-    const noDetail = withTimes([...busy(NaN), ...held(NaN), ...busy(NaN)]);
-    const kinds = findWindows(noDetail).map(w => w.kind);
-    expect(kinds).toContain('dwell');
-    expect(kinds).not.toContain('empty');
-  });
-});
-
 describe('timecodes carry what was found', () => {
   it('includes the animal count and taxon when a detector ran', () => {
     const seen = {
@@ -167,7 +126,7 @@ describe('timecodes carry what was found', () => {
 });
 
 describe('animals as events', () => {
-  const at = (rows) => rows.map((r, i) => ({ t: i * 30, ...r }));
+  const at = (rows) => rows.map((r, i) => ({ t: i * 30, verdict: verdictFor(r), ...r }));
 
   it('makes a stretch with detections its own kind', () => {
     const line = at([
@@ -179,12 +138,6 @@ describe('animals as events', () => {
     expect(kinds).toContain('subject');
   });
 
-  it('still calls dead footage frozen even when a detector fired', () => {
-    // Nothing changing at all outranks a detection; a frozen frame repeating an
-    // animal is dead tape, not a sighting.
-    const line = at(Array.from({ length: 6 }, () => ({ movement: 0.0001, detections: 3 })));
-    expect(findWindows(line).map(w => w.kind)).toContain('frozen');
-  });
 
   it('falls back to movement when no detector ran', () => {
     const line = at([
@@ -198,7 +151,7 @@ describe('animals as events', () => {
 });
 
 describe('one event per species', () => {
-  const at = (rows) => rows.map((r, i) => ({ t: i * 30, ...r }));
+  const at = (rows) => rows.map((r, i) => ({ t: i * 30, verdict: verdictFor(r), ...r }));
 
   it('does not merge two species into one sighting', () => {
     const line = at([
@@ -313,7 +266,7 @@ describe('the species filter', () => {
 });
 
 describe('detector confidence on an event', () => {
-  const at = (rows) => rows.map((r, i) => ({ t: i * 30, ...r }));
+  const at = (rows) => rows.map((r, i) => ({ t: i * 30, verdict: verdictFor(r), ...r }));
 
   it('keeps the best look at the animal, not the average one', () => {
     // Mid-run the animal is half out of frame; the tile should still say 0.94.
@@ -334,36 +287,24 @@ describe('detector confidence on an event', () => {
 });
 
 
-describe('naming what a recording holds', () => {
+describe('naming a stretch of footage', () => {
   const rows = (...specs) => specs.map(([top_class, detections, confidence], i) =>
-    ({ t: i * 30, movement: 1, detections, top_class, confidence }));
+    ({ t: i * 30, movement: 1, detections, top_class, confidence, verdict: 'subject' }));
 
-  it('names the species the detector was surest of, not the most numerous', () => {
-    const summary = summariseRecording({ fps: 30 },
-      rows(['shrimp', 4, 0.28], ['cephalopoda', 1, 0.94]), []);
-    expect(summary.topClass).toBe('cephalopoda');
+  it('names it after the species the detector was surest of, not the most numerous', () => {
+    // Four shrimp at 0.28 and one cephalopod at 0.94: the confident call is the
+    // one worth putting on a tile.
+    const [window] = findWindows(rows(['shrimp', 4, 0.28], ['shrimp', 4, 0.28],
+                                      ['cephalopoda', 1, 0.94], ['cephalopoda', 1, 0.94]))
+      .filter(w => w.topClass === 'cephalopoda');
+    expect(window).toBeTruthy();
   });
 
   it('falls back to counts where no confidence was recorded', () => {
-    const summary = summariseRecording({ fps: 30 },
-      rows(['shrimp', 4, undefined], ['beroe', 1, undefined]), []);
-    expect(summary.topClass).toBe('shrimp');
-  });
-
-  it('lists every species it saw, surest first', () => {
-    const summary = summariseRecording({ fps: 30 },
-      rows(['shrimp', 1, 0.3], ['beroe', 1, 0.9], ['shrimp', 1, 0.4]), []);
-    expect(summary.species).toEqual(['beroe', 'shrimp']);
-  });
-
-  it('has no species to list when no detector ran', () => {
-    const summary = summariseRecording({ fps: 30 },
-      [{ t: 0, movement: 1 }, { t: 30, movement: 1 }], []);
-    expect(summary.species).toEqual([]);
-    expect(summary.topClass).toBe(null);
+    const found = findWindows(rows(['shrimp', 4, undefined], ['shrimp', 4, undefined]));
+    expect(found[0].topClass).toBe('shrimp');
   });
 });
-
 
 describe('reading a position on the barcode', () => {
   const line = [{ t: 0 }, { t: 30 }, { t: 60 }, { t: 90 }];
@@ -451,7 +392,7 @@ describe('cycling an event\'s frames', () => {
 
 
 describe('things that moved that nothing could name', () => {
-  const at = (rows) => rows.map((r, i) => ({ t: i * 30, ...r }));
+  const at = (rows) => rows.map((r, i) => ({ t: i * 30, verdict: verdictFor(r), ...r }));
 
   it('marks a stretch where something moved and no detector named it', () => {
     const line = at([
@@ -795,40 +736,57 @@ describe('animals as a rate rather than a count', () => {
   });
 });
 
-describe('the verdict shares as a table', () => {
-  const summary = (name, total, dead) => ({
-    recording: { name, group: 'EX2503' },
-    total, dead, held: 1, empty: 1, busy: total - dead - 2,
+describe('the verdict shares as a query, not as data', () => {
+  // These used to carry the numbers: the verdicts were computed in the browser, so
+  // the only way to plot them was to write them into the SQL as an inlined VALUES
+  // list. On 287 recordings that was 1,148 rows and 99 KB of statement per plot,
+  // four plots over, and duckdb-wasm could not run it. Decided in Python and
+  // written into the report, they are a column.
+  const ctx = (cols) => ({
+    sql: { q: n => `"${n}"`, dimSubsetWhere: () => ['1=1'], groupCol: () => 'expedition' },
+    schema: { allCols: cols, dimCols: ['dim_t'], allTable: 'pp_all' },
+    state: { groupCol: 'expedition' }, where: '',
+  });
+  const WITH_VERDICTS = ['name', 'dim_t', 'expedition', 'slice_verdict', 'footage_seconds',
+    'verdict_seconds_frozen', 'verdict_seconds_dwell', 'verdict_seconds_empty',
+    'verdict_seconds_active', 'verdict_seconds_subject', 'verdict_seconds_unnamed'];
+
+  it('names the column instead of carrying the rows', () => {
+    const source = verdictSource(ctx(WITH_VERDICTS), 'frozen');
+    expect(source.table).toContain('"verdict_seconds_frozen"');
+    expect(source.table).not.toContain('VALUES');
   });
 
-  it('is a derived table, not a statement that creates one', () => {
-    const source = verdictSource([summary('a.mp4', 10, 4)], 'Frozen');
-    expect(source.table).not.toMatch(/CREATE|VIEW/i);
-    expect(source.table).toContain('VALUES');
-    expect(source.where).toBe("WHERE verdict = 'Frozen'");
+  it('is the same size whatever the collection holds', () => {
+    // The property the inlined version could not have, and the reason this widget
+    // broke on a collection while the engine's own plots did not.
+    const source = verdictSource(ctx(WITH_VERDICTS), 'frozen');
+    expect(source.table.length).toBeLessThan(700);
   });
 
-  it('casts the share, because VALUES infers a decimal', () => {
-    // Every other column the engine plots is a double, and this was the only
-    // place a DECIMAL reached approx_quantile.
-    expect(verdictSource([summary('a.mp4', 10, 4)], 'Frozen').table)
-      .toContain('CAST(share AS DOUBLE)');
+  it('reads one row per recording, not one per slice', () => {
+    // The per-recording totals live on the recording's own row - the one with no
+    // slice index - because a recording's length is not a sum over its slices.
+    expect(verdictSource(ctx(WITH_VERDICTS), 'dwell').table).toContain('"dim_t" IS NULL');
   });
 
-  it('quotes no reserved word into the column a plot groups by', () => {
-    expect(verdictSource([summary('a.mp4', 10, 4)], 'Frozen').table).toContain('grp');
+  it('is a share of the recording, so recordings of different lengths compare', () => {
+    const source = verdictSource(ctx(WITH_VERDICTS), 'active');
+    expect(source.table).toMatch(/100\.0 \* "verdict_seconds_active" \/ "footage_seconds"/);
   });
 
-  it('says nothing when no recording has any length', () => {
-    expect(verdictSource([summary('a.mp4', 0, 0)], 'Frozen')).toBe(null);
+  it('still says which verdict the rows are, so the filter matches', () => {
+    const source = verdictSource(ctx(WITH_VERDICTS), 'frozen');
+    expect(source.where).toContain(WINDOW_KINDS.frozen.label);
+    expect(source.table).toContain(WINDOW_KINDS.frozen.label);
   });
 
-  it('escapes a recording whose name carries a quote', () => {
-    const source = verdictSource([summary("dive's tape.mp4", 10, 4)], 'Frozen');
-    expect(source.table).toContain("dive''s tape.mp4");
+  it('leaves a report that was never judged alone', () => {
+    // `collect identify` writes these columns from what is already in the file;
+    // guessing at them here would be the duplicated rule all over again.
+    expect(verdictSource(ctx(['name', 'dim_t']), 'frozen')).toBe(null);
   });
 });
-
 
 describe('saying whether the rate changed anything', () => {
   const said = (seconds, unchanged = false) => {
@@ -871,6 +829,7 @@ describe('one animal is one event, even when another interrupts it', () => {
   const slices = (labels, step = 50) => labels.map((top_class, i) => ({
     t: i * step, movement: 5, peak: 1, structure: 100, objects: 0,
     detections: top_class ? 1 : 0, top_class, confidence: 0.9,
+    verdict: top_class ? 'subject' : 'active',
   }));
 
   it('rejoins a species a different one interrupted', () => {
@@ -1143,7 +1102,7 @@ describe('recovering a dive from the segments it was published in', () => {
 
 describe('the events as a strip, for a tile', () => {
   const slices = (count, step = 30) =>
-    Array.from({ length: count }, (_v, i) => ({ t: i * step }));
+    Array.from({ length: count }, (_v, i) => ({ t: i * step, verdict: 'active' }));
   const drawn = (timeline, windows) => {
     const host = document.createElement('div');
     const did = appendEventStrip(host, timeline, windows);
@@ -1352,33 +1311,3 @@ describe('nothing is ever aliased `at`', () => {
   });
 });
 
-describe('the verdict plots carry only the data they plot', () => {
-  // Triage is the one widget that cannot name a column: its verdicts are computed
-  // per recording in the browser, so the numbers travel to the engine inside the
-  // SQL. That makes the size of the statement its own problem - on 287 recordings
-  // it was 1,148 inlined rows and 99 KB of SQL per plot, four times over, because
-  // every plot carried all four verdicts and threw three quarters away in a WHERE.
-  // The fields are what `summariseRecording` writes: dead, held, empty, busy.
-  const summaries = (n) => Array.from({ length: n }, (_, i) => ({
-    recording: { name: `rec${i}.mp4`, group: 'EX2107' },
-    total: 100, dead: 10, held: 20, empty: 30, busy: 40,
-  }));
-  const FROZEN = WINDOW_KINDS.frozen.label;
-
-  it('inlines one row per recording, not one per recording per verdict', () => {
-    const source = verdictSource(summaries(50), FROZEN);
-    const rows = (source.table.match(/\), \(/g) || []).length + 1;
-    expect(rows).toBe(50);
-  });
-
-  it('still says which verdict the rows are, so the filter matches', () => {
-    const source = verdictSource(summaries(3), FROZEN);
-    expect(source.where).toContain(FROZEN);
-    expect(source.table).toContain(FROZEN);
-    expect(source.table).not.toContain(WINDOW_KINDS.dwell.label);
-  });
-
-  it('has nothing to show when no recording has any footage', () => {
-    expect(verdictSource([{ recording: { name: 'a' }, total: 0 }], FROZEN)).toBe(null);
-  });
-});

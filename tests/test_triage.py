@@ -125,3 +125,33 @@ def test_the_percentile_is_the_viewer_s_to_the_letter():
 
 def test_a_timeline_too_short_to_have_a_shape_has_no_windows():
     assert find_windows(_line([(0.5, 100, 1, 0, "fish")])) == []
+
+
+def test_codec_noise_is_frozen_not_a_still_camera():
+    """Lossy video never differs by exactly zero.
+
+    On a real dive tape the dead tail sat between 0.0001 and 0.0045 while the
+    quietest live footage sat at 0.133, so matching exact zeros missed the whole
+    dead stretch. The threshold is where that gap is, not at zero.
+    """
+    dead = _line([(5.0, 100, 0, 0, None)] * 10 + [(0.0004, 100, 0, 0, None)] * 8
+                 + [(5.0, 100, 0, 0, None)] * 10)
+    assert [w.kind for w in find_windows(dead) if w.kind == "frozen"] == ["frozen"]
+
+    alive = _line([(5.0, 100, 0, 0, None)] * 10 + [(0.133, 100, 0, 0, None)] * 8
+                  + [(5.0, 100, 0, 0, None)] * 10)
+    assert not [w for w in find_windows(alive) if w.kind == "frozen"]
+
+
+def test_no_kind_totals_more_than_the_recording_is_long():
+    line = _line([(0.0, 100, 0, 0, None)] * 40)
+    verdicts = summarise(line, fps=30)
+    assert verdicts.seconds["frozen"] <= verdicts.total_seconds
+
+
+def test_without_a_detail_measurement_a_still_camera_is_a_dwell():
+    """`empty` needs something to compare against. With no laplacian_variance and no
+    std_intensity in the report there is no baseline, and calling every held shot
+    empty would be worse than calling none of them that."""
+    blind = _line([(0.5, None, 0, 0, None)] + [(5.0, None, 0, 0, None)] * 20)
+    assert verdict_per_slice(blind)[0] == "dwell"

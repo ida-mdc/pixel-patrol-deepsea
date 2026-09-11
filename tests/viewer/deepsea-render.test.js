@@ -14,7 +14,14 @@ const COLUMNS = ['frame_difference', 'frame_difference_max', 'mean_intensity', '
                  'slice_red', 'slice_green', 'slice_blue',
                  // What the slice-location processor writes. Over-time needs one
                  // of them for an axis, and a located report has both.
-                 'recorded_at', 'depth_m'];
+                 'recorded_at', 'depth_m',
+                 // What `triage.describe` writes: the verdict per slice and, on
+                 // each recording's own row, the seconds it spent in each. A
+                 // report without them is one the widgets cannot judge.
+                 'slice_verdict', 'footage_seconds',
+                 'verdict_seconds_frozen', 'verdict_seconds_subject',
+                 'verdict_seconds_unnamed', 'verdict_seconds_dwell',
+                 'verdict_seconds_empty', 'verdict_seconds_active'];
 
 const TIMELINE = Array.from({ length: 12 }, (_, i) => ({
   t: i * 30,
@@ -42,6 +49,21 @@ const TIMELINE = Array.from({ length: 12 }, (_, i) => ({
   detections: [5, 6, 10].includes(i) ? 1 : 0,
   top_class: i === 5 || i === 6 ? 'beroe' : i === 10 ? 'sea pen' : null,
   confidence: i === 5 ? 0.91 : i === 6 ? 0.8 : i === 10 ? 0.7 : null,
+  // What the report says each slice was doing. Decided in Python and read here,
+  // so a mock report has to carry it or every widget that reads a verdict finds
+  // an unjudged recording and draws nothing.
+  verdict: [5, 6, 10].includes(i) ? 'subject'
+           : [0, 1, 2].includes(i) ? 'frozen' : 'active',
+  // The per-recording totals, on every row because the mock answers every query
+  // with these and the widgets read them off whichever row they get.
+  footage_seconds: 360,
+  verdict_seconds_frozen: 60, verdict_seconds_subject: 90,
+  verdict_seconds_unnamed: 0, verdict_seconds_dwell: 30,
+  verdict_seconds_empty: 0, verdict_seconds_active: 180,
+  // ...and under the names the summaries query gives them, since the mock hands
+  // back these rows for every query rather than running the SQL.
+  name: 'dive.mp4', total: 360,
+  frozen: 60, subject: 90, unnamed: 0, dwell: 30, empty: 0, active: 180,
 }));
 
 const emptyArrow = { numRows: 0, schema: { fields: [] }, getChildAt: () => null };
