@@ -844,11 +844,16 @@ def combine(root: Path) -> Optional[Path]:
         return None
     frames, names = [], []
     for path in parquets:
-        table = pl.read_parquet(path)
+        # Read without the pictures rather than reading them and dropping them.
+        # They are most of the bytes - a 1.1 GB expedition report is mostly cached
+        # stills - and this step holds every expedition at once, so materialising
+        # them to discard them a line later is what made the page build need more
+        # memory than the analysis did.
+        wanted = [c for c in pl.read_parquet_schema(path) if c not in PICTURE_COLUMNS]
+        table = pl.read_parquet(path, columns=wanted)
         # Which expedition a row came from has to survive the concatenation, or
         # the combined report can group by everything except the thing a reader
         # most wants to group by.
-        table = table.drop([c for c in PICTURE_COLUMNS if c in table.columns])
         table = table.with_columns(pl.lit(_describe(path.stem).title).alias("expedition"))
         frames.append(table)
         names.append(path.stem)

@@ -172,9 +172,14 @@ def read_animals(report: Path):
     from pixel_patrol_deepsea.identity import ANIMAL, animals_from, has_ids
     from pixel_patrol_deepsea.refine import Sighting, track_sightings
 
-    table = pl.read_parquet(report)
-    if "detections" not in table.columns:
+    # Three columns out of sixty, and none of them the cached stills: this is
+    # called once per expedition on reports where the pictures are most of the
+    # gigabyte, and the animals are all inside `detections`.
+    available = pl.read_parquet_schema(report)
+    if "detections" not in available:
         return [], {}
+    wanted = [c for c in ("detections", "dim_t", "child_id", "name") if c in available]
+    table = pl.read_parquet(report, columns=wanted)
     slices = table.filter(pl.col("detections").is_not_null()
                           & pl.col("dim_t").is_not_null())
     recording = "child_id" if "child_id" in slices.columns else "name"
