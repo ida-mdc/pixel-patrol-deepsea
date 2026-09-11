@@ -56,9 +56,10 @@ const INDEX = {
   },
 };
 
-const ABOUT = { everything: 'Every animal the detector found.',
-                Cnidaria: 'Anemones, corals, sea pens and jellyfish.',
-                Hexacorallia: 'Polyps built in sixes.' };
+/* What `fetch_wikipedia` found: a title where there is an article, nothing where
+   there is not. Holothuroidea-style redirects are the point of storing the title. */
+const LOOKUP = { Cnidaria: 'Cnidaria', Hexacorallia: 'Hexacorallia',
+                 Actiniaria: 'Sea anemone' };
 
 /** The store, answered out of memory: an index, and empty pages of pictures. */
 const store = (url) => {
@@ -76,9 +77,9 @@ function page() {
       <aside id="about"></aside>
       <div id="wall"></div><div id="more"></div>
     </section>`;
-  const run = new Function('ABOUT', 'fetch', pageScript()
+  const run = new Function('LOOKUP', 'fetch', pageScript()
     + '\n; return { state, focusOn, drawJumps, nodeAt };');
-  return run(ABOUT, store);
+  return run(LOOKUP, store);
 }
 
 const chips = () => [...document.getElementById('jumps').children]
@@ -150,36 +151,90 @@ describe('the middle of the ring', () => {
   });
 });
 
-describe('what the page says about a branch', () => {
+describe('where the page sends a reader to read about a branch', () => {
   let api;
   beforeEach(() => { api = page(); api.state.index = INDEX; api.drawJumps(); });
 
-  it('describes it where somebody has written a description', () => {
+  it('links the register by identifier, not by search', () => {
     api.focusOn(['Animalia', 'Cnidaria']);
-    const about = document.getElementById('about').textContent;
-    expect(about).toContain('Anemones, corals, sea pens and jellyfish.');
-    expect(about).toContain('Phylum');
-    expect(document.querySelector('#about .worms').href).toContain('id=1267');
-  });
-
-  it('borrows the nearest description, and says whose it is', () => {
-    api.focusOn(['Animalia', 'Cnidaria', 'Hexacorallia', 'Actiniaria']);
     const about = document.getElementById('about');
-    expect(about.querySelector('.from').textContent).toBe('Hexacorallia:');
-    expect(about.textContent).toContain('Polyps built in sixes.');
-    // ...and where the register put it, since nobody described this one.
-    expect(about.textContent).toContain('An order of Hexacorallia, in the phylum Cnidaria.');
+    expect(about.textContent).toContain('Phylum');
+    expect(about.querySelector('.links a').href).toContain('id=1267');
+    expect(about.querySelector('.links a').textContent).toContain('WoRMS record');
   });
 
-  it('only tells a reader the register has never heard of a name when that is true', () => {
+  it('offers the article it was told exists, under the title it has', () => {
+    // `Actiniaria` is a redirect to *Sea anemone*, which is the word somebody
+    // clicking on a Latin name was looking for.
+    api.focusOn(['Animalia', 'Cnidaria', 'Hexacorallia', 'Actiniaria']);
+    const wiki = [...document.querySelectorAll('#about .links a')]
+      .find(a => a.href.includes('wikipedia'));
+    expect(wiki.textContent).toContain('Sea anemone');
+    expect(wiki.href).toContain('/wiki/Sea_anemone');
+  });
+
+  it('offers no article for a name that has none', () => {
+    api.focusOn(['Animalia', 'Porifera']);
+    const links = [...document.querySelectorAll('#about .links a')];
+    expect(links.some(a => a.href.includes('wikipedia'))).toBe(false);
+    expect(links).toHaveLength(1);
+  });
+
+  it('describes nothing in its own words, except the names it made up itself', () => {
     api.focusOn(['Animalia', 'Cnidaria', 'Hexacorallia']);
-    expect(document.getElementById('about').textContent).not.toContain('no record');
+    expect(document.getElementById('about').querySelector('.hint')).toBeNull();
     api.focusOn(['Unplaced', 'Undecided']);
-    expect(document.getElementById('about').textContent).toContain('carries no record');
+    expect(document.getElementById('about').textContent)
+      .toContain('the name was dropped');
+  });
+
+  it('says there is nothing to look up for the detector\'s own classes', () => {
+    api.focusOn(['Unplaced', 'LRJ complex']);
+    const about = document.getElementById('about');
+    expect(about.textContent).toContain('nothing to look up');
+    expect(about.querySelector('a')).toBeNull();
   });
 
   it('reads out the count and the name above the ring', () => {
     api.focusOn(['Animalia', 'Porifera']);
     expect(document.getElementById('sunRead').textContent).toBe('30Porifera');
+  });
+});
+
+describe('the ring is a half circle at every level', () => {
+  let api;
+  beforeEach(() => { api = page(); api.state.index = INDEX; api.drawJumps(); });
+
+  /** The angle every wedge in the outermost ring covers, added up. */
+  const rimAngle = () => {
+    const rim = 26 + 26 * 3 - 2;
+    let covered = 0;
+    for (const path of document.querySelectorAll('#sunburst path')) {
+      const d = path.getAttribute('d');
+      const outer = Number(d.match(/A([\d.]+) /)[1]);
+      if (Math.abs(outer - rim) > 0.01) continue;      // not a wedge that reaches
+      const [x0, y0] = d.match(/^M([-\d.e]+) ([-\d.e]+)/).slice(1).map(Number);
+      const [x1, y1] = d.match(/1 ([-\d.e]+) ([-\d.e]+)L/).slice(1).map(Number);
+      covered += Math.atan2(x1, -y1) - Math.atan2(x0, -y0);
+    }
+    return covered;
+  };
+
+  it('fills the half at the root, where every branch goes deeper', () => {
+    api.focusOn([]);
+    expect(rimAngle()).toBeCloseTo(Math.PI, 2);
+  });
+
+  it('fills it where the naming stops one ring in', () => {
+    // Porifera holds one name and no branches below it: without the grey the
+    // drawing stopped at the first ring over that whole wedge, and the half circle
+    // came out a ragged three-quarters.
+    api.focusOn(['Animalia', 'Porifera']);
+    expect(rimAngle()).toBeCloseTo(Math.PI, 2);
+  });
+
+  it('fills it under a branch whose animals are mostly named no further', () => {
+    api.focusOn(['Animalia', 'Cnidaria']);
+    expect(rimAngle()).toBeCloseTo(Math.PI, 2);
   });
 });

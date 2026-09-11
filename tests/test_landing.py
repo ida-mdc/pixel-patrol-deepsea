@@ -13,6 +13,11 @@ from pixel_patrol_deepsea.catalogue_page import read_progress, render
 from tests.test_catalogue_page import _collection, _slices
 
 
+def _clock_of(page):
+    """The footage clock, wherever the readout put it."""
+    return re.search(r"<b>\d+:\d\d:\d\d</b>", page)
+
+
 def _two_expeditions(tmp_path):
     _collection(tmp_path, listed=10, report_rows=_slices(), expedition="EX2107")
     _collection(tmp_path, listed=6, report_rows=_slices(), expedition="EX2205")
@@ -29,8 +34,8 @@ def test_the_title_leaves_the_numbers_to_the_numbers(tmp_path):
     title = re.search(r"<h1>(.*?)</h1>", page, re.S).group(1)
     assert not re.search(r"\d", title), title
     assert "nobody" not in title.lower()
-    # ...and the numbers are still on the page, in the summary under it.
-    assert "of footage read" in page
+    # ...and the numbers are still on the page, in the readout under it.
+    assert "footage read" in page and _clock_of(page)
 
 
 def test_the_header_does_not_carry_pictures_of_its_own(tmp_path):
@@ -80,14 +85,23 @@ def test_the_taxonomy_is_grouped_the_way_the_reports_group_it(tmp_path):
 
     assert GROUP_RANK == "phylum"
     page = render(_two_expeditions(tmp_path))
-    assert "One button per phylum" in page
+    assert "Grouped by phylum" in page
     # The kingdom's children are the phyla, and everything is one of the buttons.
     assert "for (const phylum of kingdom.children" in page
     assert "path: [], all: true" in page
 
 
-def test_only_the_descriptions_of_what_was_found_are_written_in(tmp_path):
-    """A collection of one midwater dive should not carry a note about barnacles."""
+def test_only_the_articles_that_exist_are_linked(tmp_path):
+    """A link to an article that is not there is worse than no link at all.
+
+    `fetch_wikipedia` asks which names have one; the page carries the answers for
+    the names in this tree and nothing else, so a collection of one midwater dive
+    does not ship an entry about barnacles.
+    """
+    import json
+
+    from pixel_patrol_deepsea.fetch_wikipedia import load_articles
+
     index = {"tree": {"name": "everything", "count": 3,
                       "children": [{"name": "Animalia", "count": 3, "children": [
                           {"name": "Porifera", "count": 3, "taxa": ["Asbestopluma"]}]}]},
@@ -96,23 +110,23 @@ def test_only_the_descriptions_of_what_was_found_are_written_in(tmp_path):
                                                  "Poecilosclerida", "Cladorhizidae",
                                                  "Asbestopluma"]}}}
     page = render(_two_expeditions(tmp_path), index)
-    notes = re.search(r"const ABOUT = (\{.*?\});", page, re.S).group(1)
-    import json
+    lookup = json.loads(re.search(r"const LOOKUP = (\{.*?\});", page, re.S).group(1))
+    assert lookup["Porifera"] == "Sponge", "the article title is the plain word for it"
+    assert set(lookup) <= set(index["taxa"]["Asbestopluma"]["above"]) | {
+        "everything", "Animalia", "Porifera"}
+    assert "Cnidaria" not in lookup
+    # ...and every title the page offers is one the fetch actually found.
+    articles = load_articles()
+    assert all(articles.get(name) == title for name, title in lookup.items())
 
-    notes = json.loads(notes)
-    assert "Porifera" in notes and "Asbestopluma" in notes
-    # An ancestor a reader can land on is described; a phylum nothing was found in
-    # is not.
-    assert "Cladorhizidae" in notes
-    assert "Cnidaria" not in notes and "Arthropoda" not in notes
 
-
-def test_no_description_is_the_name_over_again():
-    """The point is the plain words. `Myxiniformes: hagfish` earns its two words;
-    `Myxiniformes: the myxiniformes` would be the sentence a reader already had."""
-    from pixel_patrol_deepsea.descriptions import NOTES
-
-    for name, note in NOTES.items():
-        assert note.strip().endswith((".", "?")), name
-        said = note.lower().replace(".", "").replace("the ", "").strip()
-        assert said != name.lower(), name
+def test_the_page_describes_nothing_in_its_own_words(tmp_path):
+    """The box says what the detector called it, what the register knows and what
+    the encyclopaedia calls it. A paragraph of natural history written to fill the
+    space would be the one thing on the page with no source behind it."""
+    page = render(_two_expeditions(tmp_path))
+    assert "descriptions" not in page
+    # The two exceptions are names this project and the detector made up, which
+    # nobody else is going to explain.
+    assert "const OURS" in page
+    assert page.count("Undecided:") == 1 and page.count("Unplaced:") == 1

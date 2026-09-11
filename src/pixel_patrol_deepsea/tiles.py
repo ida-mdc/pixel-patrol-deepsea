@@ -9,7 +9,9 @@ document with pictures in it.
 So the crops come out of the reports and into a store beside them, paged:
 
     tiles/index.json          the taxonomy, with a count on every node
-    tiles/<taxon>/p0.json     sixty animals, most confident first, and their sizes
+    tiles/<taxon>/p0.json     sixty animals, most confident first, their sizes,
+                              and what the tile says about each: name, expedition,
+                              second, confidence, agreement, looks, duration
     tiles/<taxon>/p0.jpgs     their sixty crops, end to end, raw JPEG
     tiles/<taxon>/p0.clips    the frames that animate them, end to end
 
@@ -107,6 +109,10 @@ def build(root: Path, expeditions: Optional[List[Path]] = None) -> Dict:
                 "c": round(best.confidence, 3),
                 "a": round(getattr(track, "agreement", 1.0), 2),
                 "n": len(track.sightings),
+                # How long it stayed in view. The tile says this beside the
+                # confidence, because "0.94, and gone in a tenth of a second" and
+                # "0.94, and there for a minute" are not the same claim.
+                "d": round(track.seconds, 1),
                 "i": best.crop,
             }
             clip = _its_clip(clips, track)

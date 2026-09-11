@@ -576,22 +576,27 @@ python -m pixel_patrol_deepsea.collect site collection/
 ```
 
 Writes **one** `index.html` beside a static viewer — the only page this package
-produces. Four things, in the order somebody meets them:
+produces. It reads as a dive log, which is what it is: a header stamp, figures in a
+monospace column, hairlines between them, four numbered parts, and the pictures as a
+contact sheet. Cyan is the only accent and the footage chose it; amber is kept for the
+one thing that has to interrupt somebody.
 
-- **a header**: what this is, over the numbers saying how much of it there is, and the
-  way into the one report that spans the collection — the statistics of every
-  expedition together, opened grouped by expedition, with no pictures in it at all.
-- **a disclaimer, in one line**: nothing here has been checked by anyone who knows
+- **01 the collection** — what this is in three sentences, over the figures saying how
+  much of it there is, and the way into the one report that spans the collection: the
+  statistics of every expedition together, opened grouped by `expedition`, with no
+  pictures in it at all.
+- **the disclaimer**, in one line: nothing here has been checked by anyone who knows
   these animals. The six ways that matters are a click behind it.
-- **the taxonomy**: half a sunburst against the page's left edge, a button per phylum
-  above it — the rank the reports colour and split by — and beside it every picture of
-  whatever branch is in focus, most confident first, a screenful per fetch, each tile
-  playing the seconds around its own animal when you hover it. Clicking the middle of
-  the ring steps back out; the box under it says what the branch *is*, in plain words,
-  from `descriptions.py`, and links its record in the World Register of Marine Species.
-- **one row per expedition**: how many of its recordings are listed and how many were
-  read, footage analysed, animals or slices with animals, names, and a link to its own
-  report.
+- **02 what is in it** — half a sunburst against the page's left edge, a button per
+  phylum above it (the rank the reports colour and split by), and beside it every
+  picture of whatever branch is in focus, most confident first, a screenful per fetch,
+  each tile playing the seconds around its own animal when you hover it — with the
+  confidence and how long the animal stayed in view over the top of it and the name
+  along the bottom. Clicking the middle of the ring steps back out.
+- **03 the expeditions** — how many of each one's recordings are listed and how many
+  were read, footage analysed, animals or slices with animals, names, and a link to
+  its own report.
+- **04 whose work this is.**
 
 Every link is a `?data=` URL into the viewer next to it, so opening a report needs a
 static file server and nothing else — no Python, no port, no viewer process. Nothing
@@ -602,13 +607,38 @@ copy of every widget, so a viewer left from an earlier run serves the widgets as
 were then, and does it silently. `pixel-patrol view` needs no such step — it reads the
 plugin out of the installed package on each request, so a widget edit is live on reload.
 
-Two things the page got wrong for a while, both of them invisible unless you looked:
+**The page does not describe an animal.** It says what the detector called it, how sure
+it was, how long it stayed in view, and where to go and read: the WoRMS record by
+identifier, and the Wikipedia article where there is one to link.
+
+```bash
+python -m pixel_patrol_deepsea.fetch_taxonomy    # lineages, from WoRMS
+python -m pixel_patrol_deepsea.fetch_wikipedia   # which names have an article
+```
+
+Both are run once and shipped with the package, so the page needs no network at all.
+The article link is fetched rather than built from the name for two reasons: a guessed
+link is often a 404 — `Paelopatides` and `Abyssocucumis abyssorum` have no article, and
+171 of 969 names have none — and following the redirects gets the plain word for a
+Latin one, so `Holothuroidea` comes back as *Sea cucumber*, which is what somebody
+clicking on it wanted. A paragraph of natural history written to fill the box would be
+the only thing on the page with no source behind it.
+
+Four things the page got wrong for a while, none of them obvious unless you looked:
 
 - **an animation that was not the animal above it.** The detector cuts one clip per
   animal in a slice and numbers them in its own order; the store took number zero for
   every animal, so a bottom covered in sea pens played the same sea pen twelve times.
   A clip is matched to an animal by the box it was cut with, and an animal the slice
   never filmed does not move at all.
+- **a ring that was not a half circle.** Each child's arc was measured against what was
+  left of the wedge rather than against the whole of it, so every child after the first
+  came out too small — at the root, Animalia took its honest four fifths and the two
+  kingdoms after it a fifth of a fifth each, leaving the drawing 151° of 180°. It was
+  invisible whenever a *no finer name* arc happened to swallow the shortfall.
+- **a wall that grew the page.** The gallery loaded as the window scrolled, which meant
+  the page had no end and the expeditions below it were unreachable. The pictures now
+  scroll in their own box, and only that box fetches more.
 - **a quarter of the coarse names shown as unplaced.** `Echinodermata`, `Chordata`,
   `Teleostei` and twenty-three others are what the detector says when it will not
   commit to a species, and the WoRMS fetch had dropped them, so they sat in a bucket

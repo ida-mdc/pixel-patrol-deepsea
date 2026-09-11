@@ -119,7 +119,7 @@ def test_totals_the_collection_in_its_own_summary(tmp_path):
     _collection(tmp_path, listed=10, parts=4, report_rows=_slices())
     page = render(read_progress(tmp_path))
     # One recording inside the report, whatever number of part files sit beside it.
-    assert "of 10 recordings" in page
+    assert "<b>1 / 10</b><span>recordings</span>" in page
     # ...and the expedition's own row in the fleet table says the same.
     assert "<td class=\"num\">1<span class=\"sub\">of 10 · 10%</span></td>" in page
 
@@ -166,7 +166,7 @@ def test_prefers_counted_animals_once_a_second_pass_has_run(tmp_path):
                 sightings=_sightings(drifting))
     page = render(read_progress(tmp_path))
     # One animal, drifting across nine detections - not nine animals.
-    assert "<b>1</b><span>animals found</span>" in page
+    assert "<b>1</b><span>animals</span>" in page
     assert "slices with an animal" not in page
 
 
