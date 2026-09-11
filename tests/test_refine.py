@@ -297,3 +297,65 @@ def test_a_sponge_is_an_animal_even_though_it_does_not_move():
     for label in ("Porifera", "Demospongiae", "Actinopterygii", "Crinoidea",
                   "Ceriantharia", "Anguilliformes", "fish"):
         assert is_an_animal(label), label
+
+
+def test_looks_that_agree_name_the_animal():
+    from pixel_patrol_deepsea.refine import resolve_taxon
+
+    agreed = [_at(0.0, taxon="Keratoisis"), _at(0.5, taxon="Keratoisis")]
+    assert resolve_taxon(agreed) == ("Keratoisis", 1.0)
+
+
+def test_looks_that_disagree_climb_to_the_rank_they_share():
+    """Two names in one branch are not a disagreement, they are two depths of it.
+
+    `Keratoisis` and `Actiniaria` are both Cnidaria: less than a species, more than
+    nothing, and - unlike either name on its own - true.
+    """
+    from pixel_patrol_deepsea.refine import resolve_taxon
+
+    name, agreement = resolve_taxon([_at(0.0, taxon="Keratoisis", confidence=0.8),
+                                     _at(0.5, taxon="Actiniaria", confidence=0.7)])
+    assert name == "Cnidaria"
+    assert 0 < agreement < 1
+
+
+def test_a_sponge_in_one_look_and_a_fish_in_the_next_is_undecided():
+    """The measurement behind this: on EX2107, 23% of animals seen more than once
+    were labelled inconsistently, and more than half of those shared nothing but
+    `Animalia`. Naming them after the most confident look is a claim the evidence
+    does not support, and a species tile is exactly that claim.
+    """
+    from pixel_patrol_deepsea.refine import UNDECIDED, resolve_taxon
+
+    name, _ = resolve_taxon([_at(0.0, taxon="Porifera", confidence=0.8),
+                             _at(0.5, taxon="Bathyraja", confidence=0.7)])
+    assert name == UNDECIDED
+
+
+def test_a_weak_dissenter_does_not_overrule_a_confident_name():
+    # Without this a stray 0.06 detection unnames a 0.85 identification, and every
+    # animal in a crowded frame ends up undecided.
+    from pixel_patrol_deepsea.refine import resolve_taxon
+
+    name, agreement = resolve_taxon([_at(0.0, taxon="Keratoisis", confidence=0.85),
+                                     _at(0.5, taxon="Bathyraja", confidence=0.06)])
+    assert (name, agreement) == ("Keratoisis", 1.0)
+
+
+def test_two_names_the_register_does_not_know_have_nothing_in_common():
+    from pixel_patrol_deepsea.refine import UNDECIDED, resolve_taxon
+
+    name, _ = resolve_taxon([_at(0.0, taxon="mystery", confidence=0.8),
+                             _at(0.5, taxon="other mystery", confidence=0.7)])
+    assert name == UNDECIDED
+
+
+def test_a_track_carries_the_name_its_own_looks_support():
+    from pixel_patrol_deepsea.refine import track_sightings
+
+    drifting = [_at(i * 0.25, taxon=taxon, box=(10 + i, 10, 30 + i, 30))
+                for i, taxon in enumerate(["Keratoisis", "Actiniaria", "Keratoisis"])]
+    [track] = track_sightings(drifting)
+    assert track.taxon == "Cnidaria"
+    assert track.agreement < 1.0

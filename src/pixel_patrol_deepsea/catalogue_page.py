@@ -178,7 +178,8 @@ def read_animals(report: Path):
 
     import polars as pl
 
-    from pixel_patrol_deepsea.identity import ANIMAL, animals_from, has_ids
+    from pixel_patrol_deepsea.identity import (
+        ANIMAL, ANIMAL_AGREEMENT, ANIMAL_TAXON, animals_from, has_ids)
     from pixel_patrol_deepsea.refine import Sighting, track_sightings
 
     # Three columns out of sixty, and none of them the cached stills: this is
@@ -192,7 +193,7 @@ def read_animals(report: Path):
     slices = table.filter(pl.col("detections").is_not_null()
                           & pl.col("dim_t").is_not_null())
     recording = "child_id" if "child_id" in slices.columns else "name"
-    sightings, clips, stored = [], {}, []
+    sightings, clips, stored, settled, backing = [], {}, [], [], []
     for row in slices.iter_rows(named=True):
         try:
             animals = json.loads(row["detections"])
@@ -219,6 +220,8 @@ def read_animals(report: Path):
                 crop=crop,
             ))
             stored.append(animal.get(ANIMAL))
+            settled.append(animal.get(ANIMAL_TAXON))
+            backing.append(animal.get(ANIMAL_AGREEMENT))
     for clip in clips.values():
         clip.frames.sort()
     # The report says which detections are one animal, where it was written by a
@@ -226,7 +229,7 @@ def read_animals(report: Path):
     # question already answered - and the page would disagree with the file it is
     # made from the moment either rule changed.
     if sightings and all(number is not None for number in stored):
-        return animals_from(sightings, stored), clips
+        return animals_from(sightings, stored, settled, backing), clips
     if sightings:
         logging.getLogger(__name__).info(
             "%s predates stored animal ids; linking them here instead. "

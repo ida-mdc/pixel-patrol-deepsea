@@ -35,11 +35,18 @@ import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
-from pixel_patrol_deepsea.refine import Sighting, Track, track_sightings
+from pixel_patrol_deepsea.refine import Sighting, Track, name_tracks, track_sightings
 
 logger = logging.getLogger(__name__)
 
 ANIMAL = "animal"
+# What the animal's looks agreed it was, and how much of their confidence backed
+# it. Written beside the id because it is decided from the whole track and a
+# reader holding one detection cannot work it out: a detection says `Keratoisis`,
+# and whether that animal is a Keratoisis or one of the 23% whose looks disagreed
+# is a property of the other detections it belongs with. See `refine.resolve_taxon`.
+ANIMAL_TAXON = "animal_taxon"
+ANIMAL_AGREEMENT = "animal_agreement"
 
 
 def _recording_column(columns: Sequence[str]) -> str:
@@ -115,6 +122,8 @@ def identify(report: Path) -> int:
         for sighting in track.sightings:
             row, entry = where[position_of[id(sighting)]]
             parsed[row][entry][ANIMAL] = number
+            parsed[row][entry][ANIMAL_TAXON] = track.taxon
+            parsed[row][entry][ANIMAL_AGREEMENT] = round(track.agreement, 3)
 
     # A clip is several frames cut around one animal with a single box, and it says
     # which animal by its index within the slice. It gets the same id, so the film
@@ -126,7 +135,9 @@ def identify(report: Path) -> int:
                 continue
             of = animal.get("of")
             if isinstance(of, int) and 0 <= of < len(real) and ANIMAL in real[of]:
-                animal[ANIMAL] = real[of][ANIMAL]
+                for field in (ANIMAL, ANIMAL_TAXON, ANIMAL_AGREEMENT):
+                    if field in real[of]:
+                        animal[field] = real[of][field]
 
     rewritten = [json.dumps(parsed[i], separators=(",", ":")) if i in parsed else blob
                  for i, blob in enumerate(blobs)]
@@ -163,7 +174,9 @@ def has_ids(rows: Sequence[Optional[str]]) -> bool:
     return False
 
 
-def animals_from(sightings: Sequence[Sighting], ids: Sequence[int]) -> List[Track]:
+def animals_from(sightings: Sequence[Sighting], ids: Sequence[int],
+                 names: Optional[Sequence] = None,
+                 agreements: Optional[Sequence] = None) -> List[Track]:
     """The tracks a report already decided on, rebuilt from the stored ids.
 
     Same shape as `track_sightings` returns, so a caller cannot tell which of the
@@ -171,13 +184,30 @@ def animals_from(sightings: Sequence[Sighting], ids: Sequence[int]) -> List[Trac
     every detection, and gives the same answer every time it is asked.
     """
     grouped: Dict[Tuple[str, int], List[Sighting]] = {}
-    for sighting, number in zip(sightings, ids):
-        grouped.setdefault((sighting.recording, int(number)), []).append(sighting)
+    named: Dict[Tuple[str, int], Tuple[str, float]] = {}
+    for index, (sighting, number) in enumerate(zip(sightings, ids)):
+        key = (sighting.recording, int(number))
+        grouped.setdefault(key, []).append(sighting)
+        if names is not None and index < len(names) and names[index]:
+            agreement = 1.0
+            if agreements is not None and index < len(agreements):
+                try:
+                    agreement = float(agreements[index])
+                except (TypeError, ValueError):
+                    agreement = 1.0
+            named[key] = (str(names[index]), agreement)
     tracks = []
-    for (recording, _number), mine in grouped.items():
+    for key, mine in grouped.items():
+        recording, _number = key
         mine.sort(key=lambda s: s.second)
-        best = max(mine, key=lambda s: s.confidence)
-        tracks.append(Track(recording=recording, taxon=best.taxon,
+        # The name the report settled on, where it says. Deriving it again here
+        # would be a second opinion on a question already answered, and the two
+        # would disagree the moment the rule changed.
+        if key in named:
+            taxon, agreement = named[key]
+        else:
+            taxon, agreement = max(mine, key=lambda s: s.confidence).taxon, 1.0
+        tracks.append(Track(recording=recording, taxon=taxon,
                             first_second=mine[0].second, last_second=mine[-1].second,
-                            sightings=mine))
+                            sightings=mine, agreement=agreement))
     return tracks

@@ -19,7 +19,7 @@ import csv
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Sequence
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -217,6 +217,10 @@ class Track:
     first_second: float
     last_second: float
     sightings: List[Sighting]
+    # How much of the confidence behind this animal backed the name it carries.
+    # 1.0 when every look agreed; lower when `taxon` is a rank they had to be
+    # climbed to, or `Undecided` because they shared nothing.
+    agreement: float = 1.0
 
     @property
     def frames(self) -> int:
@@ -242,6 +246,77 @@ NOT_AN_ANIMAL = frozenset({
     "medusa carcass", "molt", "krill molt", "shell", "eggcase", "ink", "wood",
     "kelp", "mung", "carapace", "tube", "stalk", "chromista", "plantae",
 })
+
+
+# A track whose sightings disagree about what the animal is, and how far apart
+# they have to be before the name is not worth printing.
+#
+# Measured on EX2107, which is 11,040 animals: 6,099 of them were seen more than
+# once and 1,378 of those - 23% - were labelled inconsistently. More than half of
+# those disagreements share nothing but `Animalia`: a sponge in one look and a fish
+# in the next. Naming those after whichever look the detector was most confident
+# about is a claim the evidence does not support, and it is the claim a species
+# tile on the page makes.
+UNDECIDED = "Undecided"
+# A sighting is only allowed to argue about the name if it is within reach of the
+# best one. Without this a stray 0.06 detection overrules a 0.85 identification,
+# and every animal in a crowded frame ends up undecided.
+NAMING_REACH = 0.5
+
+
+def resolve_taxon(sightings: Sequence["Sighting"], taxonomy: Optional[Dict] = None
+                  ) -> Tuple[str, float]:
+    """What to call an animal whose looks disagree, and how much they agreed.
+
+    Three outcomes, in order of how much the evidence supports:
+
+    1. The looks agree - the name.
+    2. They disagree but share a lineage - the deepest rank they share.
+       `Keratoisis` and `Isididae` are not a disagreement, they are two depths of
+       the same branch; `Keratoisis` and `Antipatharia` are both Cnidaria, which is
+       less than a species and more than nothing, and is true.
+    3. They share nothing above the kingdom - `Undecided`, because a name that is
+       right in one frame and wrong in the next is not information about the
+       animal, it is information about the detector.
+
+    The second return value is the share of the confidence that backed the winning
+    name, so a reader can see how much of a claim it is.
+    """
+    from pixel_patrol_deepsea.fetch_taxonomy import lineage_of, load_taxonomy
+
+    considered = [s for s in sightings if s.taxon]
+    if not considered:
+        return UNDECIDED, 0.0
+    best = max(s.confidence for s in considered)
+    heard = [s for s in considered if s.confidence >= best * NAMING_REACH]
+    weight: Dict[str, float] = {}
+    for sighting in heard:
+        weight[sighting.taxon] = weight.get(sighting.taxon, 0.0) + sighting.confidence
+    total = sum(weight.values()) or 1.0
+    if len(weight) == 1:
+        name = next(iter(weight))
+        return name, 1.0
+
+    table = taxonomy if taxonomy is not None else load_taxonomy()
+    lineages = [lineage_of(name, table) for name in weight]
+    shared: List[str] = []
+    for ranks in zip(*lineages):
+        if len(set(ranks)) != 1:
+            break
+        shared.append(ranks[0])
+    leading = max(weight, key=weight.get)
+    agreement = weight[leading] / total
+    # "Unplaced" is where a name the register does not know is parked, and two
+    # names being equally unknown is not a thing they have in common.
+    if not shared or shared[-1] in ("Unplaced", "Animalia"):
+        return UNDECIDED, agreement
+    return shared[-1], agreement
+
+
+def name_tracks(tracks: Sequence["Track"], taxonomy: Optional[Dict] = None) -> None:
+    """Give every track the name its own looks support, in place."""
+    for track in tracks:
+        track.taxon, track.agreement = resolve_taxon(track.sightings, taxonomy)
 
 
 def is_an_animal(taxon: str) -> bool:
@@ -315,10 +390,11 @@ def track_sightings(sightings: Sequence[Sighting], iou_gate: float = TRACK_IOU,
                     fresh = Track(recording, sighting.taxon, second, second, [sighting])
                     open_tracks.append(fresh)
                     tracks.append(fresh)
-    # A track that changed its mind is named by its best look at the animal rather
-    # than by whichever label happened to open it.
-    for track in tracks:
-        track.taxon = track.best.taxon
+    # A track that changed its mind is named by what its looks agree on rather than
+    # by whichever label happened to open it - or by whichever it was most
+    # confident about, which is the same claim with better presentation. See
+    # `resolve_taxon`.
+    name_tracks(tracks)
     return tracks
 
 
