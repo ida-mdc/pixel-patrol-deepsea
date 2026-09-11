@@ -213,3 +213,148 @@
     - https://rawdata.oceanobservatories.org/files/RS03ASHS/PN03B/CAMHDA301/2022/08/15/CAMHDA301-20220815T031500.mp4
     - https://rawdata.oceanobservatories.org/files/RS03ASHS/PN03B/CAMHDA301/2024/08/15/CAMHDA301-20240815T031500.mp4
     - https://rawdata.oceanobservatories.org/files/RS03ASHS/PN03B/CAMHDA301/2026/08/15/CAMHDA301-20260815T031500.mp4
+
+# ── further afield ─────────────────────────────────────────────────────────────
+#
+# Five more Okeanos Explorer cruises, chosen for the oceans the catalogue did not
+# have: the Caribbean, the South Pacific, the western Pacific, Hawaii and the
+# northern Mid-Atlantic Ridge. All five publish a 1 Hz vehicle track and dive
+# reports, checked before they were listed here - between 26,000 and 36,000 fixes
+# on the dive that was sampled.
+#
+# Two of them publish themed clips rather than one continuous tape, the way
+# EX1605L1 does, and need the looser pattern to match anything at all.
+
+- id: EX1811
+  name: "Océano Profundo 2018: Exploring Deep-sea Habitats off Puerto Rico"
+  archive: NOAA Ocean Exploration
+  vessel: NOAA Ship Okeanos Explorer, ROV Deep Discoverer
+  date: 2018-10
+  listing: https://www.ncei.noaa.gov/data/oceans/oer/video/EX1811/Video/
+  depth: 2
+  pattern: "*ROVHD_Low.mp4"
+  location:
+    kind: noaa-dive
+    data: https://oer.hpc.msstate.edu/okeanos/ex1811/
+  notes: >-
+    The Puerto Rico trench and the island's deep slopes - the only Caribbean
+    footage here, and the only place in the catalogue where the Atlantic reaches
+    8,000 m.
+
+- id: EX1702
+  name: "Mountains in the Deep: Exploring the Central Pacific Basin"
+  archive: NOAA Ocean Exploration
+  vessel: NOAA Ship Okeanos Explorer, ROV Deep Discoverer
+  date: 2017-04
+  listing: https://www.ncei.noaa.gov/data/oceans/oer/video/EX1702/Video/
+  depth: 2
+  pattern: "*ROVHD_Low.mp4"
+  location:
+    kind: noaa-dive
+    data: https://oer.hpc.msstate.edu/okeanos/ex1702/
+  notes: Seamounts around American Samoa and the Central Pacific Basin.
+
+- id: EX1606
+  name: Deepwater Wonders of Wake
+  archive: NOAA Ocean Exploration
+  vessel: NOAA Ship Okeanos Explorer, ROV Deep Discoverer
+  date: 2016-07
+  listing: https://www.ncei.noaa.gov/data/oceans/oer/video/EX1606/Video/
+  depth: 2
+  # Themed clips, as on EX1605L1: the plain "*ROVHD_Low.mp4" matches nothing here.
+  pattern: "*ROVHD*_Low.mp4"
+  location:
+    kind: noaa-dive
+    data: https://oer.hpc.msstate.edu/okeanos/ex1606/
+  notes: Wake Atoll and the seamounts of the western Pacific, to 2250 m.
+
+- id: EX1504L2
+  name: "Hohonu Moana: Exploring Deep Waters off Hawaii"
+  archive: NOAA Ocean Exploration
+  vessel: NOAA Ship Okeanos Explorer, ROV Deep Discoverer
+  date: 2015-08
+  listing: https://www.ncei.noaa.gov/data/oceans/oer/video/EX1504L2/Video/
+  depth: 2
+  pattern: "*ROVHD*_Low.mp4"
+  location:
+    kind: noaa-dive
+    data: https://oer.hpc.msstate.edu/okeanos/ex1504l2/
+  notes: >-
+    Hawaii and Johnston Atoll, to 2484 m. The same waters as EX2503 a decade
+    earlier, which is the other pair in this catalogue that can be compared across
+    time.
+
+- id: EX2206
+  name: Voyage to the Ridge 3
+  archive: NOAA Ocean Exploration
+  vessel: NOAA Ship Okeanos Explorer, ROV Deep Discoverer
+  date: 2022-08
+  listing: https://www.ncei.noaa.gov/data/oceans/oer/video/EX2206/Video/
+  depth: 2
+  pattern: "*ROVHD_Low.mp4"
+  location:
+    kind: noaa-dive
+    data: https://oer.hpc.msstate.edu/okeanos/ex2206/
+  notes: >-
+    The northern Mid-Atlantic Ridge and the Azores, three weeks after EX2205
+    worked the same ridge further south.
+
+# ── before the telepresence era ────────────────────────────────────────────────
+#
+# NOAA's older programmes, digitised from tape. They are here for what nothing
+# else in the catalogue has - the Arctic, the Caribbean in 2001, Monterey in 2000,
+# a different ship and a different camera every time - and they arrive with less
+# metadata than anything else, which is the point rather than a problem.
+#
+# What is missing, exactly: the filenames carry a date but no time, so there is no
+# clock to put a slice on and `recorded_at` is null. The navigation these cruises
+# recorded was never published beside the video, so there is no track and no
+# position. Every measurement of the footage itself - motion, colour, particles,
+# detections - is unaffected, and a report of them is worth having. The widgets
+# that need a position or a clock leave these recordings out and say so; they do
+# not refuse the rest.
+#
+# The picture is smaller too: 360x240, digitised from standard-definition tape,
+# against 640x360 for the modern proxies. The detector reads it upscaled, which is
+# measurably worse - see the README on what a proxy costs - so read a detection
+# here as weaker evidence than the same detection on a modern cruise.
+
+- id: HiddenOcean2005L1
+  name: "Hidden Ocean 2005: Arctic Exploration"
+  archive: NOAA Ocean Exploration
+  vessel: USCGC Healy
+  date: 2005-06
+  listing: https://www.ncei.noaa.gov/data/oceans/oer/video/HiddenOcean2005L1/Video/
+  depth: 1
+  pattern: "*PROXY.MP4"
+  notes: >-
+    Under the Arctic ice in the Canada Basin - the only polar footage in this
+    catalogue, and the only footage taken from an icebreaker. No clock and no
+    navigation are published with it.
+
+- id: GOA2004
+  name: Gulf of Alaska Seamount Expedition 2004
+  archive: NOAA Ocean Exploration
+  vessel: R/V Atlantis, DSV Alvin
+  date: 2004-07
+  listing: https://www.ncei.noaa.gov/data/oceans/oer/video/GOA2004/Video/
+  depth: 1
+  pattern: "*PROXY.MP4"
+  notes: >-
+    Alvin dives on the Gulf of Alaska seamounts, nineteen years before EX2306
+    worked the same water with an ROV. Footage from a human-occupied submersible,
+    which is a different way of looking: a pilot turning to what a scientist in the
+    sphere asked to see. No clock and no navigation are published with it.
+
+- id: MBNMS2000L1
+  name: Monterey Bay National Marine Sanctuary 2000
+  archive: NOAA Ocean Exploration
+  vessel: R/V Western Flyer, ROV Tiburon
+  date: 2000-06
+  listing: https://www.ncei.noaa.gov/data/oceans/oer/video/MBNMS2000L1/Video/
+  depth: 1
+  pattern: "*PROXY.MP4"
+  notes: >-
+    Monterey Canyon in 2000 - the same water MBARI's annotated sequences come
+    from, twenty-three years earlier and through a different camera. No clock and
+    no navigation are published with it.
