@@ -118,6 +118,7 @@ def load_detector():
         raise RuntimeError("no detector configured; see pixel_patrol_deepsea.detector")
     if str(root) not in sys.path:
         sys.path.insert(0, str(root))
+    _standin_for_pkg_resources()
 
     # YOLOv5 v6.2 predates torch 2.6's weights_only default, and its checkpoints are
     # pickled model objects rather than plain tensors.
@@ -130,6 +131,43 @@ def load_detector():
         torch.load = original
     names = model.names
     return model, (list(names.values()) if isinstance(names, dict) else list(names))
+
+
+def _standin_for_pkg_resources() -> None:
+    """Let YOLOv5 v6.2 import `pkg_resources` on a setuptools that no longer has it.
+
+    setuptools removed pkg_resources in 81. YOLOv5 imports it at the top of
+    `utils/general.py` - so the import fails before any of this code runs - and
+    uses exactly three things from it, all inside `check_version` and
+    `check_requirements`, which inference never calls. A checkpoint that will not
+    load because a dependency-checking helper cannot check dependencies is not a
+    real constraint, and pinning the whole environment back to an old setuptools to
+    satisfy it would be a large price for a module nothing here uses.
+
+    So the three names exist and behave: versions compare properly through
+    `packaging`, and the two that would go looking for installed distributions say
+    they cannot rather than lying about what is installed.
+    """
+    import types
+
+    try:
+        import pkg_resources  # noqa: F401
+        return
+    except ImportError:
+        pass
+
+    from packaging.version import parse as parse_version
+
+    def parse_requirements(_source):
+        raise RuntimeError("pkg_resources is unavailable; requirements are not checked here")
+
+    stand_in = types.ModuleType("pkg_resources")
+    stand_in.parse_version = parse_version
+    stand_in.parse_requirements = parse_requirements
+    stand_in.require = parse_requirements
+    stand_in.DistributionNotFound = type("DistributionNotFound", (Exception,), {})
+    stand_in.VersionConflict = type("VersionConflict", (Exception,), {})
+    sys.modules["pkg_resources"] = stand_in
 
 
 def letterbox(frame: np.ndarray, size: int, stride: int = 32):

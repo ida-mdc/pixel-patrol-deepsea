@@ -12,6 +12,16 @@ dependencies = [
     "pillow>=10.0",              # slice-thumbnail encodes every cached still
     "opencv-python-headless>=4.9",  # letterboxing frames for the detector
     "torch>=2.2",
+    # Imported by the YOLOv5 code the detector loads, not by anything here:
+    # models/common.py wants `requests`, and utils/plots.py - which it imports on
+    # the way to the model - wants `seaborn`. Without them the detector registers,
+    # fails on every slice, warns, and writes no detections at all. Declared
+    # because "they happened to be in that environment" is how a cluster run came
+    # back with 282 recordings and no animals. (`pkg_resources`, which it also
+    # imports, is gone from setuptools 81 and is stood in for in `detector`
+    # rather than pinning the whole environment backwards for it.)
+    "requests>=2.31",
+    "seaborn>=0.13",
     "torchvision>=0.17",
 ]
 

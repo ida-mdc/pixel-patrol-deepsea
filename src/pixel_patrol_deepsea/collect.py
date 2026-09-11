@@ -221,8 +221,24 @@ def _insist_on_the_detector(wanted: str) -> None:
 
     if wanted in ("", "none", "off"):
         return
-    if engine.is_available():
+    # Loading it, not just finding it. `is_available` asks whether the weights, the
+    # code, cv2 and torch are present, and all four were the day the detector
+    # warned "No module named 'requests'" on every slice of 282 recordings and
+    # wrote no detections. Whatever the next missing piece turns out to be, trying
+    # the thing catches it; enumerating its dependencies does not. It costs a
+    # couple of seconds, once, against an hour of analysis.
+    try:
+        engine.load_detector()
         return
+    except Exception as exc:
+        if engine.is_available():
+            raise SystemExit(
+                f"the detector is there but will not load: {exc}\n"
+                f"  cache: {engine.CACHE}\n"
+                f"This is usually a missing dependency of the YOLOv5 code it loads. "
+                f"Reinstalling the package pulls them in:\n"
+                f"    python -m pip install -e <this checkout>\n"
+                f"To analyse without a detector on purpose, pass --detector none.")
     raise SystemExit(
         f"no detector, so nothing would be found and the report would not say so.\n"
         f"  looked in : {engine.CACHE}\n"
