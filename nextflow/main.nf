@@ -137,11 +137,19 @@ process ANALYSE {
     // Nextflow 26 resolves a directive's string when the process is defined,
     // where `expedition` is not bound to anything yet.
     publishDir path: { "${params.outdir}/parts/${expedition}" }, mode: 'copy'
-    // One recording of video and one model in memory. Retried once because an
-    // archive serving thousands of hours will drop a connection now and then.
-    memory '8 GB'
-    errorStrategy 'retry'
-    maxRetries 1
+    // One recording of video and one model in memory. Retried because an archive
+    // serving thousands of hours will drop a connection now and then, and with
+    // more memory each time because the other reason a recording fails is being
+    // bigger than the last one that fit.
+    memory { 8.GB * task.attempt }
+    // ...and then left out. A recording that cannot be read is one recording, and
+    // the alternative - the default, which is to terminate - throws away a
+    // collection that is 282 recordings finished and 5 unreadable, including the
+    // merge and the page that would have shown the 282. The loader has taken this
+    // view since it was written: "losing the other nine hundred to it would be
+    // absurd".
+    errorStrategy { task.attempt > 3 ? 'ignore' : 'retry' }
+    maxRetries 3
 
     input:
     tuple val(expedition), val(name), val(url)
