@@ -14,11 +14,22 @@ from pixel_patrol_deepsea import tiles
 from tests.test_catalogue_page import JPEG, _animal, _report_with_animals
 
 
-def _frames(taxon, box, count=3):
+def _frames(taxon, box, count=3, of=0, crop=None):
     """The steady frames the detector cuts beside an animal, as it writes them:
-    extra detections flagged `clip`, belonging to the animal numbered `of`."""
-    return [{"class": taxon, "conf": 0.5, "box": list(box), "clip": 1, "of": 0}
+    extra detections flagged `clip`, belonging to the animal numbered `of`.
+
+    Cut with the animal's own box, which is how a clip says whose it is. `of` is
+    the detector's own numbering of the animals it filmed in the slice and means
+    nothing outside it.
+    """
+    return [{"class": taxon, "conf": 0.5, "box": list(box), "clip": 1, "of": of,
+             **({"crop": crop} if crop else {})}
             for _ in range(count)]
+
+
+def _film(tag):
+    """A frame nobody could confuse with another animal's."""
+    return JPEG[:-2] + bytes([tag]) + JPEG[-2:]
 
 
 def _store(tmp_path, entries):
@@ -106,3 +117,43 @@ def test_pages_hold_no_more_than_a_pageful(tmp_path):
     for taxon, about in index["taxa"].items():
         for page in range(about["pages"]):
             assert len(_page(store, taxon, page)[0]) <= tiles.PER_PAGE
+
+
+def test_an_animal_animates_with_its_own_film_and_not_its_neighbours(tmp_path):
+    """Two sea pens in one slice, each filmed - each tile plays its own.
+
+    The slice cuts a clip per animal and numbers them in its own order, so the
+    number cannot be assumed: taking `of` 0 for every animal is what showed a
+    bottom covered in sea pens as the same sea pen twelve times over, a tile
+    holding one animal and moving as another.
+    """
+    near, far = (10, 10, 60, 50), (560, 300, 610, 340)
+    store, _ = _store(tmp_path, [[
+        _animal("sea pen", 0.9, near), _animal("sea pen", 0.7, far),
+        *_frames("sea pen", near, of=0, crop=_film(1)),
+        *_frames("sea pen", far, of=1, crop=_film(2))]])
+    animals, _stills, clips = _page(store, "sea pen")
+    assert [a["c"] for a in animals] == [0.9, 0.7], "most confident first"
+    played, at = [], 0
+    for animal in animals:
+        frames = []
+        for size in animal.get("f", []):
+            frames.append(clips[at:at + size])
+            at += size
+        played.append(set(frames))
+    assert played == [{_film(1)}, {_film(2)}]
+
+
+def test_an_animal_the_slice_never_filmed_does_not_move(tmp_path):
+    """Only the few most convincing animals in a slice get a clip.
+
+    The rest have no film of their own, and the nearest one is a different animal
+    in a different place. A still tile says so; a tile playing its neighbour says
+    something false.
+    """
+    near, far = (10, 10, 60, 50), (560, 300, 610, 340)
+    store, _ = _store(tmp_path, [[
+        _animal("sea pen", 0.9, near), _animal("sea pen", 0.7, far),
+        *_frames("sea pen", near, of=0, crop=_film(1))]])
+    animals, _stills, _clips = _page(store, "sea pen")
+    assert [bool(a["m"]) for a in animals] == [True, False]

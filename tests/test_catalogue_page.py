@@ -187,7 +187,7 @@ def _report_with_animals(root, entries, expedition="EX2107"):
             # way a burst of consecutive frames comes out of the detector.
             "detections": json.dumps([
                 {**a, "second": round(slice_index * 5.0 + i * 0.1, 3), "frame": i,
-                 "crop": base64.b64encode(JPEG).decode()}
+                 "crop": base64.b64encode(a.get("crop") or JPEG).decode()}
                 for i, a in enumerate(animals)]) if animals else None,
         })
     (root / "parquet").mkdir(parents=True, exist_ok=True)

@@ -109,7 +109,7 @@ def build(root: Path, expeditions: Optional[List[Path]] = None) -> Dict:
                 "n": len(track.sightings),
                 "i": best.crop,
             }
-            clip = clips.get((track.recording, best.slice_t, 0))
+            clip = _its_clip(clips, track)
             found.setdefault(track.taxon, []).append(entry)
             frames.setdefault(track.taxon, []).append(
                 list(clip.crops[:MOST_FRAMES]) if clip else [])
@@ -139,6 +139,34 @@ def build(root: Path, expeditions: Optional[List[Path]] = None) -> Dict:
     (store / "index.json").write_text(json.dumps(index, separators=(",", ":")))
     logger.info("tiles: %d taxa, %d animals", len(counts), sum(counts.values()))
     return index
+
+
+def _its_clip(clips: Dict, track):
+    """The clip cut with this animal's own box, or none.
+
+    The detector cuts one clip per animal - the few most convincing in a slice -
+    and numbers them `of` in its own order, which is not an index into anything
+    this side of the report knows. What identifies a clip is the box it was cut
+    with: the same box the animal was detected in. Assuming the number was zero
+    handed every animal in a slice the first animal's film, so a bottom covered in
+    sea pens animated as the same sea pen over and over - the tile showed one
+    animal and moved as another.
+
+    Matched against the animal's own looks, most confident first: the still is its
+    best look, so that slice is where to try, and a look a second later is still
+    this animal rather than its neighbour. An animal the slice cut no clip for -
+    only the few most convincing get one - gets none, which is the honest answer.
+    A tile that does not move is better than one that moves as something else.
+    """
+    from pixel_patrol_deepsea.catalogue_page import ITS_OWN_CLIP, _overlap
+
+    for look in sorted(track.sightings, key=lambda s: -s.confidence):
+        here = [clip for key, clip in clips.items()
+                if key[0] == track.recording and key[1] == look.slice_t]
+        mine = max(here, key=lambda clip: _overlap(clip.box, look.box), default=None)
+        if mine is not None and _overlap(mine.box, look.box) >= ITS_OWN_CLIP:
+            return mine
+    return None
 
 
 def _write_page(where: Path, page: int, animals: List[dict],
