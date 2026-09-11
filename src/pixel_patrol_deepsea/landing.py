@@ -231,13 +231,19 @@ def _fleet_row(row) -> str:
 
     share = (row.processed / row.listed * 100) if row.listed else 0
     taxa = f"{len(row.taxa)}" if row.taxa else "—"
+    # An expedition nobody has listed or read yet has no denominator, and "0 of 0 ·
+    # 0%" reads as a measurement rather than as the absence of one.
+    read = (f'{row.processed:,}<span class="sub">of {row.listed:,} · {share:.0f}%</span>'
+            if row.listed else (f"{row.processed:,}" if row.processed else "—"))
+    animals = (f"{row.animals:,}" if row.animals else
+               f'{row.with_animals:,}<span class="sub">slices</span>'
+               if row.with_animals else "—")
     return f"""<tr>
       <td><b>{html.escape(row.title)}</b><span class="sub">{html.escape(row.id)}</span></td>
       <td class="num">{html.escape(row.date or '—')}</td>
-      <td class="num">{row.processed:,}<span class="sub">of {row.listed:,} · {share:.0f}%</span></td>
+      <td class="num">{read}</td>
       <td class="num">{_clock(row.seconds)}</td>
-      <td class="num">{f"{row.animals:,}" if row.animals
-          else f'{row.with_animals:,}<span class="sub">slices</span>'}</td>
+      <td class="num">{animals}</td>
       <td class="num">{taxa}</td>
       <td class="num">{_mission(row)}{_link(row)}</td>
     </tr>"""

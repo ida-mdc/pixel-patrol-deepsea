@@ -28,6 +28,7 @@
     the only two cruises here that visited the same place twice.
 
 - id: EX1903L2
+  link: https://oceanexplorer.noaa.gov/expedition/ex1903/
   name: Windows to the Deep 2019
   archive: NOAA Ocean Exploration
   vessel: NOAA Ship Okeanos Explorer, ROV Deep Discoverer
@@ -43,6 +44,7 @@
     earlier half of the only repeat visit in this catalogue - see EX2107.
 
 - id: EX1605L1
+  link: https://archive.oceanexplorer.noaa.gov/okeanos/explorations/ex1605/welcome.html
   name: Deepwater Exploration of the Marianas
   archive: NOAA Ocean Exploration
   vessel: NOAA Ship Okeanos Explorer, ROV Deep Discoverer
@@ -119,6 +121,7 @@
 # actually newer about these four is the footage, not the navigation.
 
 - id: EX2503
+  link: https://oceanexplorer.noaa.gov/expedition/ex2503/
   name: "Beyond the Blue: Papahanaumokuakea 2025"
   archive: NOAA Ocean Exploration
   vessel: NOAA Ship Okeanos Explorer, ROV Deep Discoverer
@@ -135,6 +138,7 @@
     deepest of the four cruises in this section, and second only to EX1605L1.
 
 - id: EX2306
+  link: https://oceanexplorer.noaa.gov/expedition/ex2306/
   name: Seascape Alaska 5
   archive: NOAA Ocean Exploration
   vessel: NOAA Ship Okeanos Explorer, ROV Deep Discoverer
@@ -151,6 +155,7 @@
     from everything else here.
 
 - id: EX2205
+  link: https://oceanexplorer.noaa.gov/expedition/22voyage-to-the-ridge/
   name: Voyage to the Ridge 2
   archive: NOAA Ocean Exploration
   vessel: NOAA Ship Okeanos Explorer, ROV Deep Discoverer
@@ -166,6 +171,7 @@
     fracture zones, to 3350 m. The only Atlantic-ridge footage in the catalogue.
 
 - id: EX2301
+  link: https://oceanexplorer.noaa.gov/expedition/ex2301/
   name: "EXPRESS 2023 - West Coast Exploration"
   archive: NOAA Ocean Exploration
   vessel: NOAA Ship Okeanos Explorer, ROV Deep Discoverer
@@ -291,6 +297,7 @@
     time.
 
 - id: EX2206
+  link: https://oceanexplorer.noaa.gov/expedition/22voyage-to-the-ridge/
   name: Voyage to the Ridge 3
   archive: NOAA Ocean Exploration
   vessel: NOAA Ship Okeanos Explorer, ROV Deep Discoverer

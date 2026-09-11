@@ -56,6 +56,7 @@ class Progress:
     vessel: str = ""
     date: str = ""
     notes: str = ""
+    link: str = ""      # the expedition's own page, for credit and for context
     listed: int = 0
     processed: int = 0
     recordings: int = 0      # distinct recordings inside the merged report
@@ -102,7 +103,8 @@ def _progress_of(root: Path, expedition_id: str, entry) -> Progress:
                    archive=(entry.archive if entry else ""),
                    vessel=(entry.vessel if entry else ""),
                    date=(entry.date if entry else ""),
-                   notes=(entry.notes if entry else ""))
+                   notes=(entry.notes if entry else ""),
+                   link=(entry.link if entry else ""))
     manifest = root / "manifests" / f"{expedition_id}.json"
     if manifest.is_file():
         try:
