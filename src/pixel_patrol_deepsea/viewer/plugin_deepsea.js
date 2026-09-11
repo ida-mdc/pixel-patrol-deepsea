@@ -174,6 +174,14 @@ async function fetchTimeline(ctx, recording) {
  * Same rows, same order, same filtering - the only difference is that the
  * recording each row belongs to arrives as a column instead of as a predicate.
  */
+// Recordings per query. One query for a whole collection is the fewest round
+// trips and the largest single result, and the largest single result is the one
+// duckdb-wasm has to hold, sort and hand over in one piece - in a browser, with a
+// fixed heap. Sixty-four recordings is around twenty thousand rows: few enough
+// queries that the cost is the work rather than the waiting, small enough that no
+// single one is an outlier.
+const TIMELINES_PER_QUERY = 64;
+
 export async function fetchTimelines(ctx, recordings) {
   const { q } = ctx.sql;
   if (recordings.length <= 1) {
@@ -181,19 +189,28 @@ export async function fetchTimelines(ctx, recordings) {
     if (!only) return new Map();
     return new Map([[String(only.name), await fetchTimeline(ctx, only)]]);
   }
-  const parts = ctx.sql.dimSubsetWhere({ split: new Set(['t']) });
-  const columns = timelineColumns(ctx);
-  const rows = await ctx.queryRows(`
-    SELECT ${recordingKey(ctx)} AS rec, ${q('dim_t')} AS t, ${q('frame_difference')} AS movement${columns}
-    FROM ${sliceTable(ctx)} WHERE ${parts.join(' AND ')} ORDER BY rec, t`);
   const wanted = new Set(recordings.map(recording => String(recording.name)));
   const byRecording = new Map();
-  for (const row of rows) {
-    if (!Number.isFinite(Number(row.movement))) continue;
-    const name = String(row.rec);
-    if (!wanted.has(name)) continue;
-    if (!byRecording.has(name)) byRecording.set(name, []);
-    byRecording.get(name).push(row);
+  for (let from = 0; from < recordings.length; from += TIMELINES_PER_QUERY) {
+    const batch = recordings.slice(from, from + TIMELINES_PER_QUERY);
+    const parts = ctx.sql.dimSubsetWhere({ split: new Set(['t']) });
+    parts.push(`${recordingKey(ctx)} IN (${batch.map(r => literal(r.name)).join(', ')})`);
+    // No ORDER BY: sorting the whole table is the most expensive thing this could
+    // ask a browser to do, and the rows have to be split by recording here anyway.
+    // Sorting each recording's own few hundred afterwards costs nothing.
+    const rows = await ctx.queryRows(`
+      SELECT ${recordingKey(ctx)} AS rec, ${q('dim_t')} AS t, ${q('frame_difference')} AS movement${timelineColumns(ctx)}
+      FROM ${sliceTable(ctx)} WHERE ${parts.join(' AND ')}`);
+    for (const row of rows) {
+      if (!Number.isFinite(Number(row.movement))) continue;
+      const name = String(row.rec);
+      if (!wanted.has(name)) continue;
+      if (!byRecording.has(name)) byRecording.set(name, []);
+      byRecording.get(name).push(row);
+    }
+  }
+  for (const timeline of byRecording.values()) {
+    timeline.sort((a, b) => Number(a.t) - Number(b.t));
   }
   return byRecording;
 }

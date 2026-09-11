@@ -1240,7 +1240,7 @@ describe('a collection is read in one query, not one per recording', () => {
     async queryRows(sql) { asked.push(sql); return rows; },
   });
 
-  it('asks once however many recordings there are', async () => {
+  it('asks once per batch of recordings, not once per recording', async () => {
     const asked = [];
     const rows = [];
     for (const rec of ['a.mp4', 'b.mp4', 'c.mp4']) {
@@ -1252,8 +1252,19 @@ describe('a collection is read in one query, not one per recording', () => {
     const ctx = ctxFor(rows, asked);
     const got = await fetchTimelines(ctx, [{ name: 'a.mp4' }, { name: 'b.mp4' }, { name: 'c.mp4' }]);
     expect(asked).toHaveLength(1);
+    expect(asked[0]).not.toMatch(/ORDER BY/);
     expect([...got.keys()].sort()).toEqual(['a.mp4', 'b.mp4', 'c.mp4']);
     expect(got.get('b.mp4')).toHaveLength(6);
+  });
+
+  it('sorts each recording by time itself, since the query does not', async () => {
+    // Sorting the whole table is the most expensive thing this could ask a browser
+    // to do, and the rows are split by recording here anyway.
+    const asked = [];
+    const rows = [{ rec: 'a.mp4', t: 20, movement: 3 }, { rec: 'a.mp4', t: 0, movement: 1 },
+                  { rec: 'a.mp4', t: 10, movement: 2 }];
+    const got = await fetchTimelines(ctxFor(rows, asked), [{ name: 'a.mp4' }, { name: 'b.mp4' }]);
+    expect(got.get('a.mp4').map(r => r.t)).toEqual([0, 10, 20]);
   });
 
   it('keeps each recording to its own rows', async () => {
