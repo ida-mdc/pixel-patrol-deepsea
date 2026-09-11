@@ -115,13 +115,17 @@ def test_analysing_without_a_detector_has_to_be_asked_for(monkeypatch, tmp_path)
     A processor that cannot run is not registered, and `--processors-include` for
     an unregistered name asks for nothing and gets it - so a worker without the
     detector writes a perfectly good report with no animals in it and exits zero.
-    A whole cluster run came back that way: positions, colour, motion, and not one
-    detection, because the compute nodes never saw XDG_CACHE_HOME.
+    A whole cluster run came back that way: 282 recordings with positions, colour
+    and motion, and not one detection.
     """
     import pytest
 
     from pixel_patrol_deepsea import collect, detector
 
+    def missing():
+        raise RuntimeError("no detector configured")
+
+    monkeypatch.setattr(detector, "load_detector", missing)
     monkeypatch.setattr(detector, "is_available", lambda: False)
     with pytest.raises(SystemExit, match="no detector"):
         collect.analyse_one("https://example/x.mp4", tmp_path / "x.parquet", "DSMOT",
@@ -131,11 +135,37 @@ def test_analysing_without_a_detector_has_to_be_asked_for(monkeypatch, tmp_path)
     collect._insist_on_the_detector("none")
 
 
+def test_a_detector_that_is_there_but_will_not_load_is_not_good_enough(monkeypatch):
+    """Everything `is_available` checks was present on the day it found nothing.
+
+    Weights, code, cv2 and torch were all in place; what was missing was a module
+    the YOLOv5 code imports on its way to the model. So the check loads it.
+    """
+    import pytest
+
+    from pixel_patrol_deepsea import collect, detector
+
+    def broken():
+        raise ImportError("No module named 'requests'")
+
+    monkeypatch.setattr(detector, "load_detector", broken)
+    monkeypatch.setattr(detector, "is_available", lambda: True)
+    with pytest.raises(SystemExit) as refused:
+        collect._insist_on_the_detector("general")
+    said = str(refused.value)
+    assert "will not load" in said and "requests" in said
+    assert str(detector.CACHE) in said
+
+
 def test_the_message_names_the_cache_it_looked_in(monkeypatch):
     import pytest
 
     from pixel_patrol_deepsea import collect, detector
 
+    def missing():
+        raise RuntimeError("nothing here")
+
+    monkeypatch.setattr(detector, "load_detector", missing)
     monkeypatch.setattr(detector, "is_available", lambda: False)
     with pytest.raises(SystemExit) as refused:
         collect._insist_on_the_detector("general")
