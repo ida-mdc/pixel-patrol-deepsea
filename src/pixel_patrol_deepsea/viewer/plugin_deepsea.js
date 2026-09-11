@@ -2285,10 +2285,17 @@ export function verdictSource(summaries, verdict) {
       // Only the verdict being plotted. This used to emit all four for each of
       // them and let the `WHERE` throw three quarters away, which on a collection
       // of 287 recordings meant 1,148 inlined rows and 99 KB of SQL text per plot,
-      // four times over. The engine's own plots name a column and send nothing;
-      // this one has to carry its data, so what it carries should be what is asked
-      // for. A statement that large is also the one thing triage did that no other
-      // widget did, on the day it was the only widget failing in the browser.
+      // four times over - and that is what broke it. In the browser's duckdb-wasm
+      // a statement that size failed to run, and failed as `_setThrew is not
+      // defined`, because that build reports a DuckDB error by losing it. Cut to
+      // the rows actually drawn - 287, 25 KB - the widget works.
+      //
+      // Worth keeping in mind for any widget that follows: the engine's own plots
+      // name a column and send nothing, so their size is the table's problem. This
+      // one computes its numbers in the browser and has to carry them, which makes
+      // the length of the statement its own problem, and a browser's parser has
+      // far less room than the one on your machine. Native DuckDB parses the 99 KB
+      // version without complaint, which is why this cannot be found locally.
       if (WINDOW_KINDS[kind].label !== verdict) continue;
       const share = 100 * summary[field] / summary.total;
       if (!Number.isFinite(share)) continue;
