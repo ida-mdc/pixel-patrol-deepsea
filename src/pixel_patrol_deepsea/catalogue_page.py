@@ -42,9 +42,16 @@ HIDDEN_WIDGETS = (
 )
 
 
-def _report_url(parquet: str) -> str:
-    """A link into the static viewer beside this page, opened on what is worth reading."""
-    return f"viewer/index.html?data={parquet}&hidden={'.'.join(HIDDEN_WIDGETS)}"
+def _report_url(parquet: str, group: str = "") -> str:
+    """A link into the static viewer beside this page, opened on what is worth reading.
+
+    `group` is the column the viewer splits every widget by. Worth setting on the
+    combined report and on nothing else: one expedition's report has no column that
+    tells its rows apart that way, and the combined one has `expedition`, which is
+    the whole reason a reader opens it.
+    """
+    url = f"viewer/index.html?data={parquet}&hidden={'.'.join(HIDDEN_WIDGETS)}"
+    return f"{url}&group={group}" if group else url
 
 
 @dataclass
@@ -464,7 +471,7 @@ def _everything_link(rows: List[Progress]) -> str:
     with_reports = [r for r in rows if r.report is not None]
     if len(with_reports) < 2:
         return ""
-    target = _report_url(f"../parquet/{EVERYTHING}.parquet")
+    target = _report_url(f"../parquet/{EVERYTHING}.parquet", group="expedition")
     hours = _clock(sum(r.seconds for r in with_reports))
     return f"""
     <section class="everything">

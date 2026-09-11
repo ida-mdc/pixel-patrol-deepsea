@@ -9,16 +9,16 @@ best sponge" but "show me every sponge".
 So this is four things, in the order someone meets them:
 
     the hero        what this is, in a sentence, over the numbers that say how much
-                    of it there is - and moving pictures, because the first thing
-                    anyone wants to know about deep-sea footage is what is in it.
-    the warning     what the numbers are worth. It is above the fold on purpose and
-                    it is not softened: a detector that is confidently wrong, a
-                    fraction of the frames read, and a taxonomy resolved by an
-                    algorithm rather than by anybody who knows the animals.
-    the taxonomy    a sunburst of what was found, and beside it every picture of
-                    whatever branch is clicked, loaded a screenful at a time from
-                    the store `tiles` writes. It does not matter how many there
-                    are; the page fetches what is on screen.
+                    of it there is. Short on purpose: the pictures are the point of
+                    the page and they start a screen further down, so the header
+                    does not spend a viewport saying so.
+    the disclaimer  what the numbers are worth, in one line that cannot be missed.
+                    It is above the pictures on purpose and it is not softened; the
+                    detail is a click away for anyone who wants it.
+    the taxonomy    a half sunburst against the left edge and, beside it, every
+                    picture of whatever branch is in focus, loaded a screenful at a
+                    time from the store `tiles` writes. Grouped by phylum, which is
+                    the rank the reports group by and the one a reader navigates by.
     the expeditions one line each: how much was analysed, and the way in.
 
 Everything below the hero is built from `tiles/index.json` and the paged files
@@ -49,10 +49,10 @@ def render(rows, index: Optional[Dict] = None, scores: Optional[Dict] = None) ->
     seen = sum(r.with_animals for r in rows)
     taxa = len((index or {}).get("taxa", {}))
     everything = [r for r in rows if r.report is not None]
-    # The catalogue lists more expeditions than have been read. The lede is about
-    # what was read, and the table below is where the rest of them are accounted for.
-    ran = len([r for r in rows if r.processed])
-    combined = _report_url(f"../parquet/{EVERYTHING}.parquet") if len(everything) > 1 else ""
+    # Grouped by expedition, because the only reason to open every expedition in
+    # one report is to see how they differ from each other.
+    combined = (_report_url(f"../parquet/{EVERYTHING}.parquet", group="expedition")
+                if len(everything) > 1 else "")
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -67,87 +67,86 @@ def render(rows, index: Optional[Dict] = None, scores: Optional[Dict] = None) ->
     </div>
     <div class="hero-say">
       <p class="kicker">Pixel Patrol · deep sea</p>
-      <h1>{_clock(seconds)} of footage<br>nobody had watched</h1>
-      <p class="lede">Expedition video read end to end and asked two questions: what
-         moved, and what was it. {processed:,} recordings from {ran} expeditions,
-         every animal the detector found, and a position and a clock on each one that
-         published them.</p>
+      <h1>What is in the footage</h1>
+      <p class="lede">Expedition video, read end to end and asked two questions: what
+         moved, and what was it. Every animal a detector found, the name it gave, and
+         a position and a clock wherever the archive published one.</p>
       <div class="stats">
+        {_stat(_clock(seconds), "of footage read")}
         {_stat(f"{processed:,}", f"of {listed:,} recordings" if listed else "recordings read")}
         {_stat(f"{animals:,}", "animals found") if animals
                else _stat(f"{seen:,}", "slices with an animal")}
         {_stat(f"{taxa}", "names given")}
-        {_stat(f"{len([r for r in rows if r.report])}", "reports")}
       </div>
-      {f'<a class="cta" href="{html.escape(combined, quote=True)}">Open all {len(everything)} expeditions together &rarr;</a>' if combined else ''}
+      {_together(combined)}
     </div>
-    <div class="hero-tiles" id="heroTiles" aria-hidden="true"></div>
-    <a class="scroll-cue" href="#warning">what this is worth &darr;</a>
   </section>
 
   <section class="warning" id="warning">
-    <h2>Read this before you believe any of it</h2>
-    <div class="warn-grid">
-      <div>
-        <h3>A proof of concept</h3>
-        <p>This is a demonstration that an archive of unwatched video can be read,
-           indexed and made browsable. It is not a survey, and nothing here has been
-           checked by anyone who knows these animals.</p>
+    <p class="alarm"><span class="mark" aria-hidden="true">&#9888;</span>
+       <b>Disclaimer</b> Nothing here has been checked by anyone who knows these
+       animals. Every name is one detector's guess on footage it was never trained
+       on, most frames were never read at all, and every count is an upper bound.</p>
+    <details class="caveats">
+      <summary>What that means, in six parts</summary>
+      <div class="warn-grid">
+        <div>
+          <h3>A proof of concept</h3>
+          <p>A demonstration that an archive of unwatched video can be read, indexed
+             and made browsable. Not a survey.</p>
+        </div>
+        <div>
+          <h3>The names are guesses</h3>
+          <p>One YOLOv5 checkpoint trained on MBARI imagery, 499 classes, run on
+             frames it has never seen. On a set of labelled specimens it named two of
+             five correctly and was wrong at 0.94 confidence on the rest. Read a name
+             as a shortlist.</p>
+        </div>
+        <div>
+          <h3>Most frames were never read</h3>
+          <p>A sample of each expedition's dives, a sample of each dive's bottom
+             time, and the detector looking about once a second. The table below says
+             how much of each expedition that was.</p>
+        </div>
+        <div>
+          <h3>Counts are upper bounds</h3>
+          <p>Sightings are linked into animals geometrically, which against a
+             tracking benchmark splits the average animal across about 1.8 entries.
+             The long tail is single, low-confidence detections.</p>
+        </div>
+        <div>
+          <h3>The picture is a proxy</h3>
+          <p>Almost all of this footage is published at 640×360, some older tapes at
+             360×240 - about six points of recall below full resolution, and no
+             upscaling gets it back.</p>
+        </div>
+        <div>
+          <h3>Colour is the vehicle's</h3>
+          <p>Everything below the photic zone is lit by the lamps that filmed it, and
+             water takes the red out within metres. Colour describes the lighting as
+             much as the animal.</p>
+        </div>
       </div>
-      <div>
-        <h3>The names are guesses</h3>
-        <p>Every name came from one object detector - a YOLOv5 checkpoint trained on
-           MBARI imagery, 499 classes - run on frames it has never seen. It is
-           confidently wrong often: on a set of labelled specimens it named two of
-           five correctly and was wrong at 0.94 confidence on the others. Where an
-           animal's looks disagreed, the name was resolved to the rank they share,
-           or to <b>Undecided</b>. Read a name as a shortlist, not an
-           identification.</p>
-      </div>
-      <div>
-        <h3>Most frames were never read</h3>
-        <p>Recordings are thinned before analysis and the detector looks about once a
-           second, so most frames were never seen by anything. Of each expedition,
-           only a sample of dives and a sample of each dive's bottom time was
-           analysed at all - the counts below say how much.</p>
-      </div>
-      <div>
-        <h3>Counts are upper bounds</h3>
-        <p>One animal seen across several seconds is linked into one, but the linking
-           is geometric and imperfect - measured against a tracking benchmark it
-           splits the average animal across about 1.8 entries. The long tail is
-           single, low-confidence detections. Filter by confidence before quoting a
-           number.</p>
-      </div>
-      <div>
-        <h3>The picture is a proxy</h3>
-        <p>Almost all of this footage is published at 640×360, and some of the older
-           tapes at 360×240. That costs the detector about six points of recall
-           against full resolution, and no upscaling gets it back.</p>
-      </div>
-      <div>
-        <h3>Colour is the vehicle's</h3>
-        <p>Everything below the photic zone is lit by the lamps that filmed it, and
-           water takes the red out within metres. Colour measurements here describe
-           the lighting as much as the animal.</p>
-      </div>
-    </div>
+    </details>
   </section>
 
   <section class="explore" id="explore">
     <header class="explore-head">
       <h2>Everything that was found</h2>
-      <p class="lede">Click a branch to go into it. The pictures are every animal the
-         detector put under that name, most confident first, loaded as you scroll.
-         Hover one to watch the seconds around it.</p>
-      <nav class="jumps" id="jumps"></nav>
-      <nav class="crumbs" id="crumbs"></nav>
+      <p class="lede">One button per phylum - sponges, cnidarians, fish - which is
+         the grouping the reports use. Click a ring to go further in and the middle
+         of it to come back out; the pictures beside it are every animal under
+         whatever is in focus, most confident first, loaded as you scroll. Hover one
+         to watch the seconds around it.</p>
+      <nav class="jumps" id="jumps" aria-label="the phyla this collection found"></nav>
+      <nav class="crumbs" id="crumbs" aria-label="the branch in focus"></nav>
     </header>
     <div class="explore-body">
       <div class="sun-side">
-        <div class="sun"><svg id="sunburst" viewBox="-100 -100 200 200" role="img"
-             aria-label="the taxonomy of what was found"></svg>
-          <div class="sun-centre" id="sunCentre"></div>
+        <p class="sun-read" id="sunRead"></p>
+        <div class="sun"><svg id="sunburst" viewBox="0 -100 100 200" role="img"
+             preserveAspectRatio="xMinYMid meet"
+             aria-label="the taxonomy of what was found, as half a sunburst"></svg>
         </div>
         <aside class="about" id="about"></aside>
       </div>
@@ -209,12 +208,58 @@ def render(rows, index: Optional[Dict] = None, scores: Optional[Dict] = None) ->
     link works; there is nothing else to install.
   </footer>
 </main>
+<script>const ABOUT = {_notes(index)};</script>
 <script>{SCRIPT}</script>
 </body></html>"""
 
 
 def _stat(value: str, label: str) -> str:
     return f'<div class="stat"><b>{html.escape(value)}</b><span>{html.escape(label)}</span></div>'
+
+
+def _together(url: str) -> str:
+    """The way into the one report that spans the collection.
+
+    It is not another gallery and saying "open all nine expeditions" did not warn
+    anybody of that: it is the statistics - counts, names, depths, positions,
+    times - over every expedition that has been read, and it carries no pictures at
+    all, because those are hundreds of megabytes and belong in an expedition's own
+    report. It opens grouped by expedition, since the only reason to put them in
+    one report is to compare them.
+    """
+    if not url:
+        return ""
+    return (f'<a class="cta" href="{html.escape(url, quote=True)}">'
+            f'The statistics, every expedition together &rarr;</a>'
+            f'<p class="cta-note">One report over every expedition that has been '
+            f'read, grouped by expedition: how much was found, of what, how deep, '
+            f'where and when. No pictures - each expedition\'s own report holds '
+            f'those, and they are listed at the foot of this page.</p>')
+
+
+def _notes(index: Optional[Dict]) -> str:
+    """What the page can say about a branch, for the branches it holds.
+
+    `descriptions.py` describes every group this footage has turned up; a
+    collection is a few hundred of them. Only the ones in this tree are written
+    into the page, so a report of one midwater dive does not carry a paragraph
+    about barnacles.
+    """
+    from pixel_patrol_deepsea.descriptions import notes_for
+
+    names = {"everything"}
+
+    def walk(node: Dict) -> None:
+        names.add(node.get("name") or "")
+        for child in node.get("children") or []:
+            walk(child)
+
+    if index:
+        walk(index.get("tree") or {})
+        for name, about in (index.get("taxa") or {}).items():
+            names.add(name)
+            names.update(about.get("above") or [])
+    return json.dumps(notes_for(sorted(n for n in names if n)), separators=(",", ":"))
 
 
 def _mission(row) -> str:
@@ -268,25 +313,27 @@ h1, h2, h3 { line-height: 1.15; letter-spacing: -.02em; margin: 0; }
 a { color: var(--glow); }
 
 /* ── the hero ─────────────────────────────────────────────────────────────── */
-.hero { min-height: 100vh; display: grid; position: relative; overflow: hidden;
-        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-        align-items: center; gap: 3rem; padding: 5vh 6vw 12vh;
+/* A screen tall was a screen spent on a title. The pictures are what the page is
+   for, so the header is as high as what is written in it and no higher. */
+.hero { display: grid; position: relative; overflow: hidden;
+        grid-template-columns: minmax(0, 20rem) minmax(0, 1fr);
+        align-items: center; gap: 3rem; padding: 3vh 6vw 3rem;
         background:
           radial-gradient(120% 90% at 15% 0%, #0d2d47 0%, transparent 60%),
           radial-gradient(80% 70% at 90% 20%, #06283d 0%, transparent 55%),
           linear-gradient(180deg, var(--abyss-2), var(--abyss) 70%); }
-.hero-art { position: relative; justify-self: center; max-width: 42rem; }
+.hero-art { position: relative; justify-self: center; max-width: 20rem; }
 /* Black line art on white, which is the wrong way round down here. */
 .hero-art img { width: 100%; height: auto; filter: invert(1) brightness(1.08);
                 mix-blend-mode: screen; opacity: .92; }
-.hero-say { max-width: 34rem; }
+.hero-say { max-width: 44rem; }
 .kicker { color: var(--glow); text-transform: uppercase; letter-spacing: .18em;
           font-size: .72rem; margin: 0 0 1rem; }
 .hero h1 { font-size: clamp(2.2rem, 5vw, 3.6rem); }
 .lede { color: var(--dim); max-width: 40rem; }
 .hero .lede { margin: 1.1rem 0 2rem; font-size: 1.05rem; }
 .stats { display: grid; grid-template-columns: repeat(2, minmax(8rem, 1fr));
-         gap: .8rem; margin-bottom: 2rem; }
+         gap: .8rem; margin-bottom: 2rem; max-width: 36rem; }
 .stat { border: 1px solid var(--line); border-radius: 12px; padding: .7rem .9rem;
         background: var(--card); }
 @media (min-width: 1500px) { .stats { grid-template-columns: repeat(4, 1fr); } }
@@ -296,21 +343,25 @@ a { color: var(--glow); }
        padding: .75rem 1.3rem; border-radius: 999px; text-decoration: none;
        box-shadow: 0 0 40px rgba(53,214,245,.25); }
 .cta:hover { filter: brightness(1.1); }
-.hero-tiles { position: absolute; inset: auto 0 0; height: 132px; display: flex;
-              gap: 10px; padding: 0 6vw 2.2rem; pointer-events: none;
-              mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent); }
-.hero-tiles img { width: 96px; height: 96px; object-fit: cover; border-radius: 10px;
-                  border: 1px solid var(--line); opacity: 0; animation: rise .9s forwards; }
-@keyframes rise { from { opacity: 0; transform: translateY(14px); }
-                  to { opacity: .85; transform: none; } }
-.scroll-cue { position: absolute; left: 50%; bottom: 1rem; transform: translateX(-50%);
-              color: var(--dim); font-size: .8rem; text-decoration: none; }
+.cta-note { color: var(--dim); font-size: .85rem; margin: .8rem 0 0; max-width: 34rem; }
 
-/* ── the warning ──────────────────────────────────────────────────────────── */
-.warning { padding: 4rem 6vw; border-top: 1px solid var(--line);
-           background: linear-gradient(180deg, rgba(255,176,32,.07), transparent 60%); }
-.warning h2 { font-size: clamp(1.4rem, 3vw, 2rem); color: var(--warn); margin-bottom: 1.6rem; }
-.warn-grid { display: grid; gap: 1.4rem 2.4rem;
+/* ── the disclaimer ───────────────────────────────────────────────────────── */
+/* Six headed paragraphs of caveat, above the fold, was more words than the page
+   itself and read as a legal notice - which is how a legal notice gets skipped.
+   One line in the warning colour is harder to miss than six, and the six are still
+   here for whoever opens them. */
+.warning { padding: 2rem 6vw; border-top: 1px solid var(--line); }
+.alarm { margin: 0; padding: .9rem 1.1rem; border-radius: 10px; color: #ffe9c9;
+         border: 1px solid rgba(255,176,32,.5); border-left: 4px solid var(--warn);
+         background: rgba(255,176,32,.09); max-width: 70rem; }
+.alarm .mark { color: var(--warn); margin-right: .4rem; }
+.alarm b { color: var(--warn); text-transform: uppercase; letter-spacing: .1em;
+           font-size: .78rem; margin-right: .5rem; }
+.caveats { margin-top: .8rem; }
+.caveats summary { color: var(--dim); font-size: .86rem; cursor: pointer;
+                   width: fit-content; }
+.caveats summary:hover { color: var(--ink); }
+.warn-grid { display: grid; gap: 1.3rem 2.4rem; margin-top: 1.3rem;
              grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); }
 .warn-grid h3 { font-size: .95rem; margin-bottom: .3rem; }
 .warn-grid p { color: var(--dim); margin: 0; font-size: .93rem; }
@@ -319,7 +370,11 @@ a { color: var(--glow); }
 .explore { padding: 4rem 6vw 2rem; border-top: 1px solid var(--line); }
 .explore h2 { font-size: clamp(1.4rem, 3vw, 2rem); }
 .explore-head .lede { margin: .7rem 0 1rem; }
-.jumps { display: flex; flex-wrap: wrap; gap: .5rem; margin: 0 0 1rem; }
+.jumps { display: flex; flex-wrap: wrap; gap: .5rem; margin: 0 0 1rem;
+         align-items: baseline; }
+.jumps .jump.on { border-color: var(--glow); color: var(--ink);
+                  background: rgba(53,214,245,.1); }
+.jumps .all { border-style: dashed; }
 .jumps .jump { background: transparent; color: var(--dim); border: 1px solid var(--line);
                border-radius: 999px; padding: .3rem .85rem; font: inherit;
                font-size: .82rem; cursor: pointer; }
@@ -335,18 +390,31 @@ a { color: var(--glow); }
 .crumbs button:hover { border-color: var(--glow); }
 .crumbs .sep { color: var(--dim); }
 .crumbs .only { border-color: #4a5f72; color: var(--dim); }
-.explore-body { display: grid; grid-template-columns: minmax(260px, 26rem) minmax(0, 1fr);
+/* A third of the width for the ring, the rest for the animals. The ring is half a
+   circle with its flat side on the page's own left edge - a whole circle in this
+   column is small and surrounded by nothing, and the half is the same drawing at
+   twice the radius. */
+.explore-body { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(0, 2.4fr);
                 gap: 2.5rem; align-items: start; }
-.sun { position: relative; }
-.sun svg { width: 100%; height: auto; display: block; }
+.sun { position: relative; margin-left: -6vw; }
+/* Half a circle is as tall as it is wide twice over, so it is the viewport and not
+   the column that decides how big the ring gets. */
+.sun svg { width: 100%; height: auto; display: block;
+           max-height: min(80vh, 38rem); }
 .sun path { cursor: pointer; transition: opacity .15s; }
 .sun path:hover { opacity: .75; }
-.sun-centre.hovering span { color: var(--ink); }
-.sun-centre { position: absolute; inset: 38% 34% auto; text-align: center;
-              pointer-events: none; }
-.sun-centre b { display: block; font-size: 1rem; }
-.sun-centre span { color: var(--dim); font-size: .74rem; display: block;
-                  line-height: 1.15; overflow-wrap: anywhere; }
+/* The hole is the way back up. Drawn as a target rather than left as empty space,
+   because the ring it sits in is the one thing on the page that goes deeper. */
+.sun .hole { fill: rgba(53,214,245,.06); stroke: var(--line); stroke-width: .5;
+             cursor: default; }
+.sun .hole.up { fill: rgba(53,214,245,.12); cursor: pointer; }
+.sun .hole.up:hover { fill: rgba(53,214,245,.22); }
+.sun .back { fill: var(--glow); font-size: 5.5px; font-family: inherit;
+             pointer-events: none; }
+.sun-read { margin: 0 0 .4rem; min-height: 2rem; }
+.sun-read b { font-size: 1.35rem; letter-spacing: -.02em; margin-right: .4rem; }
+.sun-read span { color: var(--dim); }
+.sun-read.hovering span { color: var(--ink); }
 .wall { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }
 .wall .empty { color: var(--dim); grid-column: 1 / -1; }
 .tile { position: relative; margin: 0; border-radius: 10px; overflow: hidden;
@@ -375,6 +443,8 @@ a { color: var(--glow); }
 .about .count { color: var(--glow); margin: 0 0 .4rem; font-size: .88rem; }
 .about .lineage { color: var(--dim); font-size: .8rem; margin: 0 0 .6rem; }
 .about .hint { color: var(--dim); font-size: .85rem; margin: 0; }
+.about .what { font-size: .9rem; margin: 0 0 .6rem; }
+.about .what .from { color: var(--glow); }
 .worms { font-size: .85rem; text-decoration: none; }
 .worms:hover { text-decoration: underline; }
 
@@ -407,10 +477,11 @@ footer { padding: 2rem 6vw 4rem; color: var(--dim); font-size: .85rem;
 code { background: var(--card); padding: .1rem .35rem; border-radius: 4px; }
 
 @media (max-width: 900px) {
-  .hero { grid-template-columns: 1fr; padding-bottom: 16vh; }
-  .hero-art { max-width: 26rem; }
+  .hero { grid-template-columns: 1fr; padding-bottom: 2rem; }
+  .hero-art { max-width: 16rem; }
   .explore-body { grid-template-columns: 1fr; }
-  .sun { position: static; max-width: 24rem; margin: 0 auto; }
+  .sun-side { position: static; }
+  .sun svg { max-height: 22rem; }
 }
 """
 
@@ -421,23 +492,17 @@ SCRIPT = r"""
    into the HTML, so the page does not grow with the collection - what is on screen
    is what has been fetched. */
 const TILES = 'tiles';
+const SVGNS = 'http://www.w3.org/2000/svg';
+/* The ring's geometry, in the units the sunburst is drawn in. The hole is wide
+   because it is a button - the way back out - and not just the middle. */
+const HOLE = 26, RING = 26, RINGS = 3;
+/* The two branches that are not taxonomy: the register's names run out here. */
+const UNPLACED = 'Unplaced', UNDECIDED = 'Undecided';
 const state = { index: null, path: [], taxa: [], queue: [], loading: false,
                 done: false, pages: new Map(), clips: new Map() };
 
 const el = (id) => document.getElementById(id);
 
-/* Names that are not taxa and would otherwise send a reader to a register that has
-   never heard of them. */
-const ASIDES = {
-  Undecided: `The detector saw this animal across several seconds and called it
-    something different each time, and the names disagreed too far up to share a
-    rank - a fish one second, a sponge the next. Rather than pick the loudest guess
-    the name was dropped. These are worth a look: they are where the detector is
-    least sure, and where something unusual is most likely to be hiding.`,
-  Unplaced: `Names the World Register of Marine Species does not carry - the
-    detector's own classes for gear, marks, substrate and animals it names its own
-    way, plus the ones whose frames disagreed.`,
-};
 const say = (n) => n.toLocaleString();
 
 async function boot() {
@@ -448,9 +513,8 @@ async function boot() {
       + 'Run <code>collect site</code> where the reports are.</p>';
     return;
   }
-  focusOn(...fromHash());
   drawJumps();
-  heroTiles();
+  focusOn(...fromHash());
 }
 
 /* ── the taxonomy, as rings ────────────────────────────────────────────────── */
@@ -504,8 +568,8 @@ function restArc(node, from, to, depth) {
   if (!kids.length) return;
   const rest = node.count - kids.reduce((sum, child) => sum + child.count, 0);
   if (rest <= 0) return;
-  const inner = 16 + depth * 26, outer = inner + 24;
-  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  const inner = HOLE + depth * RING, outer = inner + RING - 2;
+  const path = document.createElementNS(SVGNS, 'path');
   path.setAttribute('d', arc(from, to, inner, outer));
   path.setAttribute('class', 'rest');
   path.setAttribute('fill', '#4a5f72');
@@ -513,11 +577,11 @@ function restArc(node, from, to, depth) {
   path.setAttribute('stroke', '#04101c');
   path.setAttribute('stroke-width', '0.6');
   const label = { name: `${node.name}, no finer name`, count: rest };
-  const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+  const title = document.createElementNS(SVGNS, 'title');
   title.textContent = `${label.name} — ${say(rest)}`;
   path.appendChild(title);
-  path.addEventListener('mouseenter', () => nameInHole(label));
-  path.addEventListener('mouseleave', () => nameInHole(null));
+  path.addEventListener('mouseenter', () => readout(label));
+  path.addEventListener('mouseleave', () => readout(null));
   path.addEventListener('click', () => focusOn(pathOf(node), node.name));
   el('sunburst').appendChild(path);
 }
@@ -541,36 +605,64 @@ function toHash(path, only) {
   history.replaceState(null, '', trail ? `#t=${encodeURIComponent(trail)}` : location.pathname);
 }
 
-/** Straight ways in: the big branches, and the animals that could not be named.
+/** One way in per phylum, plus the whole collection and the names that are not taxa.
  *
- * Undecided is not a failure to be hidden - it is every animal the detector called
- * one thing and then another, which is where its confusion is legible. */
+ * This row used to be the four biggest branches anywhere in the tree, which put a
+ * kingdom, a phylum and a class beside each other - three different ranks, in an
+ * order nothing explained, and no way back to everything. Phylum is the rank the
+ * reports group and colour by, and the one a reader actually navigates by: sponges,
+ * cnidarians, fish. So the row is every phylum this collection turned up, biggest
+ * first, and the two branches that are not phyla are marked rather than mixed in.
+ *
+ * Undecided is one of those and is not a failure to be hidden: it is every animal
+ * the detector called one thing and then another, which is where its confusion is
+ * legible. */
 function drawJumps() {
   const jumps = el('jumps');
   if (!jumps) return;
   const root = state.index.tree;
-  const branches = [];
-  const walk = (node, path) => {
-    for (const child of node.children || []) {
-      branches.push({ node: child, path: [...path, child.name] });
-      walk(child, [...path, child.name]);
+  const phyla = [], odd = [];
+  for (const kingdom of root.children || []) {
+    if (kingdom.name === UNPLACED) {
+      odd.push({ node: kingdom, path: [kingdom.name] });
+      for (const child of kingdom.children || []) {
+        if (child.name === UNDECIDED) odd.push({ node: child, path: [kingdom.name, child.name] });
+      }
+      continue;
     }
-  };
-  walk(root, []);
-  const biggest = branches
-    .filter(b => (b.node.children || []).length)
-    .sort((a, b) => b.node.count - a.node.count)
-    .slice(0, 4);
-  const odd = branches.filter(b => b.node.name === 'Undecided');
-  for (const { node, path } of [...odd, ...biggest]) {
-    const button = document.createElement('button');
-    button.className = node.name === 'Undecided' ? 'jump odd' : 'jump';
-    button.innerHTML = `${escape(node.name)} <span>${say(node.count)}</span>`;
-    button.addEventListener('click', () => {
-      focusOn(path);
-      el('explore').scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
-    jumps.appendChild(button);
+    // A phylum is the step below the kingdom, whatever depth the register's own
+    // intermediate ranks would have put it at.
+    for (const phylum of kingdom.children || []) {
+      phyla.push({ node: phylum, path: [kingdom.name, phylum.name] });
+    }
+  }
+  phyla.sort((a, b) => b.node.count - a.node.count);
+  const all = { node: root, path: [], all: true };
+  jumps.replaceChildren(...[all, ...phyla, ...odd].map(jumpFor));
+  markJumps();
+}
+
+function jumpFor({ node, path, all }) {
+  const button = document.createElement('button');
+  button.className = 'jump' + (all ? ' all' : '')
+    + (node.name === UNDECIDED || node.name === UNPLACED ? ' odd' : '');
+  button.dataset.path = path.join('/');
+  button.innerHTML = `${escape(all ? 'everything' : node.name)} <span>${say(node.count)}</span>`;
+  button.addEventListener('click', () => {
+    focusOn(path);
+    el('explore').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+  return button;
+}
+
+/** Light the button the wall is showing, so the row says where you are and not
+ *  only where you could go. A branch deeper than a phylum lights its phylum. */
+function markJumps() {
+  const here = state.path.join('/');
+  for (const button of el('jumps').children) {
+    const path = button.dataset.path;
+    const on = path ? here === path || here.startsWith(path + '/') : !here;
+    button.classList.toggle('on', on);
   }
 }
 
@@ -582,7 +674,11 @@ function pathOf(node) {
   return [...from, ...(pathTo(base, node) || [])];
 }
 
-/** Three rings out from whatever is in focus, each child an arc of its parent. */
+/** Three rings out from whatever is in focus, each child an arc of its parent.
+ *
+ * Half a circle, from straight up round to straight down, with the flat side on
+ * the page's left edge. The same rings at twice the radius in a third of the width,
+ * and the hole becomes big enough to be the button it ought to have been. */
 function drawSun() {
   const svg = el('sunburst');
   const focus = nodeAt(state.path);
@@ -592,27 +688,26 @@ function drawSun() {
   state.basePath = leaf ? state.path.slice(0, -1) : state.path;
   const base = nodeAt(state.basePath);
   svg.innerHTML = '';
-  const rings = 3, width = 26, hole = 16;
-  let reach = hole + width * 2;  // how far out anything got drawn, floored at two rings
+  let reach = HOLE + RING * 2;  // how far out anything got drawn, floored at two rings
   const place = (node, from, to, depth) => {
-    if (depth >= rings || to - from < 0.012) return;
+    if (depth >= RINGS || to - from < 0.006) return;
     for (const child of node.children || []) {
       const span = (to - from) * (child.count / Math.max(1, node.count));
-      const inner = hole + depth * width, outer = inner + width - 2;
+      const inner = HOLE + depth * RING, outer = inner + RING - 2;
       reach = Math.max(reach, outer);
-      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      const path = document.createElementNS(SVGNS, 'path');
       path.setAttribute('d', arc(from, from + span, inner, outer));
       path.setAttribute('fill', colourFor(child.name, depth));
       path.setAttribute('fill-opacity', String(0.92 - depth * 0.18));
       const here = leaf && child.name === focus.name;
       path.setAttribute('stroke', here ? '#7fd4ff' : '#04101c');
       path.setAttribute('stroke-width', here ? '1.6' : '0.6');
-      const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+      const title = document.createElementNS(SVGNS, 'title');
       title.textContent = `${child.name} — ${say(child.count)}`;
       path.appendChild(title);
       path.addEventListener('click', () => focusOn(pathOf(child)));
-      path.addEventListener('mouseenter', () => nameInHole(child));
-      path.addEventListener('mouseleave', () => nameInHole(null));
+      path.addEventListener('mouseenter', () => readout(child));
+      path.addEventListener('mouseleave', () => readout(null));
       svg.appendChild(path);
       place(child, from, from + span, depth + 1);
       from += span;
@@ -620,57 +715,133 @@ function drawSun() {
     // Whatever angle is left over belongs to animals named at this rank and no
     // deeper - called Porifera and nothing more. Without an arc that reads as a
     // hole in the ring, and it is often the commonest answer the detector gives.
-    if (to - from > 0.012 && depth < rings) restArc(node, from, to, depth);
+    if (to - from > 0.006 && depth < RINGS) restArc(node, from, to, depth);
   };
-  place(base, 0, Math.PI * 2, 0);
-  // A branch two ranks deep should not sit in a circle drawn for five.
-  svg.setAttribute('viewBox', `${-reach - 4} ${-reach - 4} ${2 * reach + 8} ${2 * reach + 8}`);
-  nameInHole(null);
+  place(base, 0, Math.PI, 0);
+  drawHole();
+  // A branch two ranks deep should not sit in a circle drawn for five. One unit of
+  // slack on the flat side keeps the radial strokes off the page's edge.
+  svg.setAttribute('viewBox', `-1 ${-reach - 4} ${reach + 5} ${2 * reach + 8}`);
+  readout(null);
   drawAbout(focus);
 }
 
-/** The hole in the middle reads whatever the pointer is over, or the focus itself. */
-function nameInHole(node) {
+/** The half-disc at the flat side: a click in it is a step back out.
+ *
+ * The report's own sunburst has done this since it was a sunburst, and a reader
+ * who has used one goes for the middle first. The breadcrumbs above do the same
+ * thing for a keyboard and for jumping more than one step. */
+function drawHole() {
+  const up = state.only ? state.path : state.path.slice(0, -1);
+  const somewhere = Boolean(state.only || state.path.length);
+  const path = document.createElementNS(SVGNS, 'path');
+  path.setAttribute('d', `M0 ${-HOLE}A${HOLE} ${HOLE} 0 0 1 0 ${HOLE}Z`);
+  path.setAttribute('class', somewhere ? 'hole up' : 'hole');
+  const title = document.createElementNS(SVGNS, 'title');
+  title.textContent = somewhere
+    ? `back to ${up.length ? up[up.length - 1] : 'everything'}`
+    : 'the whole collection - click a ring to go in';
+  path.appendChild(title);
+  if (somewhere) path.addEventListener('click', () => focusOn(up));
+  el('sunburst').appendChild(path);
+  if (!somewhere) return;
+  const label = document.createElementNS(SVGNS, 'text');
+  label.setAttribute('class', 'back');
+  label.setAttribute('x', '4');
+  label.setAttribute('y', '2');
+  label.textContent = '\u2039 back';
+  el('sunburst').appendChild(label);
+}
+
+/** The line above the ring reads whatever the pointer is over, or the focus. */
+function readout(node) {
   const focus = nodeAt(state.path);
   const shown = node || focus;
-  el('sunCentre').innerHTML = `<b>${say(shown.count)}</b><span>${shown.name === 'everything'
-    ? 'animals' : escape(shown.name)}</span>`;
-  el('sunCentre').classList.toggle('hovering', Boolean(node));
+  el('sunRead').innerHTML = `<b>${say(shown.count)}</b><span>${shown.name === 'everything'
+    ? 'animals, everything together' : escape(shown.name)}</span>`;
+  el('sunRead').classList.toggle('hovering', Boolean(node));
 }
 
 /** What this branch is, for a reader who has never heard of it.
  *
- * The register's own record, not a search: someone meeting `Asbestopluma` for the
- * first time should land on the people whose business it is. A name the register
- * does not know says so - which is information, since it usually means the
- * detector's class is not a taxon at all. */
+ * A count and a link to a register are not an answer to "what am I looking at", and
+ * that is the question somebody clicking `Holothuroidea` has. So the box leads with
+ * a description where one is written - `ABOUT`, from `descriptions.py` - and where
+ * none is, borrows the nearest ancestor's and says whose it is, which for a genus of
+ * carnivorous sponge is most of what a reader needed anyway.
+ *
+ * Then the register's own record, and by id rather than by search: someone meeting
+ * `Asbestopluma` for the first time should land on the people whose business it is.
+ * Only a name under `Unplaced` gets told the register has never heard of it - those
+ * are the detector's own classes, and saying it of a branch the register itself
+ * supplied was simply wrong. */
 function drawAbout(focus) {
   const about = el('about');
-  if (focus.name === 'everything') {
-    about.innerHTML = `<p class="hint">Every animal the detector found, arranged by what
-      it called them. Click a ring to go in; the pictures beside it follow.</p>`;
-    return;
-  }
-  const aside = ASIDES[focus.name];
-  if (aside) {
-    about.innerHTML = `<h3>${escape(focus.name)}</h3>
-      <p class="count">${say(focus.count)} animals</p><p class="hint">${aside}</p>`;
-    return;
-  }
-  const named = state.index.taxa[focus.name];
-  const under = taxaUnder(focus).length;
+  const named = state.index.taxa[focus.name];   // set when the detector says this name
+  // The branches above this one, nearest last. `everything` is not one of them:
+  // its note is about the page, and borrowing it would describe a family of
+  // sponges as "every animal the detector found".
+  const chain = ((named && named.above) || state.path)
+    .filter(step => step !== focus.name);
   const lineage = (named && named.above) || [];
-  const worms = named && named.aphia
-    ? `<a class="worms" href="https://www.marinespecies.org/aphia.php?p=taxdetails&id=${named.aphia}"
-         target="_blank" rel="noopener">Look it up in WoRMS &rarr;</a>`
-    : `<p class="hint">The World Register of Marine Species has no record under this
-        name, which usually means the detector's class is not a taxon - gear, a
-        substrate, or a name it made its own way.</p>`;
+  const under = taxaUnder(focus).length;
+  const said = ABOUT[focus.name];
+  const borrowed = said ? null : nearestNote(chain);
+  const note = said ? `<p class="what">${escape(said)}</p>`
+    : borrowed ? `<p class="what"><span class="from">${escape(borrowed.name)}:</span>
+                  ${escape(borrowed.note)}</p>`
+    : '';
   about.innerHTML = `
-    <h3>${escape(focus.name)}${named && named.rank ? ` <span class="rank">${escape(named.rank)}</span>` : ''}</h3>
-    <p class="count">${say(focus.count)} animals${under > 1 ? ` across ${under} names` : ''}</p>
+    ${focus.name === 'everything' ? '' : `
+      <h3>${escape(focus.name)}${named && named.rank
+        ? ` <span class="rank">${escape(named.rank)}</span>` : ''}</h3>
+      <p class="count">${say(focus.count)} animals${under > 1 ? ` across ${under} names` : ''}</p>`}
+    ${note}
+    ${said || !named ? '' : `<p class="hint">${escape(placed(focus.name, named))}</p>`}
     ${lineage.length ? `<p class="lineage">${lineage.map(escape).join(' › ')}</p>` : ''}
-    ${worms}`;
+    ${wormsLink(focus, named)}`;
+}
+
+/** The nearest branch above this one that somebody has described. */
+function nearestNote(chain) {
+  for (let step = chain.length - 1; step >= 0; step--) {
+    if (ABOUT[chain[step]]) return { name: chain[step], note: ABOUT[chain[step]] };
+  }
+  return null;
+}
+
+/** Where the register put a name, as a sentence, for the ones nobody described.
+ *
+ * `above` is the lineage the register gave, coarsest first and ending in the name
+ * itself, so the step before the name is what it belongs to and the second step is
+ * its phylum. */
+function placed(name, named) {
+  const above = (named.above || []).filter(step => step !== name);
+  const rank = (named.rank || '').toLowerCase();
+  const parent = above[above.length - 1], phylum = above[1];
+  if (!rank && !parent) return '';
+  const a = /^[aeiou]/.test(rank) ? 'An' : 'A';       // an order, a family
+  let said = rank && parent ? `${a} ${rank} of ${parent}`
+    : rank ? `${a} ${rank}` : `Part of ${parent}`;
+  if (phylum && phylum !== parent) said += `, in the phylum ${phylum}`;
+  return said + '.';
+}
+
+/** The register's record for this name, its search where there is no record, and
+ *  an explanation where the register is not the right place to look at all. */
+function wormsLink(focus, named) {
+  if (focus.name === 'everything') return '';
+  if (state.path[0] === UNPLACED || focus.name === UNPLACED) {
+    return `<p class="hint">The World Register of Marine Species carries no record
+      under this name: it is the detector's own, or one its looks could not agree
+      on.</p>`;
+  }
+  const worms = 'https://www.marinespecies.org/';
+  const href = named && named.aphia
+    ? `${worms}aphia.php?p=taxdetails&id=${named.aphia}`
+    : `${worms}aphia.php?p=taxlist&searchpar=0&tComp=begins&tName=${encodeURIComponent(focus.name)}`;
+  return `<a class="worms" href="${href}" target="_blank" rel="noopener">${
+    named && named.aphia ? 'Look it up in WoRMS' : 'Find it in WoRMS'} &rarr;</a>`;
 }
 
 /** The steps from an ancestor down to a node, for a click three rings out. */
@@ -686,6 +857,8 @@ function pathTo(from, wanted, trail = []) {
 function drawCrumbs() {
   const crumbs = el('crumbs');
   crumbs.innerHTML = '';
+  // At the root the trail is one step long and the button row already says so.
+  if (!state.path.length && !state.only) return;
   const steps = ['everything', ...state.path];
   steps.forEach((step, depth) => {
     const button = document.createElement('button');
@@ -731,6 +904,7 @@ function focusOn(path, only = null) {
   el('wall').innerHTML = '';
   drawSun();
   drawCrumbs();
+  markJumps();
   loadMore();
 }
 
@@ -856,34 +1030,6 @@ const clock = (seconds) => {
   const whole = Math.floor(seconds);
   return `${String(Math.floor(whole / 60)).padStart(2, '0')}:${String(whole % 60).padStart(2, '0')}`;
 };
-
-/* ── the hero's drifting tiles ────────────────────────────────────────────── */
-
-async function heroTiles() {
-  const strip = el('heroTiles');
-  const names = Object.keys(state.index.taxa)
-    .sort((a, b) => state.index.taxa[b].count - state.index.taxa[a].count)
-    .slice(0, 14);
-  let shown = 0;
-  for (const name of names) {
-    if (shown >= 9) break;
-    try {
-      const { animals, stills } = await pageOf(state.index.taxa[name].slug, 0);
-      const wanted = Math.floor(Math.random() * Math.min(6, animals.length));
-      const animal = animals[wanted];
-      if (!animal) continue;
-      let at = 0;
-      for (const before of animals.slice(0, wanted)) at += before.l;
-      const img = document.createElement('img');
-      img.src = asPicture(stills.slice(at, at + animal.l));
-      img.alt = animal.t;
-      img.title = `${animal.t} — ${animal.c.toFixed(2)}`;
-      img.style.animationDelay = `${shown * 90}ms`;
-      strip.appendChild(img);
-      shown++;
-    } catch { /* one tile fewer is not worth a message */ }
-  }
-}
 
 if (window.IntersectionObserver) {
   new IntersectionObserver(entries => {

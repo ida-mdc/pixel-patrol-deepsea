@@ -576,21 +576,43 @@ python -m pixel_patrol_deepsea.collect site collection/
 ```
 
 Writes **one** `index.html` beside a static viewer — the only page this package
-produces. It carries the headline numbers, a tile per species with the best crop of it,
-an animated tile per animal orderable by confidence, time, species or duration, a card
-per expedition with progress, provenance and species, and a link to that expedition's
-report. The viewer is **rebuilt every time**, not
-skipped when one is already there: the site carries its own copy of every widget, so a
-viewer left from an earlier run serves the widgets as they were then, and does it
-silently. `pixel-patrol view` needs no such step — it reads the plugin out of the
-installed package on each request, so a widget edit is live on reload.
+produces. Four things, in the order somebody meets them:
 
-one row per expedition with how many of its
-recordings are listed and how many are processed, hours analysed, animals or slices with
-animals, species count, and a link to that expedition's report. The link is a `?data=`
-URL into the viewer next to it, so opening a report needs a static file server and
-nothing else — no Python, no port, no viewer process. The footage widgets are bundled
-into that viewer automatically, so the gallery and the motion bands are there.
+- **a header**: what this is, over the numbers saying how much of it there is, and the
+  way into the one report that spans the collection — the statistics of every
+  expedition together, opened grouped by expedition, with no pictures in it at all.
+- **a disclaimer, in one line**: nothing here has been checked by anyone who knows
+  these animals. The six ways that matters are a click behind it.
+- **the taxonomy**: half a sunburst against the page's left edge, a button per phylum
+  above it — the rank the reports colour and split by — and beside it every picture of
+  whatever branch is in focus, most confident first, a screenful per fetch, each tile
+  playing the seconds around its own animal when you hover it. Clicking the middle of
+  the ring steps back out; the box under it says what the branch *is*, in plain words,
+  from `descriptions.py`, and links its record in the World Register of Marine Species.
+- **one row per expedition**: how many of its recordings are listed and how many were
+  read, footage analysed, animals or slices with animals, names, and a link to its own
+  report.
+
+Every link is a `?data=` URL into the viewer next to it, so opening a report needs a
+static file server and nothing else — no Python, no port, no viewer process. Nothing
+below the header is built into the HTML: it is all read from `tiles/`, so the page is
+the same size whether the collection holds one expedition or fifty. The viewer is
+**rebuilt every time**, not skipped when one is already there: the site carries its own
+copy of every widget, so a viewer left from an earlier run serves the widgets as they
+were then, and does it silently. `pixel-patrol view` needs no such step — it reads the
+plugin out of the installed package on each request, so a widget edit is live on reload.
+
+Two things the page got wrong for a while, both of them invisible unless you looked:
+
+- **an animation that was not the animal above it.** The detector cuts one clip per
+  animal in a slice and numbers them in its own order; the store took number zero for
+  every animal, so a bottom covered in sea pens played the same sea pen twelve times.
+  A clip is matched to an animal by the box it was cut with, and an animal the slice
+  never filmed does not move at all.
+- **a quarter of the coarse names shown as unplaced.** `Echinodermata`, `Chordata`,
+  `Teleostei` and twenty-three others are what the detector says when it will not
+  commit to a species, and the WoRMS fetch had dropped them, so they sat in a bucket
+  beside the phyla they belong to. `fetch_taxonomy --names` resolves a list by hand.
 
 ## Where and when the footage was taken
 

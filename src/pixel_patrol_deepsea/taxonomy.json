@@ -256,6 +256,13 @@
 "matched": "Animalia",
 "rank": "Kingdom"
 },
+"Annelida": {
+"aphia_id": 882,
+"kingdom": "Animalia",
+"matched": "Annelida",
+"phylum": "Annelida",
+"rank": "Phylum"
+},
 "Anoplogaster cornuta": {
 "aphia_id": 126393,
 "class": "Teleostei",
@@ -378,6 +385,13 @@
 "phylum": "Chordata",
 "rank": "Genus"
 },
+"Arthropoda": {
+"aphia_id": 1065,
+"kingdom": "Animalia",
+"matched": "Arthropoda",
+"phylum": "Arthropoda",
+"rank": "Phylum"
+},
 "Asbestopluma": {
 "aphia_id": 131893,
 "class": "Demospongiae",
@@ -412,6 +426,16 @@
 "phylum": "Porifera",
 "rank": "Species",
 "species": "Asbestopluma rickettsi"
+},
+"Asteriidae": {
+"aphia_id": 123121,
+"class": "Asteroidea",
+"family": "Asteriidae",
+"kingdom": "Animalia",
+"matched": "Asteriidae",
+"order": "Forcipulatida",
+"phylum": "Echinodermata",
+"rank": "Family"
 },
 "Asteroidea": {
 "aphia_id": 123080,
@@ -1026,6 +1050,13 @@
 "rank": "Species",
 "species": "Chiroteuthis calyx"
 },
+"Chordata": {
+"aphia_id": 1821,
+"kingdom": "Animalia",
+"matched": "Chordata",
+"phylum": "Chordata",
+"rank": "Phylum"
+},
 "Chorilia longipes": {
 "aphia_id": 441520,
 "class": "Malacostraca",
@@ -1221,6 +1252,16 @@
 "matched": "Copepoda",
 "phylum": "Arthropoda",
 "rank": "Class"
+},
+"Coralliidae": {
+"aphia_id": 125280,
+"class": "Octocorallia",
+"family": "Coralliidae",
+"kingdom": "Animalia",
+"matched": "Coralliidae",
+"order": "Scleralcyonacea",
+"phylum": "Cnidaria",
+"rank": "Family"
 },
 "Corallimorphus": {
 "aphia_id": 100784,
@@ -1653,6 +1694,13 @@
 "phylum": "Echinodermata",
 "rank": "Genus"
 },
+"Echinodermata": {
+"aphia_id": 1806,
+"kingdom": "Animalia",
+"matched": "Echinodermata",
+"phylum": "Echinodermata",
+"rank": "Phylum"
+},
 "Echinoidea": {
 "aphia_id": 123082,
 "class": "Echinoidea",
@@ -1669,6 +1717,15 @@
 "phylum": "Annelida",
 "rank": "Subclass"
 },
+"Elasipodida": {
+"aphia_id": 123112,
+"class": "Holothuroidea",
+"kingdom": "Animalia",
+"matched": "Elasipodida",
+"order": "Elasipodida",
+"phylum": "Echinodermata",
+"rank": "Order"
+},
 "Elpidia": {
 "aphia_id": 123512,
 "class": "Holothuroidea",
@@ -1679,6 +1736,16 @@
 "order": "Elasipodida",
 "phylum": "Echinodermata",
 "rank": "Genus"
+},
+"Elpidiidae": {
+"aphia_id": 123191,
+"class": "Holothuroidea",
+"family": "Elpidiidae",
+"kingdom": "Animalia",
+"matched": "Elpidiidae",
+"order": "Elasipodida",
+"phylum": "Echinodermata",
+"rank": "Family"
 },
 "Embassichthys bathybius": {
 "aphia_id": 280641,
@@ -1914,6 +1981,15 @@
 "order": "Scleralcyonacea",
 "phylum": "Cnidaria",
 "rank": "Genus"
+},
+"Gadiformes": {
+"aphia_id": 10313,
+"class": "Teleostei",
+"kingdom": "Animalia",
+"matched": "Gadiformes",
+"order": "Gadiformes",
+"phylum": "Chordata",
+"rank": "Order"
 },
 "Galatheoidea": {
 "aphia_id": 106685,
@@ -2317,6 +2393,15 @@
 "rank": "Species",
 "species": "Histioteuthis heteropsis"
 },
+"Holasteroida": {
+"aphia_id": 160733,
+"class": "Echinoidea",
+"kingdom": "Animalia",
+"matched": "Holasteroida",
+"order": "Holasteroida",
+"phylum": "Echinodermata",
+"rank": "Order"
+},
 "Holothuroidea": {
 "aphia_id": 123083,
 "class": "Holothuroidea",
@@ -2526,6 +2611,16 @@
 "order": "Siphonophorae",
 "phylum": "Cnidaria",
 "rank": "Genus"
+},
+"Keratoisididae": {
+"aphia_id": 1544106,
+"class": "Octocorallia",
+"family": "Keratoisididae",
+"kingdom": "Animalia",
+"matched": "Keratoisididae",
+"order": "Scleralcyonacea",
+"phylum": "Cnidaria",
+"rank": "Family"
 },
 "Keratoisis": {
 "aphia_id": 125306,
@@ -2859,6 +2954,23 @@
 "rank": "Species",
 "species": "Magnapinna pacifica"
 },
+"Malacalcyonacea": {
+"aphia_id": 1609357,
+"class": "Octocorallia",
+"kingdom": "Animalia",
+"matched": "Malacalcyonacea",
+"order": "Malacalcyonacea",
+"phylum": "Cnidaria",
+"rank": "Order"
+},
+"Malacostraca": {
+"aphia_id": 1071,
+"class": "Malacostraca",
+"kingdom": "Animalia",
+"matched": "Malacostraca",
+"phylum": "Arthropoda",
+"rank": "Class"
+},
 "Marrus": {
 "aphia_id": 135391,
 "class": "Hydrozoa",
@@ -2998,6 +3110,13 @@
 "rank": "Species",
 "species": "Mola mola"
 },
+"Mollusca": {
+"aphia_id": 51,
+"kingdom": "Animalia",
+"matched": "Mollusca",
+"phylum": "Mollusca",
+"rank": "Phylum"
+},
 "Moloha faxoni": {
 "aphia_id": 440204,
 "class": "Malacostraca",
@@ -3117,6 +3236,15 @@
 "rank": "Species",
 "species": "Nanomia bijuga"
 },
+"Narcomedusae": {
+"aphia_id": 16349,
+"class": "Hydrozoa",
+"kingdom": "Animalia",
+"matched": "Narcomedusae",
+"order": "Narcomedusae",
+"phylum": "Cnidaria",
+"rank": "Order"
+},
 "Nemertea": {
 "aphia_id": 152391,
 "kingdom": "Animalia",
@@ -3228,6 +3356,15 @@
 "phylum": "Cnidaria",
 "rank": "Species",
 "species": "Octogonade mediterranea"
+},
+"Octopoda": {
+"aphia_id": 11718,
+"class": "Cephalopoda",
+"kingdom": "Animalia",
+"matched": "Octopoda",
+"order": "Octopoda",
+"phylum": "Mollusca",
+"rank": "Order"
 },
 "Octopodidae": {
 "aphia_id": 11782,
@@ -3643,6 +3780,15 @@
 "phylum": "Chordata",
 "rank": "Family"
 },
+"Perciformes": {
+"aphia_id": 11014,
+"class": "Teleostei",
+"kingdom": "Animalia",
+"matched": "Perciformes",
+"order": "Perciformes",
+"phylum": "Chordata",
+"rank": "Order"
+},
 "Periphylla periphylla": {
 "aphia_id": 135294,
 "class": "Scyphozoa",
@@ -3784,6 +3930,16 @@
 "rank": "Species",
 "species": "Pleuroncodes planipes"
 },
+"Pleuronectidae": {
+"aphia_id": 125579,
+"class": "Teleostei",
+"family": "Pleuronectidae",
+"kingdom": "Animalia",
+"matched": "Pleuronectidae",
+"order": "Pleuronectiformes",
+"phylum": "Chordata",
+"rank": "Family"
+},
 "Pleuronectiformes": {
 "aphia_id": 10331,
 "class": "Teleostei",
@@ -3849,6 +4005,16 @@
 "matched": "Porifera",
 "phylum": "Porifera",
 "rank": "Phylum"
+},
+"Pourtalesiidae": {
+"aphia_id": 123168,
+"class": "Echinoidea",
+"family": "Pourtalesiidae",
+"kingdom": "Animalia",
+"matched": "Pourtalesiidae",
+"order": "Holasteroida",
+"phylum": "Echinodermata",
+"rank": "Family"
 },
 "Praya dubia": {
 "aphia_id": 135466,
@@ -3970,6 +4136,16 @@
 "order": "Velatida",
 "phylum": "Echinodermata",
 "rank": "Genus"
+},
+"Pterasteridae": {
+"aphia_id": 123142,
+"class": "Asteroidea",
+"family": "Pterasteridae",
+"kingdom": "Animalia",
+"matched": "Pterasteridae",
+"order": "Velatida",
+"phylum": "Echinodermata",
+"rank": "Family"
 },
 "Pteropoda": {
 "aphia_id": 325345,
@@ -4196,6 +4372,15 @@
 "phylum": "Cnidaria",
 "rank": "Order"
 },
+"Scleralcyonacea": {
+"aphia_id": 1609355,
+"class": "Octocorallia",
+"kingdom": "Animalia",
+"matched": "Scleralcyonacea",
+"order": "Scleralcyonacea",
+"phylum": "Cnidaria",
+"rank": "Order"
+},
 "Sclerothamnopsis": {
 "aphia_id": 171809,
 "class": "Hexactinellida",
@@ -4229,6 +4414,14 @@
 "phylum": "Echinodermata",
 "rank": "Genus"
 },
+"Scyphozoa": {
+"aphia_id": 135220,
+"class": "Scyphozoa",
+"kingdom": "Animalia",
+"matched": "Scyphozoa",
+"phylum": "Cnidaria",
+"rank": "Class"
+},
 "Sebastes": {
 "aphia_id": 126175,
 "class": "Teleostei",
@@ -4250,6 +4443,15 @@
 "order": "Perciformes",
 "phylum": "Chordata",
 "rank": "Genus"
+},
+"Semaeostomeae": {
+"aphia_id": 135225,
+"class": "Scyphozoa",
+"kingdom": "Animalia",
+"matched": "Semaeostomeae",
+"order": "Semaeostomeae",
+"phylum": "Cnidaria",
+"rank": "Order"
 },
 "Serpulidae": {
 "aphia_id": 988,
@@ -4314,6 +4516,16 @@
 "order": "Valvatida",
 "phylum": "Echinodermata",
 "rank": "Genus"
+},
+"Solasteridae": {
+"aphia_id": 123143,
+"class": "Asteroidea",
+"family": "Solasteridae",
+"kingdom": "Animalia",
+"matched": "Solasteridae",
+"order": "Valvatida",
+"phylum": "Echinodermata",
+"rank": "Family"
 },
 "Solmaris": {
 "aphia_id": 117239,
@@ -4588,6 +4800,14 @@
 "phylum": "Mollusca",
 "rank": "Genus"
 },
+"Teleostei": {
+"aphia_id": 293496,
+"class": "Teleostei",
+"kingdom": "Animalia",
+"matched": "Teleostei",
+"phylum": "Chordata",
+"rank": "Class"
+},
 "Terebellidae": {
 "aphia_id": 982,
 "class": "Polychaeta",
@@ -4818,6 +5038,16 @@
 "matched": "Tuscaroridae",
 "order": "Phaeocalpida",
 "phylum": "Cercozoa",
+"rank": "Family"
+},
+"Ulmaridae": {
+"aphia_id": 135241,
+"class": "Scyphozoa",
+"family": "Ulmaridae",
+"kingdom": "Animalia",
+"matched": "Ulmaridae",
+"order": "Semaeostomeae",
+"phylum": "Cnidaria",
 "rank": "Family"
 },
 "Umbellula": {
