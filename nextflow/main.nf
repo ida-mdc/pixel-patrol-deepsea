@@ -78,6 +78,13 @@ params.detectorSizes  = "640,960"
 // have some that is genuinely large; otherwise leave it alone.
 params.staging        = ""
 
+// The detector is a cache, and a cache is a path in an environment variable. A
+// SLURM job does not necessarily inherit the environment that submitted it - the
+// script Nextflow generates exports nothing of its own - so the driver finding the
+// detector says nothing about whether a compute node will. Passed explicitly, and
+// defaulting to whatever the driver is using.
+params.cache          = System.getenv('XDG_CACHE_HOME') ?: ""
+
 // Every process runs through this, so the workflow does not depend on the caller
 // having the right environment active. Override for a different install:
 //   --python "conda run -n myenv python"   or   --python /path/to/venv/bin/python
@@ -145,8 +152,10 @@ process ANALYSE {
     script:
     def thin = params.fps ? "--fps ${params.fps}" : "--fps 0"
     def staging = params.staging ? "export TMPDIR='${params.staging}'" : 'export TMPDIR="$PWD"'
+    def cache = params.cache ? "export XDG_CACHE_HOME='${params.cache}'" : ""
     """
     ${staging}
+    ${cache}
     ${params.python} -m pixel_patrol_deepsea.collect one '${url}' \\
         -o ${name}.parquet -e ${expedition} ${thin} \\
         --slice-frames ${params.sliceFrames} --detector ${params.detector} \\

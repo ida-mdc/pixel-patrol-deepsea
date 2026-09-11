@@ -156,6 +156,7 @@ def analyse_one(url: str, output: Path, expedition_id: str, fps: Optional[float]
                 detector_sizes: str = DETECTOR_SIZES,
                 detect_every: int = DETECT_EVERY) -> int:
     """Analyse a single recording, keeping no copy of it."""
+    _insist_on_the_detector(detector)
     output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="footage_", dir=os.environ.get("TMPDIR")) as scratch:
         stage = Path(scratch) / "video"
@@ -202,6 +203,33 @@ def analyse_one(url: str, output: Path, expedition_id: str, fps: Optional[float]
     print(f"{output} written; the recording was not kept"
           + (f"; {animals} animals" if animals else ""))
     return 0
+
+
+def _insist_on_the_detector(wanted: str) -> None:
+    """Refuse to analyse footage with the detector missing, rather than quietly not.
+
+    A processor that cannot run is not registered, and `--processors-include` for a
+    name nothing registered asks for nothing and gets it. So a worker without the
+    detector produces a perfectly good report with no animals in it, exits zero,
+    and the failure is invisible until someone opens the collection - which is how
+    282 recordings came back from a cluster with positions, colour, motion and not
+    one detection, because the compute nodes never saw XDG_CACHE_HOME.
+
+    Analysing without it is a legitimate thing to want; it just has to be asked for.
+    """
+    from pixel_patrol_deepsea import detector as engine
+
+    if wanted in ("", "none", "off"):
+        return
+    if engine.is_available():
+        return
+    raise SystemExit(
+        f"no detector, so nothing would be found and the report would not say so.\n"
+        f"  looked in : {engine.CACHE}\n"
+        f"  set by    : XDG_CACHE_HOME={os.environ.get('XDG_CACHE_HOME', '<unset>')}\n"
+        f"Fetch one, or point XDG_CACHE_HOME at the cache that has it:\n"
+        f"    python -m pixel_patrol_deepsea.fetch_detector --model {wanted or 'general'}\n"
+        f"To analyse without a detector on purpose, pass --detector none.")
 
 
 def _filename_of(url: str) -> str:

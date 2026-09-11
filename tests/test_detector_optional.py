@@ -107,3 +107,38 @@ def test_footage_without_a_channel_axis_is_still_looked_at():
     grey = record_from(np.zeros((2, 8, 8), np.uint8),
                        {"dim_order": "TYX", "fps": 30.0, "dim_t": 0})
     assert proc._skip(grey) is False
+
+
+def test_analysing_without_a_detector_has_to_be_asked_for(monkeypatch, tmp_path):
+    """The failure this prevents was silent and expensive.
+
+    A processor that cannot run is not registered, and `--processors-include` for
+    an unregistered name asks for nothing and gets it - so a worker without the
+    detector writes a perfectly good report with no animals in it and exits zero.
+    A whole cluster run came back that way: positions, colour, motion, and not one
+    detection, because the compute nodes never saw XDG_CACHE_HOME.
+    """
+    import pytest
+
+    from pixel_patrol_deepsea import collect, detector
+
+    monkeypatch.setattr(detector, "is_available", lambda: False)
+    with pytest.raises(SystemExit, match="no detector"):
+        collect.analyse_one("https://example/x.mp4", tmp_path / "x.parquet", "DSMOT",
+                            fps=10, slice_frames=10, detector="general",
+                            detector_frames=1)
+    # ...and saying so explicitly is allowed, because it is a real thing to want
+    collect._insist_on_the_detector("none")
+
+
+def test_the_message_names_the_cache_it_looked_in(monkeypatch):
+    import pytest
+
+    from pixel_patrol_deepsea import collect, detector
+
+    monkeypatch.setattr(detector, "is_available", lambda: False)
+    with pytest.raises(SystemExit) as refused:
+        collect._insist_on_the_detector("general")
+    said = str(refused.value)
+    assert str(detector.CACHE) in said
+    assert "XDG_CACHE_HOME" in said
