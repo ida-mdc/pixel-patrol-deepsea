@@ -4,7 +4,8 @@ import { findWindows, WINDOW_KINDS, eventsToCsv, summariseRecording, renderSpeci
          keptByQuality, parseAnimals, animalFrames, sunburstOf, lineageOf, trunkOf,
          branchColours, scaleColour, measuredColours, oneEach, asRate, verdictSource,
          sayWhatTheRateDid, taxonColour, compositionTraces, accumulationTraces,
-         profileTraces, howFlat, intoDives, appendEventStrip, fetchTimelines }
+         profileTraces, howFlat, intoDives, appendEventStrip, fetchTimelines,
+         verdictSource }
   from '../../src/pixel_patrol_deepsea/viewer/plugin_deepsea.js';
 
 /** A timeline of per-slice movement values, one slice every `step` frames. */
@@ -1348,5 +1349,36 @@ describe('nothing is ever aliased `at`', () => {
     expect(asked.every(sql => !/\bAS at\b/.test(sql))).toBe(true);
     // ...and the rows still arrive under the name every reader uses
     expect(got.get('a')[0].at).toBe('2021-11-03T15:24:59');
+  });
+});
+
+describe('the verdict plots carry only the data they plot', () => {
+  // Triage is the one widget that cannot name a column: its verdicts are computed
+  // per recording in the browser, so the numbers travel to the engine inside the
+  // SQL. That makes the size of the statement its own problem - on 287 recordings
+  // it was 1,148 inlined rows and 99 KB of SQL per plot, four times over, because
+  // every plot carried all four verdicts and threw three quarters away in a WHERE.
+  // The fields are what `summariseRecording` writes: dead, held, empty, busy.
+  const summaries = (n) => Array.from({ length: n }, (_, i) => ({
+    recording: { name: `rec${i}.mp4`, group: 'EX2107' },
+    total: 100, dead: 10, held: 20, empty: 30, busy: 40,
+  }));
+  const FROZEN = WINDOW_KINDS.frozen.label;
+
+  it('inlines one row per recording, not one per recording per verdict', () => {
+    const source = verdictSource(summaries(50), FROZEN);
+    const rows = (source.table.match(/\), \(/g) || []).length + 1;
+    expect(rows).toBe(50);
+  });
+
+  it('still says which verdict the rows are, so the filter matches', () => {
+    const source = verdictSource(summaries(3), FROZEN);
+    expect(source.where).toContain(FROZEN);
+    expect(source.table).toContain(FROZEN);
+    expect(source.table).not.toContain(WINDOW_KINDS.dwell.label);
+  });
+
+  it('has nothing to show when no recording has any footage', () => {
+    expect(verdictSource([{ recording: { name: 'a' }, total: 0 }], FROZEN)).toBe(null);
   });
 });

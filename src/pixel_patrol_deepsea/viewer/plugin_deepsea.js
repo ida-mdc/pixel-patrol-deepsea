@@ -2282,6 +2282,14 @@ export function verdictSource(summaries, verdict) {
   for (const summary of summaries) {
     if (!(summary.total > 0)) continue;
     for (const [kind, field] of Object.entries(VERDICT_FIELD)) {
+      // Only the verdict being plotted. This used to emit all four for each of
+      // them and let the `WHERE` throw three quarters away, which on a collection
+      // of 287 recordings meant 1,148 inlined rows and 99 KB of SQL text per plot,
+      // four times over. The engine's own plots name a column and send nothing;
+      // this one has to carry its data, so what it carries should be what is asked
+      // for. A statement that large is also the one thing triage did that no other
+      // widget did, on the day it was the only widget failing in the browser.
+      if (WINDOW_KINDS[kind].label !== verdict) continue;
       const share = 100 * summary[field] / summary.total;
       if (!Number.isFinite(share)) continue;
       rows.push(`(${literal(shortName(summary.recording.name))}, `
