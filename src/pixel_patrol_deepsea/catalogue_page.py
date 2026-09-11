@@ -358,10 +358,44 @@ def _read_report(report: Path, row: Progress) -> None:
             pass
 
 
-def write_catalogue_page(root: Path, output: Optional[Path] = None) -> Path:
+def write_assets(root: Path) -> Path:
+    """The drawing the landing page opens on, copied beside it.
+
+    Shipped with the package rather than fetched, because a collection served from
+    a folder with no network is the normal case - a cluster's scratch, a laptop on
+    a ship - and a hero image that 404s is worse than none.
+    """
+    import shutil
+
+    source = Path(__file__).parent / "assets" / "pixel-patrol-deepsea.png"
+    if not source.is_file():
+        return root
+    assets = root / "assets"
+    assets.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(source, assets / source.name)
+    return assets
+
+
+def write_catalogue_page(root: Path, output: Optional[Path] = None,
+                         index: Optional[Dict] = None) -> Path:
+    """The landing page, over the tile store if one was written.
+
+    The store is read back from disk when it was not just built, so writing the
+    page on its own - after an edit to it, say - still shows everything the last
+    build found rather than an empty wall.
+    """
+    import json
+
     output = output or root / "index.html"
+    if index is None:
+        beside = root / "tiles" / "index.json"
+        if beside.is_file():
+            try:
+                index = json.loads(beside.read_text())
+            except Exception:
+                index = None
     rows = read_progress(root)
-    output.write_text(render(rows))
+    output.write_text(render(rows, index))
     return output
 
 
@@ -371,7 +405,14 @@ FLIPBOOK_MS = 220
 # down is one nothing downstream can recover. The wall is the other end of that
 # bargain: it shows the ones worth a person's glance and says how many it held back.
 # Same floor the report's own slider starts at.
-def render(rows: List[Progress]) -> str:
+def render(rows: List[Progress], index: Optional[Dict] = None) -> str:
+    """The landing page, over whatever the tile store holds."""
+    from pixel_patrol_deepsea.landing import render as landing
+
+    return landing(rows, index)
+
+
+def render_cards(rows: List[Progress]) -> str:
     listed = sum(r.listed for r in rows)
     processed = sum(r.processed for r in rows)
     hours = sum(r.seconds for r in rows) / 3600

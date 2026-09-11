@@ -50,6 +50,11 @@ class Expedition:
     # is published by the archive - see `locations`.
     location: Dict = field(default_factory=dict)
     name: str = ""
+    # Where the expedition describes itself, for a reader who wants to know what the
+    # ship was doing rather than what this package measured. Only where one exists
+    # and answers: NOAA names its expedition sites per cruise with no pattern, and
+    # half of them have moved to an archive domain, so most entries have none.
+    link: str = ""
     archive: str = ""
     vessel: str = ""
     date: str = ""

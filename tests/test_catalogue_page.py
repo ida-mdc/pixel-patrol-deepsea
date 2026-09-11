@@ -120,7 +120,8 @@ def test_totals_the_collection_in_its_own_summary(tmp_path):
     page = render(read_progress(tmp_path))
     # One recording inside the report, whatever number of part files sit beside it.
     assert "of 10 recordings" in page
-    assert "1 of 10 analysed" in page
+    # ...and the expedition's own row in the fleet table says the same.
+    assert "<td class=\"num\">1<span class=\"sub\">of 10 · 10%</span></td>" in page
 
 
 def test_counts_the_recordings_in_the_report_not_the_files_beside_it(tmp_path):
@@ -155,8 +156,8 @@ def test_reports_slices_with_animals_before_a_second_pass_has_counted_them(tmp_p
     # twenty slices, so calling them animals would inflate every number here.
     _collection(tmp_path, listed=10, parts=2, report_rows=_slices(6))
     page = render(read_progress(tmp_path))
-    assert "slices</b>" in page.replace("<b>", "<b>") or "slices" in page
-    assert "a detector saw" in page
+    assert "slices with an animal" in page
+    assert "animals found" not in page
 
 
 def test_prefers_counted_animals_once_a_second_pass_has_run(tmp_path):
@@ -164,8 +165,9 @@ def test_prefers_counted_animals_once_a_second_pass_has_run(tmp_path):
     _collection(tmp_path, listed=10, parts=2, report_rows=_slices(6),
                 sightings=_sightings(drifting))
     page = render(read_progress(tmp_path))
-    assert "<b>1</b> animals" in page
-    assert "9 detections" in page
+    # One animal, drifting across nine detections - not nine animals.
+    assert "<b>1</b><span>animals found</span>" in page
+    assert "slices with an animal" not in page
 
 
 def _report_with_animals(root, entries, expedition="EX2107"):

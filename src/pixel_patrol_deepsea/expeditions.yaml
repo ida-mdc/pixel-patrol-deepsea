@@ -11,6 +11,7 @@
 #             and the archive is the one that knows it. See `locations`.
 
 - id: EX2107
+  link: https://archive.oceanexplorer.noaa.gov/okeanos/explorations/ex2107/welcome.html
   name: Windows to the Deep 2021
   archive: NOAA Ocean Exploration
   vessel: NOAA Ship Okeanos Explorer, ROV Deep Discoverer
@@ -76,6 +77,7 @@
 # two names - identical video and byte-identical annotations - so they would be
 # one sequence, not two.
 - id: DSMOT
+  link: https://huggingface.co/datasets/MBARI-org/DeepSea-MOT
   name: MBARI DeepSea-MOT
   archive: MBARI, via Hugging Face
   vessel: MBARI ROVs Doc Ricketts and Ventana
@@ -195,6 +197,7 @@
 # deployment has its own coordinates and depth: the 2016 recording resolves to
 # deployment 3 at 1543 m and the 2026 one to a later deployment a few metres away.
 - id: OOI_AXIAL_CAMHD
+  link: https://interactiveoceans.washington.edu/instruments/high-definition-video-camera/
   name: Axial Seamount ASHES vent field, 2016-2026
   archive: Ocean Observatories Initiative Regional Cabled Array
   vessel: Fixed camera CAMHDA301, cabled to shore
@@ -226,6 +229,7 @@
 # EX1605L1 does, and need the looser pattern to match anything at all.
 
 - id: EX1811
+  link: https://archive.oceanexplorer.noaa.gov/okeanos/explorations/ex1811/welcome.html
   name: "Océano Profundo 2018: Exploring Deep-sea Habitats off Puerto Rico"
   archive: NOAA Ocean Exploration
   vessel: NOAA Ship Okeanos Explorer, ROV Deep Discoverer
@@ -242,6 +246,7 @@
     8,000 m.
 
 - id: EX1702
+  link: https://archive.oceanexplorer.noaa.gov/okeanos/explorations/ex1702/welcome.html
   name: "Mountains in the Deep: Exploring the Central Pacific Basin"
   archive: NOAA Ocean Exploration
   vessel: NOAA Ship Okeanos Explorer, ROV Deep Discoverer
@@ -255,6 +260,7 @@
   notes: Seamounts around American Samoa and the Central Pacific Basin.
 
 - id: EX1606
+  link: https://archive.oceanexplorer.noaa.gov/okeanos/explorations/ex1606/welcome.html
   name: Deepwater Wonders of Wake
   archive: NOAA Ocean Exploration
   vessel: NOAA Ship Okeanos Explorer, ROV Deep Discoverer
@@ -320,6 +326,7 @@
 # here as weaker evidence than the same detection on a modern cruise.
 
 - id: HiddenOcean2005L1
+  link: https://archive.oceanexplorer.noaa.gov/explorations/05arctic/welcome.html
   name: "Hidden Ocean 2005: Arctic Exploration"
   archive: NOAA Ocean Exploration
   vessel: USCGC Healy
@@ -333,6 +340,7 @@
     navigation are published with it.
 
 - id: GOA2004
+  link: https://archive.oceanexplorer.noaa.gov/explorations/04alaska/welcome.html
   name: Gulf of Alaska Seamount Expedition 2004
   archive: NOAA Ocean Exploration
   vessel: R/V Atlantis, DSV Alvin

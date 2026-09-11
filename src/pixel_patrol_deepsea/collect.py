@@ -895,7 +895,7 @@ def build_site(root: Path) -> int:
     """A static viewer beside the parquets, and the page that indexes them."""
     from pixel_patrol_base import api
 
-    from pixel_patrol_deepsea.catalogue_page import write_catalogue_page
+    from pixel_patrol_deepsea.catalogue_page import write_assets, write_catalogue_page
 
     # Always rebuilt, never skipped if it happens to exist. The site carries its own
     # copy of every widget, so a viewer left over from an earlier run serves the
@@ -910,7 +910,20 @@ def build_site(root: Path) -> int:
     print(f"viewer -> {viewer}")
     combine(root)
     _write_taxonomy(root)
-    page = write_catalogue_page(root)
+    write_assets(root)
+    # Every animal's picture, out of the reports and into a store the page can read
+    # a screenful at a time. This is the slow part of a site build - it reads every
+    # report - and it is what makes the page independent of how much was found.
+    try:
+        from pixel_patrol_deepsea.tiles import build as build_tiles
+
+        index = build_tiles(root)
+        print(f"tiles -> {root / 'tiles'} "
+              f"({len(index['taxa'])} taxa, {sum(t['count'] for t in index['taxa'].values()):,} animals)")
+    except Exception as exc:
+        logger.warning("could not write the tile store: %s", exc)
+        index = None
+    page = write_catalogue_page(root, index=index)
     print(f"catalogue -> {page}")
     return 0
 
