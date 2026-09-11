@@ -200,6 +200,13 @@ process SITE {
     output:
     path "index.html"
     path "viewer", optional: true
+    // The page is not the only thing this step makes, and declaring only the page
+    // meant the rest was built in the task directory and thrown away with it: the
+    // combined report every expedition merges into, and the detector's taxonomy,
+    // which the viewer's tree reads and falls back to bare names without. An
+    // undeclared output is not published, and nothing says so.
+    path "parquet/_everything.parquet", optional: true
+    path "taxonomy.json", optional: true
 
     script:
     // The page is built in the task directory, so everything it reads has to be
