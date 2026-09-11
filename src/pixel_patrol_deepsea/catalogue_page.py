@@ -26,11 +26,20 @@ from pixel_patrol_deepsea.catalogue import catalogue_path, load_catalogue
 # What a deep-sea report does not open on. The viewer reads `hidden=` as a
 # dot-separated list of widget ids, so this decides what a reader lands on and
 # nothing more: every one of them is still listed in the sidebar, one click away.
-# `sunburst` is the file-and-folder hierarchy, and an expedition is one directory of
-# recordings - a single ring restating the directory's name, sitting among widgets
-# that measured something. Choosing it here, on the links this page writes, is what
-# keeps the preference out of pixel-patrol's viewer.
-HIDDEN_WIDGETS = ("sunburst",)
+# Choosing it here, on the links this page writes, is what keeps the preference out
+# of pixel-patrol's viewer - none of these widgets is wrong, they are the general
+# ones, and a report of deep-sea footage opens better on the ones that know what
+# the footage is.
+HIDDEN_WIDGETS = (
+    "custom-plot",               # an empty plot for a reader to build, not to land on
+    "file-stats",                # bytes and extensions of files that are all one format
+    "image-table",               # the table the other widgets exist to save reading
+    "metadata",                  # the loader's own fields, already in the header line
+    "stats-across-dims-basic",   # generic intensity statistics across dims
+    "summary",
+    "sunburst",                  # a file-and-folder ring: an expedition is one directory
+    "violin-basic",
+)
 
 
 def _report_url(parquet: str) -> str:

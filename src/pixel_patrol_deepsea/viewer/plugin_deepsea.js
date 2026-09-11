@@ -112,10 +112,12 @@ export function recordingKey(ctx) {
 const sliceTable = (ctx) => ctx.schema.allTable ?? 'pp_all';
 
 /** One row per T slice of one recording: the whole timeline, scalars only. */
-async function fetchTimeline(ctx, recording) {
+/** The optional columns a timeline reads, named the same way however it is asked
+ * for. Shared by the one-recording and the whole-collection queries so the two
+ * cannot drift into returning different shapes of row.
+ */
+function timelineColumns(ctx) {
   const { q } = ctx.sql;
-  const parts = ctx.sql.dimSubsetWhere({ split: new Set(['t']) });
-  parts.push(`${recordingKey(ctx)} = ${literal(recording.name)}`);
   const extra = ctx.schema.allCols.includes('frame_difference_max') ? `, ${q('frame_difference_max')} AS peak` : ', NULL AS peak';
   // Something has to stand in for "is there anything in the frame": a camera parked
   // on a coral colony and one parked on open water move exactly alike. Laplacian
@@ -148,10 +150,52 @@ async function fetchTimeline(ctx, recording) {
   // thing that can put this recording beside one from another decade.
   const depth = ctx.schema.allCols.includes('depth_m') ? `, ${q('depth_m')} AS depth` : ', NULL AS depth';
   const clock = ctx.schema.allCols.includes('recorded_at') ? `, ${q('recorded_at')} AS at` : ', NULL AS at';
+  return `${extra}${structure}${objects}${detections}${movers}${depth}${clock}`;
+}
+
+async function fetchTimeline(ctx, recording) {
+  const { q } = ctx.sql;
+  const parts = ctx.sql.dimSubsetWhere({ split: new Set(['t']) });
+  parts.push(`${recordingKey(ctx)} = ${literal(recording.name)}`);
   const rows = await ctx.queryRows(`
-    SELECT ${q('dim_t')} AS t, ${q('frame_difference')} AS movement${extra}${structure}${objects}${detections}${movers}${depth}${clock}
+    SELECT ${q('dim_t')} AS t, ${q('frame_difference')} AS movement${timelineColumns(ctx)}
     FROM ${sliceTable(ctx)} WHERE ${parts.join(' AND ')} ORDER BY t`);
   return rows.filter(r => Number.isFinite(Number(r.movement)));
+}
+
+/** Every recording's timeline, in one query rather than one query each.
+ *
+ * The widgets that read a whole collection - triage, and the taxonomy tree -
+ * asked for one recording at a time and awaited each before asking for the next.
+ * On one dive that is one query. On a collection of 287 recordings it is 287
+ * round trips to duckdb in series, each with its own Arrow decode, and it is why
+ * those two widgets took minutes to paint while the rest of the page was ready.
+ *
+ * Same rows, same order, same filtering - the only difference is that the
+ * recording each row belongs to arrives as a column instead of as a predicate.
+ */
+export async function fetchTimelines(ctx, recordings) {
+  const { q } = ctx.sql;
+  if (recordings.length <= 1) {
+    const only = recordings[0];
+    if (!only) return new Map();
+    return new Map([[String(only.name), await fetchTimeline(ctx, only)]]);
+  }
+  const parts = ctx.sql.dimSubsetWhere({ split: new Set(['t']) });
+  const columns = timelineColumns(ctx);
+  const rows = await ctx.queryRows(`
+    SELECT ${recordingKey(ctx)} AS rec, ${q('dim_t')} AS t, ${q('frame_difference')} AS movement${columns}
+    FROM ${sliceTable(ctx)} WHERE ${parts.join(' AND ')} ORDER BY rec, t`);
+  const wanted = new Set(recordings.map(recording => String(recording.name)));
+  const byRecording = new Map();
+  for (const row of rows) {
+    if (!Number.isFinite(Number(row.movement))) continue;
+    const name = String(row.rec);
+    if (!wanted.has(name)) continue;
+    if (!byRecording.has(name)) byRecording.set(name, []);
+    byRecording.get(name).push(row);
+  }
+  return byRecording;
 }
 
 // ── event detection ───────────────────────────────────────────────────────────
@@ -642,9 +686,10 @@ function scoreWindows(windows, timeline, recording) {
  * whole busy tape above everything on the quiet one.
  */
 async function collectEvents(ctx, recordings) {
+  const timelines = await fetchTimelines(ctx, recordings);
   const events = [];
   for (const recording of recordings) {
-    const timeline = await fetchTimeline(ctx, recording);
+    const timeline = timelines.get(String(recording.name)) ?? [];
     if (!timeline.length) continue;
     events.push(...scoreWindows(findWindows(timeline), timeline, recording));
   }
@@ -1545,9 +1590,10 @@ function triageHeadline(summaries) {
 
 async function collectSummaries(ctx) {
   const recordings = await fetchRecordings(ctx);
+  const timelines = await fetchTimelines(ctx, recordings);
   const summaries = [];
   for (const recording of recordings) {
-    const timeline = await fetchTimeline(ctx, recording);
+    const timeline = timelines.get(String(recording.name)) ?? [];
     if (!timeline.length) continue;
     summaries.push(summariseRecording(recording, timeline, findWindows(timeline)));
   }
@@ -3021,15 +3067,45 @@ async function fetchDepthProfiles(ctx) {
  * DuckDB's grammar, so `ORDER BY at` is a parse error rather than a missing
  * column. Second time in this file.
  */
+/** Seconds of footage to average into one point, so a profile stays drawable.
+ *
+ * A collection is one row per second of footage: nine expeditions came to 86,000
+ * of them, and a dive profile drawn from 86,000 SVG points is a page that hangs
+ * before it paints. Depth is the one measurement here that cannot move quickly -
+ * a vehicle descends at under a metre a second - so averaging twenty seconds of it
+ * into one point removes nothing a reader could see, and the shape of a descent,
+ * a terraced survey or a flat transect survives intact.
+ *
+ * Below the target the query is left alone, which keeps a single recording exact
+ * and the aggregation out of the common case.
+ */
+const PROFILE_POINTS = 4000;
+
+async function profileBucket(ctx, where) {
+  const { q } = ctx.sql;
+  const [counted] = await ctx.queryRows(`
+    SELECT COUNT(*) AS n FROM ${sliceTable(ctx)} ${whereClause(ctx, where)}`);
+  const rows = Number(counted?.n ?? 0);
+  return rows > PROFILE_POINTS ? Math.ceil(rows / PROFILE_POINTS) : 0;
+}
+
 async function diveProfiles(ctx) {
   const { q } = ctx.sql;
-  const rows = await ctx.queryRows(`
+  const where = `${q('dim_t')} IS NOT NULL AND ${q('depth_m')} IS NOT NULL `
+    + `AND ${q('recorded_at')} IS NOT NULL`;
+  const bucket = await profileBucket(ctx, where);
+  const stamp = `EPOCH(CAST(${q('recorded_at')} AS TIMESTAMP))`;
+  const rows = await ctx.queryRows(bucket ? `
+    SELECT rec, grp, MIN(stamp) AS stamp, AVG(depth) AS depth
+    FROM (SELECT ${recordingKey(ctx)} AS rec, ${groupExpr(ctx)} AS grp,
+                 ${stamp} AS stamp, ${q('depth_m')} AS depth
+          FROM ${sliceTable(ctx)} ${whereClause(ctx, where)})
+    GROUP BY rec, grp, FLOOR(stamp / ${bucket})
+    ORDER BY stamp` : `
     SELECT ${recordingKey(ctx)} AS rec, ${groupExpr(ctx)} AS grp,
-           EPOCH(CAST(${q('recorded_at')} AS TIMESTAMP)) AS stamp,
-           ${q('depth_m')} AS depth
+           ${stamp} AS stamp, ${q('depth_m')} AS depth
     FROM ${sliceTable(ctx)}
-    ${whereClause(ctx, `${q('dim_t')} IS NOT NULL AND ${q('depth_m')} IS NOT NULL `
-      + `AND ${q('recorded_at')} IS NOT NULL`)}
+    ${whereClause(ctx, where)}
     ORDER BY stamp`);
   const clean = rows
     .map(row => ({ rec: row.rec, grp: row.grp, at: Number(row.stamp), depth: Number(row.depth) }))
@@ -3127,17 +3203,25 @@ export function profileTraces(ctx, byRecording, { mini = false, relative = false
   const grouped = !!ctx.state?.groupCol;
   const named = byRecording.size <= MOST_PROFILES_NAMED;
   const legendSeen = new Set();
+  // Every point that will be drawn, not this trace's share of them: the cost is
+  // the figure's, and forty profiles of two hundred points each is the same eight
+  // thousand marks as one profile of eight thousand.
+  const points = [...byRecording.values()].reduce((sum, t) => sum + t.x.length, 0);
   return [...byRecording.entries()].map(([name, trace]) => {
     const band = String(trace.grp ?? '');
     const first = grouped ? !legendSeen.has(band) : named;
     if (grouped && first) legendSeen.add(band);
     const start = trace.y.find(value => Number.isFinite(value)) ?? 0;
     return {
-      type: 'scatter',
-      // Markers as well as lines, because a dive is drawn as the few minutes of
-      // it that were collected and a five-minute piece of a six-hour axis is
-      // three pixels of line.
-      mode: 'lines+markers',
+      // WebGL past the point where SVG markers stop being free. A dive profile of a
+      // whole collection is thousands of points however hard the query thins it.
+      type: points > 2000 ? 'scattergl' : 'scatter',
+      // Markers as well as lines, because a dive is drawn as the few minutes of it
+      // that were collected and a five-minute piece of a six-hour axis is three
+      // pixels of line - but only while there are few enough of them to see. Past
+      // that they overlap into a thick line saying nothing the line did not, and
+      // cost a DOM node each.
+      mode: points > 400 ? 'lines' : 'lines+markers',
       marker: { size: 3 },
       name: grouped ? (ctx.groupLabel?.(band) ?? band) : shortName(name),
       x: trace.x,

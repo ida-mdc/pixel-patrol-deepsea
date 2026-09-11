@@ -93,13 +93,19 @@ def test_links_the_report_through_the_viewer_with_a_data_parameter(tmp_path):
     assert "viewer/index.html?data=../parquet/EX2107.parquet" in page
 
 
-def test_the_link_opens_the_report_without_the_folder_sunburst(tmp_path):
-    # A widget nobody wants to land on is switched off by the link rather than by
-    # the viewer, so the preference lives in this extension and not in
-    # pixel-patrol. Escaped, because an ampersand in an href is written &amp;.
+def test_the_link_opens_the_report_on_the_widgets_that_know_the_footage(tmp_path):
+    # The general widgets are switched off by the link rather than by the viewer,
+    # so the preference lives in this extension and not in pixel-patrol. Every one
+    # of them is still in the sidebar, one click away. Escaped, because an
+    # ampersand in an href is written &amp;.
+    from pixel_patrol_deepsea.catalogue_page import HIDDEN_WIDGETS
+
     _collection(tmp_path, listed=10, parts=4, report_rows=_slices())
     page = render(read_progress(tmp_path))
-    assert "&amp;hidden=sunburst" in page
+    assert "&amp;hidden=" + ".".join(HIDDEN_WIDGETS) in page
+    assert "sunburst" in HIDDEN_WIDGETS and "image-table" in HIDDEN_WIDGETS
+    # ...and the ones this extension exists for are not among them
+    assert not any(w.startswith("temporal-") for w in HIDDEN_WIDGETS)
 
 
 def test_says_so_rather_than_linking_a_report_that_is_not_built(tmp_path):

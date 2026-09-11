@@ -4,7 +4,7 @@ import { findWindows, WINDOW_KINDS, eventsToCsv, summariseRecording, renderSpeci
          keptByQuality, parseAnimals, animalFrames, sunburstOf, lineageOf, trunkOf,
          branchColours, scaleColour, measuredColours, oneEach, asRate, verdictSource,
          sayWhatTheRateDid, taxonColour, compositionTraces, accumulationTraces,
-         profileTraces, howFlat, intoDives, appendEventStrip }
+         profileTraces, howFlat, intoDives, appendEventStrip, fetchTimelines }
   from '../../src/pixel_patrol_deepsea/viewer/plugin_deepsea.js';
 
 /** A timeline of per-slice movement values, one slice every `step` frames. */
@@ -1180,5 +1180,99 @@ describe('the events as a strip, for a tile', () => {
   it('draws nothing rather than an empty strip when there are no events', () => {
     expect(drawn(slices(10), []).did).toBe(false);
     expect(drawn([], [{ kind: 'subject', fromT: 0, toT: 0 }]).did).toBe(false);
+  });
+});
+
+describe('depth profiles stay drawable on a whole collection', () => {
+  const wide = (recordings, each) => {
+    const out = new Map();
+    for (let r = 0; r < recordings; r++) {
+      out.set(`rec${r}.mp4`, {
+        grp: 'g', segments: 1,
+        x: Array.from({ length: each }, (_, i) => i),
+        y: Array.from({ length: each }, (_, i) => 100 + i),
+      });
+    }
+    return out;
+  };
+  const ctx = () => ({ state: { groupCol: null }, color: {}, groupLabel: null });
+
+  it('draws markers while there are few enough of them to see', () => {
+    const [trace] = profileTraces(ctx(), wide(1, 50));
+    expect(trace.mode).toBe('lines+markers');
+    expect(trace.type).toBe('scatter');
+  });
+
+  it('drops to lines once the markers would overlap into a thick line', () => {
+    const traces = profileTraces(ctx(), wide(1, 1200));
+    expect(traces[0].mode).toBe('lines');
+  });
+
+  it('counts the whole figure, not one trace, when deciding', () => {
+    // Forty profiles of two hundred points is the same eight thousand marks as
+    // one profile of eight thousand, and the browser pays the same either way.
+    const traces = profileTraces(ctx(), wide(40, 200));
+    expect(traces[0].mode).toBe('lines');
+    expect(traces[0].type).toBe('scattergl');
+  });
+
+  it('stays on svg for a report small enough not to need webgl', () => {
+    expect(profileTraces(ctx(), wide(3, 100))[0].type).toBe('scatter');
+  });
+});
+
+describe('a collection is read in one query, not one per recording', () => {
+  // Triage and the taxonomy tree asked for one recording at a time and awaited
+  // each before asking for the next. On 287 recordings that is 287 round trips to
+  // duckdb in series, which is why they took minutes while the rest of the page
+  // was ready.
+  const ctxFor = (rows, asked) => ({
+    sql: {
+      q: name => `"${name}"`,
+      dimSubsetWhere: () => ['1=1'],
+      groupCol: () => null,
+    },
+    schema: { allCols: ['frame_difference', 'dim_t', 'name', 'detection_count',
+                        'detection_top_class', 'detection_confidence'],
+              dimCols: ['dim_t'] },
+    state: { groupCol: null },
+    where: '',
+    async queryRows(sql) { asked.push(sql); return rows; },
+  });
+
+  it('asks once however many recordings there are', async () => {
+    const asked = [];
+    const rows = [];
+    for (const rec of ['a.mp4', 'b.mp4', 'c.mp4']) {
+      for (let t = 0; t < 6; t++) {
+        rows.push({ rec, t: t * 10, movement: 5 + t, detections: 1,
+                    top_class: 'fish', confidence: 0.9 });
+      }
+    }
+    const ctx = ctxFor(rows, asked);
+    const got = await fetchTimelines(ctx, [{ name: 'a.mp4' }, { name: 'b.mp4' }, { name: 'c.mp4' }]);
+    expect(asked).toHaveLength(1);
+    expect([...got.keys()].sort()).toEqual(['a.mp4', 'b.mp4', 'c.mp4']);
+    expect(got.get('b.mp4')).toHaveLength(6);
+  });
+
+  it('keeps each recording to its own rows', async () => {
+    const asked = [];
+    const rows = [{ rec: 'a.mp4', t: 0, movement: 1 }, { rec: 'b.mp4', t: 0, movement: 2 }];
+    const got = await fetchTimelines(ctxFor(rows, asked), [{ name: 'a.mp4' }, { name: 'b.mp4' }]);
+    expect(got.get('a.mp4').map(r => r.movement)).toEqual([1]);
+    expect(got.get('b.mp4').map(r => r.movement)).toEqual([2]);
+  });
+
+  it('drops unmeasurable rows exactly as the single-recording read does', async () => {
+    // Parity, not an opinion: both keep a null as zero - `Number(null)` is 0 - and
+    // both drop what cannot be read as a number at all. Worth pinning, because the
+    // two queries have to return the same rows for the batched one to be a
+    // substitution rather than a second behaviour.
+    const rows = [{ rec: 'a.mp4', t: 0, movement: 1 },
+                  { rec: 'a.mp4', t: 1, movement: null },
+                  { rec: 'a.mp4', t: 2, movement: 'seabed' }];
+    const got = await fetchTimelines(ctxFor(rows, []), [{ name: 'a.mp4' }, { name: 'b.mp4' }]);
+    expect(got.get('a.mp4').map(r => r.t)).toEqual([0, 1]);
   });
 });
