@@ -8,7 +8,8 @@ document with pictures in it.
 
 So the crops come out of the reports and into a store beside them, paged:
 
-    tiles/index.json          the taxonomy, with a count on every node
+    tiles/index.json          the taxonomy with a count on every node, and where
+                              each recording can be played from
     tiles/<taxon>/p0.json     sixty animals, most confident first, their sizes,
                               and what the tile says about each: name, expedition,
                               second, confidence, agreement, looks, duration
@@ -88,6 +89,9 @@ def build(root: Path, expeditions: Optional[List[Path]] = None) -> Dict:
     # taxon -> the animals found of it, best first
     found: Dict[str, List[dict]] = {}
     frames: Dict[str, List[List[str]]] = {}
+    # expedition -> the recordings its animals came out of, for the URLs and the
+    # frame size the page needs to play a moment back and draw a box on it.
+    seen: Dict[str, set] = {}
     for report in reports:
         expedition = report.stem
         try:
@@ -113,12 +117,16 @@ def build(root: Path, expeditions: Optional[List[Path]] = None) -> Dict:
                 # confidence, because "0.94, and gone in a tenth of a second" and
                 # "0.94, and there for a minute" are not the same claim.
                 "d": round(track.seconds, 1),
+                # Where in the frame it was, so a reader who opens the recording at
+                # this second is shown which of the things on screen was meant.
+                "b": [int(v) for v in (best.box or ())][:4],
                 "i": best.crop,
             }
             clip = _its_clip(clips, track)
             found.setdefault(track.taxon, []).append(entry)
             frames.setdefault(track.taxon, []).append(
                 list(clip.crops[:MOST_FRAMES]) if clip else [])
+            seen.setdefault(expedition, set()).add(track.recording)
         logger.info("tiles: %s gave %d animals", expedition, len(tracks))
 
     # The store is written whole. Leaving a previous build's pages behind would
@@ -140,8 +148,11 @@ def build(root: Path, expeditions: Optional[List[Path]] = None) -> Dict:
                         moving[first:first + PER_PAGE])
         counts[taxon] = len(animals)
 
-    index = {"tree": _tree(counts, taxonomy), "taxa": {
-        taxon: _about(taxon, n, taxonomy) for taxon, n in sorted(counts.items())}}
+    index = {"tree": _tree(counts, taxonomy),
+             "taxa": {taxon: _about(taxon, n, taxonomy)
+                      for taxon, n in sorted(counts.items())},
+             "where": {expedition: _where(root, expedition, recordings)
+                       for expedition, recordings in sorted(seen.items())}}
     (store / "index.json").write_text(json.dumps(index, separators=(",", ":")))
     logger.info("tiles: %d taxa, %d animals", len(counts), sum(counts.values()))
     return index
@@ -197,6 +208,50 @@ def _write_page(where: Path, page: int, animals: List[dict],
     (where / f"p{page}.jpgs").write_bytes(bytes(stills))
     if clips:
         (where / f"p{page}.clips").write_bytes(bytes(clips))
+
+
+def _where(root: Path, expedition: str, recordings) -> dict:
+    """How to play a moment back: the recordings' URLs, and the frame they are in.
+
+    Nothing is copied or re-hosted. The page opens the archive's own file at the
+    second the animal was found, which is the only honest way to show somebody what
+    a detection actually was - a crop of a 640-pixel frame proves very little on its
+    own, and the surrounding seconds are the evidence.
+
+    The URL comes from the manifest the recordings were listed from, joined on the
+    file name the report carries. Matched by prefix rather than by equality: a
+    report from an older run names a transcoded copy, `..._ROVHD_Low_10fps`, and
+    the recording it came from is the one the manifest listed. The frame size is
+    the box's coordinate system, so the page can scale it onto a video element of
+    any size.
+    """
+    from pixel_patrol_deepsea.catalogue_page import _frame_size
+
+    wide, high = _frame_size(root / "parquet" / f"{expedition}.parquet")
+    listed = []
+    manifest = root / "manifests" / f"{expedition}.json"
+    if manifest.is_file():
+        try:
+            listed = list(json.loads(manifest.read_text()).get("videos", []))
+        except Exception as exc:
+            logger.warning("tiles: cannot read %s: %s", manifest.name, exc)
+    # Longest stem first, so `DIVE01_PART02` is not claimed by `DIVE01`.
+    by_stem = sorted(((Path(url.split("?")[0]).stem, url) for url in listed),
+                     key=lambda pair: -len(pair[0]))
+    videos = {}
+    for recording in sorted(recordings):
+        stem = Path(str(recording)).stem
+        for listed_stem, url in by_stem:
+            # Exactly, or the listed name plus a suffix a transcode would add. A
+            # bare prefix would let `..._DIVE0` claim `..._DIVE01`.
+            if stem == listed_stem or stem.startswith(listed_stem + "_") \
+                    or stem.startswith(listed_stem + "-"):
+                videos[str(recording)] = url
+                break
+    if len(videos) < len(recordings):
+        logger.info("tiles: %s has no listed URL for %d of %d recordings",
+                    expedition, len(recordings) - len(videos), len(recordings))
+    return {"frame": [wide, high], "videos": videos}
 
 
 def _about(taxon: str, count: int, taxonomy: Dict) -> dict:

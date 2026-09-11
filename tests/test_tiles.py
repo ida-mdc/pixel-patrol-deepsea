@@ -157,3 +157,47 @@ def test_an_animal_the_slice_never_filmed_does_not_move(tmp_path):
         *_frames("sea pen", near, of=0, crop=_film(1))]])
     animals, _stills, _clips = _page(store, "sea pen")
     assert [bool(a["m"]) for a in animals] == [True, False]
+
+
+def test_the_index_says_where_a_recording_can_be_played_from(tmp_path):
+    """A crop of a 640-pixel frame proves very little; the seconds around it do.
+
+    The page opens the archive's own file at the second the animal was found, which
+    it can only do if the store carries the URL the recording was listed from and
+    the frame the box was drawn in.
+    """
+    import json as _json
+
+    (tmp_path / "manifests").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "manifests" / "EX2107.json").write_text(_json.dumps({"videos": [
+        "https://ncei/EX2107/Video/dive_one.mp4",
+        "https://ncei/EX2107/Video/another.mp4"]}))
+    store, index = _store(tmp_path, [[_animal("fish", 0.8, (10, 20, 60, 90))]])
+    where = index["where"]["EX2107"]
+    # The report names its recording `dive_one`, which is what the manifest listed.
+    assert where["videos"] == {"dive_one": "https://ncei/EX2107/Video/dive_one.mp4"}
+    assert where["frame"] == [640, 360]
+    animals, _stills, _clips = _page(store, "fish")
+    assert animals[0]["b"] == [10, 20, 60, 90]
+
+
+def test_a_recording_the_manifest_never_listed_gets_no_url(tmp_path):
+    """Silence rather than a guess: a link to a file that is not there is worse
+    than no link, and the page shows the crop and says so instead."""
+    store, index = _store(tmp_path, [[_animal("fish", 0.8)]])
+    assert index["where"]["EX2107"]["videos"] == {}
+
+
+def test_a_transcoded_copy_is_still_the_recording_that_was_listed(tmp_path):
+    """An older run analysed `..._Low_10fps.mp4`; the archive holds `..._Low.mp4`."""
+    import json as _json
+
+    from pixel_patrol_deepsea.tiles import _where
+
+    (tmp_path / "parquet").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "manifests").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "manifests" / "EX2107.json").write_text(_json.dumps({"videos": [
+        "https://ncei/EX2107_VID_Low.mp4", "https://ncei/EX2107_VID_Low_OTHER.mp4"]}))
+    got = _where(tmp_path, "EX2107", ["EX2107_VID_Low_10fps.mp4"])
+    assert got["videos"] == {
+        "EX2107_VID_Low_10fps.mp4": "https://ncei/EX2107_VID_Low.mp4"}

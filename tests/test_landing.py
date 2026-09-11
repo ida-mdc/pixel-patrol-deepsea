@@ -64,14 +64,22 @@ def test_the_way_into_the_collection_says_what_it_opens(tmp_path):
     assert "No pictures" in page and "grouped by expedition" in page
 
 
-def test_the_disclaimer_is_one_line_and_the_detail_is_behind_it(tmp_path):
+def test_the_disclaimer_says_all_of_it_where_it_can_be_seen(tmp_path):
+    """Six headed paragraphs became six lines, and then stopped hiding.
+
+    Behind a summary they were read by nobody, which is the same as not writing
+    them. One line each, in the box, visible.
+    """
     page = render(_two_expeditions(tmp_path))
-    warning = page[page.index('<section class="warning"'):page.index("</section>", page.index('<section class="warning"'))]
-    alarm = re.search(r'<p class="alarm">(.*?)</p>', warning, re.S).group(1)
-    assert "Disclaimer" in alarm
-    assert len(re.sub(r"<[^>]+>", "", alarm).split()) < 60
-    # The six caveats are still there, and a reader has to ask for them.
-    assert warning.index("<details") < warning.index("A proof of concept")
+    warning = page[page.index('<section class="warning"'):
+                   page.index("</section>", page.index('<section class="warning"'))]
+    assert "<details" not in warning and "<summary" not in warning
+    assert warning.count("<li>") == 6
+    # Short: the whole box is nearer a paragraph than a page.
+    assert len(re.sub(r"<[^>]+>", " ", warning).split()) < 200
+    for said in ("upper bound", "never trained on", "six points of recall",
+                 "about 1.8 entries", "lamps"):
+        assert said in warning, said
 
 
 def test_the_taxonomy_is_grouped_the_way_the_reports_group_it(tmp_path):

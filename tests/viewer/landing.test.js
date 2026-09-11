@@ -44,6 +44,11 @@ const INDEX = {
         { name: 'LRJ complex', count: 2, taxa: ['LRJ complex'] }] },
     ],
   },
+  where: {
+    EX2503: { frame: [640, 360],
+              videos: { 'EX2503_VID_20250413T012000Z_ROVHD_Low.mp4': 'https://ncei/ex2503.mp4' } },
+    DSMOT: { frame: [1920, 1080], videos: {} },
+  },
   taxa: {
     Actiniaria: { slug: 'actiniaria', count: 30, pages: 1, rank: 'Order',
                   aphia: 1360, above: ['Animalia', 'Cnidaria', 'Hexacorallia', 'Actiniaria'] },
@@ -61,24 +66,46 @@ const INDEX = {
 const LOOKUP = { Cnidaria: 'Cnidaria', Hexacorallia: 'Hexacorallia',
                  Actiniaria: 'Sea anemone' };
 
-/** The store, answered out of memory: an index, and empty pages of pictures. */
+/* One page of one taxon, the shape `_write_page` writes: a still of one byte each,
+   a duration, a box, and the recording it came out of. */
+const ANIMALS = [
+  { t: 'Actiniaria', e: 'EX2503', r: 'EX2503_VID_20250413T012000Z_ROVHD_Low.mp4',
+    s: 124.5, c: 0.91, a: 1, n: 4, d: 7.5, b: [100, 40, 180, 130], l: 1, m: 0 },
+  { t: 'Actiniaria', e: 'DSMOT', r: 'MD_BTL.mp4',
+    s: 12.0, c: 0.7, a: 1, n: 1, d: 0, b: [10, 10, 60, 50], l: 1, m: 0 },
+];
+
+/** The store, answered out of memory: an index, and a page of pictures. */
 const store = (url) => {
   if (url.endsWith('index.json')) return Promise.resolve({ json: async () => INDEX });
-  if (url.endsWith('.json')) return Promise.resolve({ json: async () => [] });
-  return Promise.resolve({ ok: true, arrayBuffer: async () => new ArrayBuffer(0) });
+  if (url.endsWith('.json')) return Promise.resolve({
+    json: async () => (url.includes('actiniaria') ? ANIMALS : []) });
+  return Promise.resolve({ ok: true, arrayBuffer: async () => new ArrayBuffer(2) });
 };
 
 function page() {
+  localStorage.clear();
   document.body.innerHTML = `
     <section id="explore">
       <nav id="jumps"></nav><nav id="crumbs"></nav>
       <p id="sunRead"></p>
       <svg id="sunburst"></svg>
       <aside id="about"></aside>
-      <div id="wall"></div><div id="more"></div>
-    </section>`;
+      <div id="wall"><div id="more"></div></div>
+    </section>
+    <section id="kept" hidden><a id="keptCsv" href="#"></a>
+      <button id="keptClear"></button><div id="keptWall"></div></section>
+    <div class="stage" id="stage" hidden><div class="stage-box">
+      <p><b id="stageName"></b><span id="stageFacts"></span>
+        <button class="star" id="stageStar"></button>
+        <button id="stageShut"></button></p>
+      <div class="stage-play" id="stagePlay"></div>
+      <p><input type="checkbox" id="stageBox" checked>
+        <a id="stageFile"></a><span id="stageNote"></span></p>
+    </div></div>`;
   const run = new Function('LOOKUP', 'fetch', pageScript()
-    + '\n; return { state, focusOn, drawJumps, nodeAt };');
+    + '\n; return { state, focusOn, drawJumps, nodeAt, openStage, toggleKept, '
+    + 'kept, asCsv, wireTheStage, refreshKept, drawKept, shutStage, tileFor };');
   return run(LOOKUP, store);
 }
 
@@ -94,10 +121,13 @@ describe('the ways into the taxonomy', () => {
     // Not "the four biggest branches": those were a kingdom, a phylum and a class
     // in one row, which is three ranks and no grouping anybody can follow.
     expect(chips()).toEqual(['everything', 'Cnidaria', 'Porifera', 'Foraminifera',
-                             'Unplaced', 'Undecided']);
+                             'Unplaced']);
   });
 
-  it('does not offer a kingdom or anything under a phylum', () => {
+  it('does not repeat in the row what is one click inside it', () => {
+    // Undecided lives in Unplaced, and a button for each put the part beside the
+    // whole with nothing saying which was which.
+    expect(chips()).not.toContain('Undecided');
     expect(chips()).not.toContain('Animalia');
     expect(chips()).not.toContain('Hexacorallia');
   });
@@ -238,3 +268,120 @@ describe('the ring is a half circle at every level', () => {
     expect(rimAngle()).toBeCloseTo(Math.PI, 2);
   });
 });
+
+describe('a tile is a way into the footage', () => {
+  let api;
+  beforeEach(() => {
+    api = page();
+    api.state.index = INDEX;
+    api.refreshKept();
+    api.wireTheStage();
+  });
+
+  const tile = (which = 0) =>
+    api.tileFor(ANIMALS[which], new Uint8Array([255]), 'actiniaria', 0, which);
+
+  it('opens the archive\'s own recording, a couple of seconds early', () => {
+    api.openStage(ANIMALS[0], 'actiniaria', 0, 0, 'blob:still');
+    expect(document.getElementById('stage').hidden).toBe(false);
+    const video = document.querySelector('#stagePlay video');
+    // 124.5 seconds in, opened at 122.5: an animal arriving on screen is most of
+    // what tells a reader whether the box is around anything.
+    expect(video.getAttribute('src')).toBe('https://ncei/ex2503.mp4#t=122.5');
+    expect(document.getElementById('stageFile').getAttribute('href'))
+      .toBe('https://ncei/ex2503.mp4#t=122.5');
+  });
+
+  it('draws the box in the coordinates of the frame it was drawn in', () => {
+    api.openStage(ANIMALS[0], 'actiniaria', 0, 0, 'blob:still');
+    const svg = document.querySelector('#stagePlay svg');
+    expect(svg.getAttribute('viewBox')).toBe('0 0 640 360');
+    const rect = svg.querySelector('rect');
+    expect([rect.getAttribute('x'), rect.getAttribute('y'),
+            rect.getAttribute('width'), rect.getAttribute('height')])
+      .toEqual(['100', '40', '80', '90']);
+  });
+
+  it('shows the crop, and says so, when no URL was recorded', () => {
+    api.openStage(ANIMALS[1], 'actiniaria', 0, 1, 'blob:still');
+    expect(document.querySelector('#stagePlay video')).toBeNull();
+    expect(document.querySelector('#stagePlay img').src).toContain('blob:still');
+    expect(document.getElementById('stageNote').textContent).toContain('not the footage');
+    expect(document.getElementById('stageFile').hidden).toBe(true);
+  });
+
+  it('stops fetching the recording when it is closed', () => {
+    api.openStage(ANIMALS[0], 'actiniaria', 0, 0, 'blob:still');
+    api.shutStage();
+    expect(document.getElementById('stage').hidden).toBe(true);
+    expect(document.querySelector('#stagePlay video')).toBeNull();
+  });
+});
+
+describe('what somebody kept', () => {
+  let api;
+  beforeEach(() => {
+    api = page();
+    api.state.index = INDEX;
+    api.refreshKept();
+    api.wireTheStage();
+  });
+
+  it('keeps a sighting in this browser, and forgets it again', () => {
+    api.toggleKept(ANIMALS[0], 'actiniaria', 0, 0);
+    expect(api.kept().map(e => e.t)).toEqual(['Actiniaria']);
+    expect(api.kept()[0]).toMatchObject({
+      e: 'EX2503', s: 124.5, b: [100, 40, 180, 130], v: 'https://ncei/ex2503.mp4' });
+    api.toggleKept(ANIMALS[0], 'actiniaria', 0, 0);
+    expect(api.kept()).toEqual([]);
+  });
+
+  it('lights the star on a tile that was kept, and only that one', () => {
+    api.toggleKept(ANIMALS[0], 'actiniaria', 0, 0);
+    const first = api.tileFor(ANIMALS[0], new Uint8Array([255]), 'actiniaria', 0, 0);
+    const second = api.tileFor(ANIMALS[1], new Uint8Array([255]), 'actiniaria', 0, 1);
+    expect(first.querySelector('.star').classList.contains('on')).toBe(true);
+    expect(second.querySelector('.star').classList.contains('on')).toBe(false);
+  });
+
+  it('starring a tile does not also open the footage', () => {
+    const figure = api.tileFor(ANIMALS[0], new Uint8Array([255]), 'actiniaria', 0, 0);
+    document.body.appendChild(figure);
+    figure.querySelector('.star').dispatchEvent(
+      new MouseEvent('click', { bubbles: true }));
+    expect(api.kept()).toHaveLength(1);
+    expect(document.getElementById('stage').hidden).toBe(true);
+  });
+
+  it('writes a csv a stranger could use to find the moment', () => {
+    api.toggleKept(ANIMALS[0], 'actiniaria', 0, 0);
+    // The page hands the browser a blob URL, which a test cannot read back, so the
+    // rows are built here the same way and the columns checked against those.
+    expect(api.asCsv(api.kept())).toMatch(/^blob:/);
+    const rows = rowsOf(api.kept());
+    expect(rows[0]).toContain('recording');
+    expect(rows[0]).toContain('video');
+    expect(rows[1]).toContain('EX2503_VID_20250413T012000Z_ROVHD_Low.mp4');
+    expect(rows[1]).toContain('124.5');
+    expect(rows[1]).toContain('100,40,180,130');
+    expect(rows[1]).toContain('https://ncei/ex2503.mp4');
+  });
+
+  it('shows the favourites section only once there is something in it', async () => {
+    expect(document.getElementById('kept').hidden).toBe(true);
+    api.toggleKept(ANIMALS[0], 'actiniaria', 0, 0);
+    await api.drawKept();
+    expect(document.getElementById('kept').hidden).toBe(false);
+    expect(document.querySelectorAll('#keptWall .tile')).toHaveLength(1);
+  });
+});
+
+/** The CSV the page would write, as rows, without going through a blob URL. */
+function rowsOf(list) {
+  const head = ['taxon', 'confidence', 'seconds_in_view', 'looks', 'expedition',
+                'recording', 'second', 'x0', 'y0', 'x1', 'y1',
+                'frame_width', 'frame_height', 'video'];
+  return [head.join(','), ...list.map(entry => [
+    entry.t, entry.c, entry.d, entry.n, entry.e, entry.r, entry.s,
+    ...(entry.b || []), ...(entry.f || []), entry.v].join(','))];
+}

@@ -582,11 +582,9 @@ contact sheet. Cyan is the only accent and the footage chose it; amber is kept f
 one thing that has to interrupt somebody.
 
 - **01 the collection** — what this is in three sentences, over the figures saying how
-  much of it there is, and the way into the one report that spans the collection: the
-  statistics of every expedition together, opened grouped by `expedition`, with no
-  pictures in it at all.
-- **the disclaimer**, in one line: nothing here has been checked by anyone who knows
-  these animals. The six ways that matters are a click behind it.
+  much of it there is.
+- **the disclaimer** — one line, and six short ones under it, all of them visible.
+  Behind a summary they were read by nobody, which is the same as not writing them.
 - **02 what is in it** — half a sunburst against the page's left edge, a button per
   phylum above it (the rank the reports colour and split by), and beside it every
   picture of whatever branch is in focus, most confident first, a screenful per fetch,
@@ -594,9 +592,22 @@ one thing that has to interrupt somebody.
   confidence and how long the animal stayed in view over the top of it and the name
   along the bottom. Clicking the middle of the ring steps back out.
 - **03 the expeditions** — how many of each one's recordings are listed and how many
-  were read, footage analysed, animals or slices with animals, names, and a link to
-  its own report.
+  were read, footage analysed, animals or slices with animals, names, and the way into
+  its own report; above them all, the report that spans every expedition, opened
+  grouped by `expedition`, with no pictures in it.
 - **04 whose work this is.**
+- **05 what you kept** — the sightings somebody starred, and a CSV of them.
+
+**Clicking a picture opens the footage there.** The archives serve their own files over
+byte ranges — NOAA's with `Access-Control-Allow-Origin: *`, and a 900 MB observatory
+recording seeks as happily as a 70 MB dive clip — so the page opens one at the second
+the animal was found, two seconds early, and draws the detector's own box over it.
+Nothing is copied or re-hosted: `tiles/index.json` carries the URL the recording was
+listed from and the frame its box is measured in, and where the manifest named no URL
+the crop is shown and the overlay says so. The star beside a tile keeps that sighting
+in `localStorage` — no account, nothing sent anywhere — and section 05 lists them
+again, with a CSV carrying the taxon, the recording, the second, the box and the URL,
+which is enough for somebody else to find the same moment in the archive.
 
 Every link is a `?data=` URL into the viewer next to it, so opening a report needs a
 static file server and nothing else — no Python, no port, no viewer process. Nothing

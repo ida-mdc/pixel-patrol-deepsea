@@ -14,24 +14,34 @@ edge, the frames doing the talking. Cyan is the only accent, and the footage cho
 it: every metre of depth takes more red out, so a deep-sea frame is cyan whatever
 is in it. Amber is kept for the one thing that has to interrupt somebody.
 
-Four numbered parts, and a warning that is not one of them:
+Five numbered parts, and a warning that is not one of them:
 
     01 the collection   what this is and where the footage comes from, in three
                         sentences, over the figures that say how much of it there
                         is. Short: the pictures are the point of the page.
-       the disclaimer   what the figures are worth, in one line that cannot be
-                        missed. The detail is behind a summary for whoever wants it.
+       the disclaimer   what the figures are worth: one line and six short ones,
+                        all of them visible. Behind a summary they were read by
+                        nobody, which is the same as not writing them.
     02 what is in it    a half sunburst against the left edge and, beside it, every
                         picture of whatever branch is in focus. Grouped by phylum,
                         which is the rank the reports group by. The pictures scroll
                         in their own box: a wall that grew the page put everything
                         below it out of reach.
-    03 the expeditions  one line each: how much was analysed, and the way in.
+    03 the expeditions  one line each: how much was analysed, the way into its
+                        report, and - above them all - the report that spans them.
     04 whose work this is
+    05 what you kept    the sightings somebody starred, and the CSV of them.
+
+Clicking a picture opens the second of footage it was cut from: the archives serve
+their own files over byte ranges, so the page seeks into a recording without
+copying a frame of it, and draws the detector's own box over the moment. That is
+the only honest way to show what a detection was - a crop of a 640-pixel frame
+proves very little, and the seconds around it are the evidence.
 
 Nothing below the header is built into the HTML - it is read from `tiles/index.json`
 and the paged files beside it, which is why the page is the same size whether the
-collection holds one expedition or fifty.
+collection holds one expedition or fifty. What somebody keeps lives in their own
+browser and is sent nowhere; the CSV is how they take it with them.
 
 What the page will not do is describe an animal in its own words. It says what the
 detector called it, how sure it was, how long it stayed in view, where the register
@@ -92,7 +102,6 @@ def render(rows, index: Optional[Dict] = None, scores: Optional[Dict] = None) ->
          footage in full - more hours of it than anybody is going to sit through.
          This reads it a frame a second and asks two questions: what moved, and
          what was it.</p>
-      {_together(combined)}
     </div>
   </section>
 
@@ -105,60 +114,36 @@ def render(rows, index: Optional[Dict] = None, scores: Optional[Dict] = None) ->
   </div>
 
   <section class="warning" id="warning">
-    <p class="alarm"><b>Disclaimer</b> Nothing here has been checked by anyone who
-       knows these animals. Every name is one detector's guess on footage it was
-       never trained on, most frames were never read at all, and every count is an
-       upper bound.</p>
-    <details class="caveats">
-      <summary>what exactly is wrong with it</summary>
-      <div class="warn-grid">
-        <div>
-          <h3>A proof of concept</h3>
-          <p>A demonstration that an archive of unwatched video can be read, indexed
-             and made browsable. Not a survey.</p>
-        </div>
-        <div>
-          <h3>The names are guesses</h3>
-          <p>One YOLOv5 checkpoint trained on MBARI imagery, 499 classes, run on
-             frames it has never seen. On a set of labelled specimens it named two of
-             five correctly and was wrong at 0.94 confidence on the rest. Read a name
-             as a shortlist.</p>
-        </div>
-        <div>
-          <h3>Most frames were never read</h3>
-          <p>A sample of each expedition's dives, a sample of each dive's bottom
-             time, and the detector looking about once a second. The table below says
-             how much of each expedition that was.</p>
-        </div>
-        <div>
-          <h3>Counts are upper bounds</h3>
-          <p>Sightings are linked into animals geometrically, which against a
-             tracking benchmark splits the average animal across about 1.8 entries.
-             The long tail is single, low-confidence detections.</p>
-        </div>
-        <div>
-          <h3>The picture is a proxy</h3>
-          <p>Almost all of this footage is published at 640×360, some older tapes at
-             360×240 - about six points of recall below full resolution, and no
-             upscaling gets it back.</p>
-        </div>
-        <div>
-          <h3>Colour is the vehicle's</h3>
-          <p>Everything below the photic zone is lit by the lamps that filmed it, and
-             water takes the red out within metres. Colour describes the lighting as
-             much as the animal.</p>
-        </div>
-      </div>
-    </details>
+    <div class="alarm">
+      <p class="alarm-line"><b>Disclaimer</b> Nothing here has been checked by anyone
+         who knows these animals, and every figure on the page is an upper bound.</p>
+      <ul>
+        <li>A demonstration that unwatched video can be read and indexed. Not a survey.</li>
+        <li>Every name is one detector's guess on footage it never trained on: a
+            shortlist, not an identification. On labelled specimens it got two of five,
+            and was wrong at 0.94 confidence on the rest.</li>
+        <li>Most frames were never read - a sample of each expedition's dives, and a
+            look about once a second.</li>
+        <li>One animal can be counted twice: the linking is geometric and splits the
+            average animal across about 1.8 entries.</li>
+        <li>The footage is published at 640×360, some older tapes at 360×240, which
+            costs the detector about six points of recall.</li>
+        <li>Colour is the vehicle's lamps as much as the animal - water takes the red
+            out within metres.</li>
+      </ul>
+    </div>
   </section>
 
   <section class="explore" id="explore">
     <header class="explore-head">
       <p class="chapter">02 / what is in it</p>
       <h2>Everything that was found</h2>
-      <p class="lede">Grouped by phylum, the way the reports are. Click a ring to go
-         further in and the middle of it to come back out. Hover a picture to watch
-         the seconds around the animal in it.</p>
+      <p class="lede">Every name here is one object detector's - a FathomNet YOLOv5
+         checkpoint, 499 classes, run on a frame a second - and the ranks above it
+         come from the World Register of Marine Species. Grouped by phylum, the way
+         the reports are. Click a ring to go further in and the middle of it to come
+         back out; hover a picture to watch the seconds around the animal, or click
+         it to open the recording there.</p>
       <nav class="jumps" id="jumps" aria-label="the phyla this collection found"></nav>
       <nav class="crumbs" id="crumbs" aria-label="the branch in focus"></nav>
     </header>
@@ -181,6 +166,7 @@ def render(rows, index: Optional[Dict] = None, scores: Optional[Dict] = None) ->
   <section class="fleet">
     <p class="chapter">03 / the expeditions</p>
     <h2>Where the footage came from</h2>
+    {_together(combined)}
     <table class="fleet-table">
       <thead><tr><th>expedition</th><th>when</th><th>analysed</th><th>footage</th>
         <th>animals</th><th>names</th><th></th></tr></thead>
@@ -228,12 +214,45 @@ def render(rows, index: Optional[Dict] = None, scores: Optional[Dict] = None) ->
     </div>
   </section>
 
+  <section class="kept" id="kept" hidden>
+    <p class="chapter">05 / what you kept</p>
+    <h2>Your favourites</h2>
+    <p class="lede">Starred sightings, kept in this browser and sent nowhere. The CSV
+       carries the name, the recording, the second and the box the detector drew,
+       which is enough for somebody else to find the moment in the archive's own
+       file.</p>
+    <p class="kept-does">
+      <a class="cta" id="keptCsv" download="deepsea-favourites.csv" href="#"
+         >download the csv &darr;</a>
+      <button class="quiet" id="keptClear">forget all of them</button>
+    </p>
+    <div class="wall kept-wall" id="keptWall"></div>
+  </section>
+
   <footer>
     Written by <code>python -m pixel_patrol_deepsea.collect site</code> on
     {datetime.now().strftime('%Y-%m-%d %H:%M')}. Serve this folder over HTTP and every
     link works; there is nothing else to install.
   </footer>
 </main>
+
+<div class="stage" id="stage" hidden>
+  <div class="stage-box" role="dialog" aria-modal="true"
+       aria-label="the moment this animal was found">
+    <p class="stage-head">
+      <b id="stageName"></b><span id="stageFacts"></span>
+      <button class="star" id="stageStar" title="keep this sighting">&#9734;</button>
+      <button class="shut" id="stageShut" title="close (esc)">&#10005;</button>
+    </p>
+    <div class="stage-play" id="stagePlay"></div>
+    <p class="stage-foot">
+      <label><input type="checkbox" id="stageBox" checked> the box the detector
+        drew, at the second it drew it</label>
+      <a id="stageFile" target="_blank" rel="noopener">the recording itself &nearr;</a>
+      <span class="stage-note" id="stageNote"></span>
+    </p>
+  </div>
+</div>
 <script>const LOOKUP = {_lookup(index)};</script>
 <script>{SCRIPT}</script>
 </body></html>"""
@@ -252,19 +271,21 @@ def _cell(value: str, label: str) -> str:
 def _together(url: str) -> str:
     """The way into the one report that spans the collection.
 
-    It is not another gallery, and saying "open all nine expeditions" did not warn
-    anybody of that: it is the statistics over every expedition that has been read,
-    and it carries no pictures at all, because those are hundreds of megabytes and
-    belong in an expedition's own report. It opens grouped by expedition, since the
-    only reason to put them in one report is to compare them.
+    It sits with the expeditions rather than in the header, because it is one of
+    them - the row above all the rows, and a reader reaches for it after seeing what
+    the others are. It is not another gallery, and saying "open all nine expeditions"
+    did not warn anybody of that: it is the statistics over every expedition that has
+    been read, and it carries no pictures at all, because those are hundreds of
+    megabytes and belong in an expedition's own report. It opens grouped by
+    expedition, since the only reason to put them in one report is to compare them.
     """
     if not url:
         return ""
-    return (f'<a class="cta" href="{html.escape(url, quote=True)}">'
-            f'the statistics, every expedition together &rarr;</a>'
-            f'<p class="cta-note">Counts, names, depths, positions and times, grouped '
-            f'by expedition. No pictures - they are in each expedition\'s own report, '
-            f'listed below.</p>')
+    return (f'<p class="together"><a class="cta" href="{html.escape(url, quote=True)}">'
+            f'open all of them in one report &rarr;</a>'
+            f'<span>Counts, names, depths, positions and times, grouped by '
+            f'expedition. No pictures: each expedition\'s own report holds those.'
+            f'</span></p>')
 
 
 def _lookup(index: Optional[Dict]) -> str:
@@ -299,7 +320,7 @@ def _mission(row) -> str:
     if not link:
         return ""
     return (f'<a class="mission" href="{html.escape(link, quote=True)}" '
-            f'title="what the ship was doing">mission</a> ')
+            f'title="what the ship was doing">mission &nearr;</a>')
 
 
 def _fleet_row(row) -> str:
@@ -321,7 +342,7 @@ def _fleet_row(row) -> str:
       <td class="num">{_clock(row.seconds)}</td>
       <td class="num">{animals}</td>
       <td class="num">{taxa}</td>
-      <td class="num">{_mission(row)}{_link(row)}</td>
+      <td class="num">{_link(row)}{_mission(row)}</td>
     </tr>"""
 
 
@@ -399,20 +420,21 @@ a { color: var(--glow); }
    One line in the warning colour is harder to miss than six, and the six are still
    here for whoever opens them. */
 .warning { padding: 2rem 6vw; }
-.alarm { margin: 0; padding: .85rem 1.1rem; color: #ffe9c9; max-width: 66rem;
+.alarm { padding: .9rem 1.2rem 1rem; color: #ffe9c9; max-width: 72rem;
          border: 1px solid rgba(255,176,32,.4); border-left: 3px solid var(--warn);
-         background: rgba(255,176,32,.07); font-size: .95rem; }
+         background: rgba(255,176,32,.07); }
+.alarm-line { margin: 0; font-size: .95rem; }
 .alarm b { color: var(--warn); font: .68rem/1 var(--mono); letter-spacing: .18em;
            text-transform: uppercase; margin-right: .7rem; }
-.caveats { margin-top: .8rem; }
-.caveats summary { color: var(--dim); cursor: pointer; width: fit-content;
-                   font: .68rem/1 var(--mono); letter-spacing: .12em;
-                   text-transform: uppercase; }
-.caveats summary:hover { color: var(--ink); }
-.warn-grid { display: grid; gap: 1.3rem 2.4rem; margin-top: 1.3rem;
-             grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); }
-.warn-grid h3 { font-size: .95rem; margin-bottom: .3rem; }
-.warn-grid p { color: var(--dim); margin: 0; font-size: .91rem; }
+/* Behind a summary, the six were behind a summary: read by nobody. They are one
+   line each now and they are simply there. */
+.alarm ul { margin: .7rem 0 0; padding: 0; list-style: none;
+            display: grid; gap: .3rem .5rem; font-size: .86rem;
+            color: rgba(255,233,201,.78); }
+.alarm li { padding-left: 1.1rem; position: relative; }
+.alarm li::before { content: "—"; position: absolute; left: 0; color: var(--warn);
+                    opacity: .7; }
+@media (min-width: 1100px) { .alarm ul { grid-template-columns: 1fr 1fr; } }
 
 /* ── 02 the taxonomy, and the contact sheet beside it ─────────────────────── */
 .explore { padding: 3rem 6vw; border-top: 1px solid var(--line); }
@@ -456,16 +478,19 @@ a { color: var(--glow); }
 .sun .hole.up:hover { fill: rgba(53,214,245,.22); }
 .sun .back { fill: var(--glow); font-family: var(--mono); font-size: 5px;
              letter-spacing: .3px; pointer-events: none; }
-.sun-read { margin: 0 0 .4rem; min-height: 2rem; }
-.sun-read b { font: 1.3rem/1.2 var(--mono); font-variant-numeric: tabular-nums;
-              margin-right: .5rem; }
-.sun-read span { color: var(--dim); font-size: .9rem; }
+/* One size, one line, one height. Two sizes and a wrapping name meant the ring
+   below jumped up and down as the pointer moved across it. */
+.sun-read { margin: 0 0 .5rem; height: 1.8rem; display: flex; gap: .55rem;
+            align-items: baseline; white-space: nowrap; overflow: hidden;
+            font: .95rem/1.8rem var(--mono); }
+.sun-read b { font-weight: 600; font-variant-numeric: tabular-nums; }
+.sun-read span { color: var(--dim); overflow: hidden; text-overflow: ellipsis; }
 .sun-read.hovering span { color: var(--ink); }
 
 /* The pictures scroll in their own box. A wall that grows without end grows the
    page without end: everything below it was unreachable once a few thousand animals
    had loaded, and scrolling anywhere near the ring fetched more of them. */
-.wall { max-height: min(76vh, 40rem); overflow-y: auto; overscroll-behavior: contain;
+.wall { max-height: min(88vh, 56rem); overflow-y: auto; overscroll-behavior: contain;
         border: 1px solid var(--line); padding: 6px; background: #020a12;
         display: grid; gap: 6px; align-content: start;
         grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
@@ -492,6 +517,64 @@ a { color: var(--glow); }
 .tile:hover figcaption, .tile:hover .meta,
 .tile:focus-within figcaption, .tile:focus-within .meta { opacity: 1; }
 .sentinel { grid-column: 1 / -1; height: 1px; }
+/* A tile is a way in, not a picture: clicking it opens the second of footage it was
+   cut from. The star keeps it, and a kept star stays lit when the pointer leaves. */
+.tile .star { position: absolute; right: 0; bottom: 0; opacity: 0; border: 0;
+              background: none; color: #cfe9f7; cursor: pointer; padding: .2rem .35rem;
+              font-size: .9rem; line-height: 1; transition: opacity .12s; }
+.tile .star:hover { color: var(--glow); }
+.tile .star.on { color: var(--warn); }
+.tile:hover .star, .tile:focus-within .star, .tile .star.on { opacity: 1; }
+.tile figcaption { padding-right: 1.4rem; }
+
+/* ── the moment itself ────────────────────────────────────────────────────── */
+/* A 100-pixel crop is not evidence of anything. The seconds around it are, and the
+   archive serves its own file over byte ranges, so the page can open one at the
+   second the animal was found without copying a frame of it. */
+.stage { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center;
+         background: rgba(2,8,14,.86); padding: 4vh 4vw;
+         backdrop-filter: blur(2px); }
+.stage[hidden] { display: none; }
+.stage-box { width: min(72rem, 100%); max-height: 92vh; overflow: auto;
+             background: var(--abyss-2); border: 1px solid var(--line); }
+.stage-head { display: flex; align-items: baseline; gap: .7rem; margin: 0;
+              padding: .7rem .9rem; border-bottom: 1px solid var(--line); }
+.stage-head b { font-size: 1rem; }
+.stage-head span { color: var(--dim); font: .72rem var(--mono); letter-spacing: .04em;
+                   font-variant-numeric: tabular-nums; }
+.stage-head .star, .stage-head .shut { margin-left: auto; background: none; border: 0;
+              color: var(--dim); cursor: pointer; font-size: 1.1rem; line-height: 1;
+              padding: 0 .2rem; }
+.stage-head .shut { margin-left: .2rem; }
+.stage-head .star.on { color: var(--warn); }
+.stage-head .star:hover, .stage-head .shut:hover { color: var(--ink); }
+.stage-play { position: relative; background: #000; aspect-ratio: 16 / 9; }
+.stage-play video, .stage-play img { position: absolute; inset: 0; width: 100%;
+              height: 100%; object-fit: contain; display: block; background: #000; }
+.stage-play svg { position: absolute; inset: 0; width: 100%; height: 100%;
+                  pointer-events: none; }
+.stage-play svg rect { fill: none; stroke: var(--glow); stroke-width: 2;
+                       vector-effect: non-scaling-stroke; }
+.stage-play.no-box svg { display: none; }
+.stage-foot { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem 1.2rem;
+              margin: 0; padding: .7rem .9rem; color: var(--dim);
+              font: .72rem var(--mono); letter-spacing: .04em;
+              border-top: 1px solid var(--line); }
+.stage-foot label { display: flex; align-items: center; gap: .4rem; cursor: pointer; }
+.stage-foot a { text-decoration: none; }
+.stage-note { color: var(--warn); }
+
+/* ── 05 what somebody kept ────────────────────────────────────────────────── */
+.kept { padding: 3rem 6vw; border-top: 1px solid var(--line); }
+.kept h2 { font-size: clamp(1.3rem, 2.6vw, 1.9rem); }
+.kept .lede { margin: .7rem 0 1.1rem; }
+.kept-does { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem;
+             margin: 0 0 1.2rem; }
+.kept-wall { max-height: 30rem; }
+.quiet { background: none; border: 1px solid var(--line); border-radius: 2px;
+         color: var(--dim); cursor: pointer; padding: .5rem .8rem;
+         font: .7rem var(--mono); letter-spacing: .12em; text-transform: uppercase; }
+.quiet:hover { color: var(--ink); border-color: var(--dim); }
 .about { margin-top: 1.2rem; border: 1px solid var(--line); border-radius: 2px;
          padding: .9rem 1rem; background: var(--card); }
 .about h3 { font-size: 1.05rem; margin-bottom: .25rem; }
@@ -519,9 +602,20 @@ a { color: var(--glow); }
                     font-variant-numeric: tabular-nums; }
 .fleet-table .sub { display: block; color: var(--dim); font-size: .74rem;
                     font-family: var(--mono); }
-.fleet-table a { text-decoration: none; border: 1px solid var(--line); border-radius: 2px;
-                 padding: .25rem .55rem; font-size: .72rem; white-space: nowrap; }
-.fleet-table a:hover { border-color: var(--glow); }
+/* The report is the point of the row. The expedition's own page is a courtesy
+   beside it - it was the louder of the two, which had it backwards. */
+.fleet-table a.open { text-decoration: none; border: 1px solid var(--glow);
+                      border-radius: 2px; padding: .34rem .7rem; font-size: .72rem;
+                      white-space: nowrap; background: rgba(53,214,245,.12);
+                      letter-spacing: .06em; }
+.fleet-table a.open:hover { background: rgba(53,214,245,.24); }
+.fleet-table a.mission { color: var(--dim); text-decoration: none; font-size: .7rem;
+                         margin-left: .7rem; white-space: nowrap; }
+.fleet-table a.mission:hover { color: var(--ink); }
+.together { display: flex; flex-wrap: wrap; align-items: center; gap: .9rem;
+            margin: 0 0 1.6rem; }
+.together .cta { padding: .8rem 1.1rem; }
+.together span { color: var(--dim); font-size: .84rem; max-width: 30rem; }
 .note { color: var(--dim); font-size: .85rem; margin-top: 1rem; max-width: 46rem; }
 
 /* ── 04 credit ────────────────────────────────────────────────────────────── */
@@ -584,7 +678,8 @@ const OURS = {
 };
 
 const state = { index: null, path: [], taxa: [], queue: [], loading: false,
-                done: false, pages: new Map(), clips: new Map() };
+                done: false, pages: new Map(), clips: new Map(),
+                keptKeys: new Set(), staged: null, csvUrl: '', drawingKept: 0 };
 
 const el = (id) => document.getElementById(id);
 
@@ -602,9 +697,13 @@ async function boot() {
       + 'Run <code>collect site</code> where the reports are.</p>';
     return;
   }
+  // What was kept first: the tiles read it as they are drawn.
+  refreshKept();
   drawJumps();
   focusOn(...fromHash());
   watchTheWall();
+  wireTheStage();
+  drawKept();
 }
 
 /* ── the taxonomy, as rings ────────────────────────────────────────────────── */
@@ -750,10 +849,9 @@ function drawJumps() {
   const phyla = [], odd = [];
   for (const kingdom of root.children || []) {
     if (kingdom.name === UNPLACED) {
+      // Undecided sits inside Unplaced, so it is one click in and not a second
+      // button beside the thing that contains it.
       odd.push({ node: kingdom, path: [kingdom.name] });
-      for (const child of kingdom.children || []) {
-        if (child.name === UNDECIDED) odd.push({ node: child, path: [kingdom.name, child.name] });
-      }
       continue;
     }
     // A phylum is the step below the kingdom, whatever depth the register's own
@@ -1000,11 +1098,11 @@ async function loadMore() {
     const { animals, stills } = await pageOf(slug, next.page);
     const wall = el('wall');
     let at = 0;
-    for (const animal of animals) {
+    animals.forEach((animal, index) => {
       const still = stills.slice(at, at + animal.l);
       at += animal.l;
-      wall.insertBefore(tileFor(animal, still, slug, next.page), el('more'));
-    }
+      wall.insertBefore(tileFor(animal, still, slug, next.page, index), el('more'));
+    });
   } catch (err) {
     /* a page that will not load is one page, not the end of the wall */
   } finally {
@@ -1082,13 +1180,16 @@ function clipStart(animals, wanted) {
 
 const asPicture = (bytes) => URL.createObjectURL(new Blob([bytes], { type: 'image/jpeg' }));
 
-/** One frame of the contact sheet: the picture, and two facts over it.
+/** One frame of the contact sheet: the picture, two facts over it, and a way in.
  *
  * How sure the detector was and how long the animal stayed in view at the top, the
  * name at the bottom, both only while the pointer is on it. There is no play badge:
  * nearly every tile has a film, so a mark on nearly every tile said nothing and
- * cost a corner of the picture. */
-function tileFor(animal, still, slug, page) {
+ * cost a corner of the picture.
+ *
+ * Clicking it opens the footage at the second it was cut from, and the star keeps
+ * the sighting. */
+function tileFor(animal, still, slug, page, at) {
   const figure = document.createElement('figure');
   figure.className = 'tile' + (animal.m ? ' moving' : '');
   const img = document.createElement('img');
@@ -1104,11 +1205,33 @@ function tileFor(animal, still, slug, page) {
   const caption = document.createElement('figcaption');
   caption.textContent = animal.t;
   figure.appendChild(caption);
+  figure.appendChild(starFor(animal, slug, page, at));
   figure.title = `${animal.t} · ${animal.e} · ${clock(animal.s)} · ${animal.n} `
     + `look${animal.n === 1 ? '' : 's'}`
-    + (animal.a < 1 ? ` · agreed ${Math.round(animal.a * 100)}%` : '');
+    + (animal.a < 1 ? ` · agreed ${Math.round(animal.a * 100)}%` : '')
+    + ' — click to open the footage here';
+  const open = () => openStage(animal, slug, page, at, img.src);
+  figure.addEventListener('click', open);
+  figure.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') { event.preventDefault(); open(); }
+  });
   if (animal.m) animate(figure, img, slug, page, animal);
   return figure;
+}
+
+/** The star on a tile, lit when this sighting is one somebody kept. */
+function starFor(animal, slug, page, at) {
+  const star = document.createElement('button');
+  const key = keyOf(animal);
+  star.className = 'star' + (state.keptKeys.has(key) ? ' on' : '');
+  star.dataset.key = key;
+  star.textContent = state.keptKeys.has(key) ? '★' : '☆';
+  star.title = 'keep this sighting';
+  star.addEventListener('click', (event) => {
+    event.stopPropagation();            // the tile itself opens the footage
+    toggleKept(animal, slug, page, at);
+  });
+  return star;
 }
 
 /** How long the animal was in view. One look is a moment, not a duration. */
@@ -1143,6 +1266,225 @@ function animate(figure, img, slug, page, animal) {
   figure.addEventListener('mouseleave', stop);
   figure.addEventListener('focusout', stop);
   figure.tabIndex = 0;
+}
+
+/* ── the moment itself ─────────────────────────────────────────────────────── */
+
+/** What the store knows about where an animal came from: the archive's own file for
+ *  its recording, and the frame its box is measured in. */
+const whereFrom = (animal) => (state.index.where || {})[animal.e] || {};
+const fileOf = (animal) => (whereFrom(animal).videos || {})[animal.r] || '';
+const frameOf = (animal) => whereFrom(animal).frame || [16, 9];
+
+/** A couple of seconds before the detection, because an animal arriving on screen
+ *  is most of what tells a reader whether the box is around anything. */
+const LEAD_IN = 2;
+
+/** Open the footage at the second this animal was found.
+ *
+ * Nothing is copied or re-hosted: the archives serve their own files over byte
+ * ranges, so a browser can seek into a 900 MB recording and fetch only the piece it
+ * needs. Where the manifest named no URL - or the archive will not play in a page -
+ * the crop is shown instead and the note says so. */
+function openStage(animal, slug, page, at, stillSrc) {
+  state.staged = { animal, slug, page, at };
+  const [wide, high] = frameOf(animal);
+  const file = fileOf(animal);
+  const from = Math.max(0, (animal.s || 0) - LEAD_IN);
+  el('stageName').textContent = animal.t;
+  el('stageFacts').textContent = `${animal.c.toFixed(2)} · ${held(animal)} in view · `
+    + `${animal.n} look${animal.n === 1 ? '' : 's'} · ${animal.e} · ${animal.r} · `
+    + clock(animal.s);
+  const star = el('stageStar');
+  star.dataset.key = keyOf(animal);
+  const play = el('stagePlay');
+  play.style.aspectRatio = `${wide} / ${high}`;
+  play.replaceChildren(file ? footage(file, from) : theCrop(stillSrc, animal));
+  play.appendChild(theBox(animal, wide, high));
+  play.classList.toggle('no-box', !el('stageBox').checked);
+  el('stageFile').href = file ? `${file}#t=${from.toFixed(1)}` : '#';
+  el('stageFile').hidden = !file;
+  el('stageNote').textContent = file ? ''
+    : 'No URL was recorded for this recording, so this is the crop and not the footage.';
+  el('stage').hidden = false;
+  el('stageShut').focus();
+  markKept();
+}
+
+function footage(file, from) {
+  const video = document.createElement('video');
+  video.src = `${file}#t=${from.toFixed(1)}`;
+  video.controls = true;
+  video.autoplay = true;
+  video.muted = true;            // a page that makes noise unasked is a rude page
+  video.playsInline = true;
+  video.preload = 'metadata';
+  video.addEventListener('loadedmetadata', () => {
+    // The media fragment is a request, not a promise; some servers ignore it.
+    if (Math.abs(video.currentTime - from) > 1) video.currentTime = from;
+  });
+  video.addEventListener('error', () => {
+    el('stageNote').textContent = 'The archive would not play this file in a page. '
+      + 'The link below opens it at the same second.';
+  });
+  return video;
+}
+
+function theCrop(stillSrc, animal) {
+  const img = document.createElement('img');
+  img.src = stillSrc || '';
+  img.alt = animal.t;
+  return img;
+}
+
+/** The box the detector drew, over the frame it drew it in.
+ *
+ * `preserveAspectRatio="none"` is safe here and only here: the box holds the
+ * coordinates of the analysed frame and the stage is given that frame's aspect
+ * ratio, so the two scale together. */
+function theBox(animal, wide, high) {
+  const svg = document.createElementNS(SVGNS, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${wide} ${high}`);
+  svg.setAttribute('preserveAspectRatio', 'none');
+  const box = (animal.b || []).map(Number);
+  if (box.length !== 4 || !box.every(Number.isFinite)) return svg;
+  const rect = document.createElementNS(SVGNS, 'rect');
+  rect.setAttribute('x', String(box[0]));
+  rect.setAttribute('y', String(box[1]));
+  rect.setAttribute('width', String(Math.max(1, box[2] - box[0])));
+  rect.setAttribute('height', String(Math.max(1, box[3] - box[1])));
+  svg.appendChild(rect);
+  return svg;
+}
+
+function shutStage() {
+  const video = el('stagePlay').querySelector('video');
+  if (video) {                    // or it goes on fetching the recording unwatched
+    video.pause();
+    video.removeAttribute('src');
+    video.load();
+  }
+  el('stagePlay').replaceChildren();
+  el('stage').hidden = true;
+  state.staged = null;
+}
+
+/* ── what somebody kept ───────────────────────────────────────────────────── */
+
+/* In this browser and nowhere else. There is no account to have and nothing is
+   sent anywhere, so `localStorage` is the whole of it - which also means a reader
+   who clears their browser loses them, and the CSV is how they keep them. */
+const KEPT = 'pp-deepsea-kept';
+const keyOf = (animal) => `${animal.e}|${animal.r}|${animal.s}|${animal.t}`;
+
+function kept() {
+  try { return JSON.parse(localStorage.getItem(KEPT)) || []; } catch { return []; }
+}
+
+function refreshKept() {
+  state.keptKeys = new Set(kept().map(entry => entry.k));
+}
+
+function keepThese(list) {
+  try { localStorage.setItem(KEPT, JSON.stringify(list)); }
+  catch { /* a private window, or a full one. The page still works. */ }
+  refreshKept();
+  markKept();
+  drawKept();
+}
+
+/** Star or unstar one sighting.
+ *
+ * Enough of it is written down to find the moment again in the archive - the
+ * recording, the second, the box - and where it sits in the store, so its picture
+ * can be drawn again without keeping a copy of it. */
+function toggleKept(animal, slug, page, at) {
+  const list = kept(), key = keyOf(animal);
+  const found = list.findIndex(entry => entry.k === key);
+  if (found >= 0) list.splice(found, 1);
+  else list.push({ k: key, slug, page, at, t: animal.t, e: animal.e, r: animal.r,
+                   s: animal.s, c: animal.c, d: animal.d || 0, n: animal.n,
+                   b: animal.b || [], v: fileOf(animal), f: frameOf(animal) });
+  keepThese(list);
+}
+
+function markKept() {
+  for (const star of document.querySelectorAll('.star[data-key]')) {
+    const on = state.keptKeys.has(star.dataset.key);
+    star.classList.toggle('on', on);
+    star.textContent = on ? '★' : '☆';
+    star.title = on ? 'kept - click to forget it' : 'keep this sighting';
+  }
+}
+
+/** The favourites, drawn from the store rather than from a copy of the pictures.
+ *
+ * Built whole and then put in place, because starring two tiles quickly had two of
+ * these running at once: both cleared the wall, both waited on a page, and both
+ * appended what they had, so a reader with one favourite was shown two of it. */
+async function drawKept() {
+  const mine = ++state.drawingKept;
+  const list = kept();
+  el('kept').hidden = !list.length;
+  el('keptCsv').href = list.length ? asCsv(list) : '#';
+  const tiles = [];
+  for (const entry of list) {
+    try {
+      const { animals, stills } = await pageOf(entry.slug, entry.page);
+      const animal = animals[entry.at];
+      if (!animal) continue;
+      let at = 0;
+      for (const before of animals.slice(0, entry.at)) at += before.l;
+      tiles.push(tileFor(animal, stills.slice(at, at + animal.l),
+                         entry.slug, entry.page, entry.at));
+    } catch { /* a favourite whose page will not load is one tile fewer */ }
+  }
+  if (mine !== state.drawingKept) return;     // a later draw has taken over
+  el('keptWall').replaceChildren(...tiles);
+  markKept();
+}
+
+/** The favourites as a file somebody else could use.
+ *
+ * The recording, the second and the box are the useful part: with those three a
+ * reader opens the archive's own file and finds the same animal, whatever happens
+ * to this page. */
+function asCsv(list) {
+  const head = ['taxon', 'confidence', 'seconds_in_view', 'looks', 'expedition',
+                'recording', 'second', 'x0', 'y0', 'x1', 'y1',
+                'frame_width', 'frame_height', 'video'];
+  const rows = [head, ...list.map(entry => {
+    const box = (entry.b || []).concat(['', '', '', '']).slice(0, 4);
+    const frame = (entry.f || []).concat(['', '']).slice(0, 2);
+    return [entry.t, entry.c, entry.d, entry.n, entry.e, entry.r, entry.s,
+            ...box, ...frame, entry.v || ''];
+  })];
+  const csv = rows.map(row => row.map(cell => {
+    const text = cell === undefined || cell === null ? '' : String(cell);
+    return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  }).join(',')).join('\n');
+  if (state.csvUrl) URL.revokeObjectURL(state.csvUrl);
+  state.csvUrl = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  return state.csvUrl;
+}
+
+/** The controls that are on the page once rather than once per tile. */
+function wireTheStage() {
+  el('stageShut').addEventListener('click', shutStage);
+  el('stage').addEventListener('click', (event) => {
+    if (event.target === el('stage')) shutStage();
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !el('stage').hidden) shutStage();
+  });
+  el('stageBox').addEventListener('change', () => {
+    el('stagePlay').classList.toggle('no-box', !el('stageBox').checked);
+  });
+  el('stageStar').addEventListener('click', () => {
+    const staged = state.staged;
+    if (staged) toggleKept(staged.animal, staged.slug, staged.page, staged.at);
+  });
+  el('keptClear').addEventListener('click', () => keepThese([]));
 }
 
 const escape = (text) => String(text).replace(/[<>&]/g, ch =>
