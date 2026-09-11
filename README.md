@@ -484,12 +484,19 @@ where it stopped. `PROFILE=local` runs the same thing on one machine, which is t
 cheapest way to find out the environment is wrong before a queue tells you.
 
 `OUT` and `WORK` are yours to choose and both need to be visible from every compute
-node; they want little space, since a five-minute cruise recording makes 3 to 8 MB of
-parquet and the ~290 recordings of a default run are a few gigabytes including the copy
-Nextflow keeps in `WORK`. The video never lands there: one recording at a time is fetched
-into `$TMPDIR`, thinned, analysed and deleted, which wants a couple of gigabytes of
-node-local space per running task — 68 MB for a NOAA proxy recording, 906 MB for one of
-the Axial camera's, twice that while the thinned copy exists.
+node. What they hold is small and permanent — a five-minute cruise recording makes 3 to
+8 MB of parquet, so the ~290 recordings of a default run are a few gigabytes including
+the copy Nextflow keeps in `WORK` — plus something large and brief: each running task
+stages its recording into its own directory under `WORK`, thins it, analyses it and
+deletes it. That is 68 MB for a NOAA proxy recording and 906 MB for one of the Axial
+camera's, roughly doubled while the thinned copy exists, and it is *per running task*.
+A hundred concurrent tasks want tens of gigabytes of headroom in `WORK` that are gone
+again by the end of the run.
+
+Node-local disk is the better home for that and is not where it lives, because the nodes
+that provoked this had a `/tmp` of a few gigabytes shared by as many tasks as the node
+had cores, which fills at about the thirtieth simultaneous download. `--staging /path`
+puts it back on node-local scratch where there is enough of it.
 
 `nextflow/cluster-setup.sh` installs the environment, the detector weights, the pip cache
 and Nextflow's own home under one directory you name, rather than into `$HOME` where all
@@ -536,10 +543,25 @@ would have produced.
 
 ### What "no download" does and does not mean
 
-`one` is the only verb that touches video, and it keeps none: the recording is staged
-into the task's own directory, analysed, and deleted with it. A collection of any size
-costs one recording of transient disk — the two-recording test above left 780 KB behind,
-all of it parquet.
+`one` is the only verb that touches video, and it keeps none — but it does fetch one.
+The recording is downloaded whole into the task's own directory, thinned, analysed, and
+deleted with it, so a collection of any size costs one recording of transient disk per
+running task and the two-recording test above left 780 KB behind, all of it parquet.
+
+It is a download rather than a stream because the pass reads the whole recording anyway:
+thinning re-encodes it end to end, repairing a bad frame count re-encodes it end to end,
+and the detector samples moments across every slice. One sequential read of the bytes is
+what all three want; seeking into the same bytes over HTTP, hundreds of times per
+recording, is the same traffic arriving slower and with more ways to fail. The parts of
+the pass that genuinely need only a few bytes do read them that way - the frame rate
+comes from a ranged read of the header, and a dive's navigation from a ranged read into
+its ancillary zip, neither of which downloads the thing it reads.
+
+Streaming the video itself is what the `expedition` loader does, and it is a different
+shape of run: one manifest is one input with n recordings behind it, each handed to
+ffmpeg as a URL, one report for the expedition and no staging at all. It costs the
+per-recording resumability that makes a cluster run restartable, which is why the
+collection pipeline does not use it.
 
 Going further, and handing the pipeline a URL instead of a path, needs a change in
 `pixel-patrol-base` rather than here: file discovery is filesystem-bound throughout —
