@@ -449,7 +449,15 @@ is resident at about 4.8 GB, so what fits at once is roughly RAM over five gigab
 truth first — and is the thing to read for how the settings differ per archive.
 
 `nextflow/main.nf` runs them: `LIST → SELECT → ANALYSE → MERGE → SITE`, one parquet per
-recording merged into one per expedition. `SELECT` is `choose`, and it is there because
+recording merged into one per expedition. **`MERGE` streams**, a row group at a time,
+and that is not an optimisation: the obvious way to concatenate parquet is to read every
+part and write the pile, which needs as much memory as the expedition is big. On the
+cluster that was killed with exit 137 on EX1702 — 2.9 GB of parts against an 8 GB limit —
+*after* nineteen hours of analysis, and it aborted the whole run; GOA2004's parts are
+17 GB and would have needed a machine nobody has. Reading row groups and writing row
+groups, the peak is one row group of pictures whatever the expedition weighs, and `MERGE`
+now retries with more memory and is then ignored rather than taking the collection down
+with it. `SELECT` is `choose`, and it is there because
 without it a workflow has exactly one cheap way to sample a cruise — the first N
 recordings — and on a deep dive those are the vehicle descending. New work is found two
 ways, because they catch different things — `-resume` skips any `ANALYSE` whose inputs are

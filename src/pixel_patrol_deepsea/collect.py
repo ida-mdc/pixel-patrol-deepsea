@@ -781,14 +781,34 @@ def _analyse_quietly(url: str, output: Path, expedition_id: str, fps, slice_fram
 
 # ── merge ─────────────────────────────────────────────────────────────────────
 
+# How the merge is cut on the way through. Rows are read in small batches and
+# written in row groups of about this many bytes - by weight rather than by count,
+# because a slice row is anything from three kilobytes to half a megabyte depending
+# on how many animals were in it, and a row group should be neither a tenth of a
+# megabyte nor the whole expedition. This is also the whole of what a merge holds.
+MERGE_ROWS = 64
+MERGE_BYTES = 48_000_000
+
+
 def merge(expedition_id: str, parts: List[Path], output: Path) -> int:
     """One parquet per expedition, from one parquet per recording.
 
     Rows are concatenated rather than recomputed: in pixel-patrol a video file is
     one image, so every level of the aggregation tree in a part already belongs to
     that recording alone and nothing needs re-rolling up.
+
+    Streamed, a row group at a time, because the obvious way to concatenate parquet
+    is to read them all and write the pile - and an expedition's parts are the
+    pictures. EX1702 is 2.9 GB of them and was killed at an 8 GB limit; GOA2004 is
+    17 GB and would have needed a machine nobody has. Nothing here holds more than
+    one row group, so the memory a merge needs no longer has anything to do with how
+    much was analysed.
+
+    The parts are not guaranteed to share a schema: a recording with no detections
+    has no detection columns, and a run from a week ago may have fewer of them than
+    today's. So the schemas are unified first - by reading the schemas, which costs
+    a footer each - and every batch is aligned to that before it is written.
     """
-    import polars as pl
     import pyarrow as pa
     import pyarrow.parquet as pq
 
@@ -796,11 +816,10 @@ def merge(expedition_id: str, parts: List[Path], output: Path) -> int:
     if not usable:
         print("nothing to merge")
         return 1
-    table = pl.concat([pl.read_parquet(p) for p in usable], how="diagonal_relaxed")
+    schema = _one_schema(usable)
     expedition = _describe(expedition_id)
-    arrow = table.to_arrow()
-    arrow = arrow.replace_schema_metadata({
-        **(arrow.schema.metadata or {}),
+    schema = schema.with_metadata({
+        **(schema.metadata or {}),
         b"pp_project_name": expedition.title.encode(),
         b"pp_description": (f"{expedition.notes} {expedition.archive}, "
                             f"{expedition.vessel}, {expedition.date}. "
@@ -808,9 +827,54 @@ def merge(expedition_id: str, parts: List[Path], output: Path) -> int:
         b"pp_loader": b"video",
     })
     output.parent.mkdir(parents=True, exist_ok=True)
-    pq.write_table(arrow, output)
-    print(f"{expedition.title}: {len(usable)} recordings, {len(table):,} rows -> {output}")
+    rows, held, buffered = 0, 0, []
+    with pq.ParquetWriter(output, schema) as writer:
+        for part in usable:
+            source = pq.ParquetFile(part)
+            for batch in source.iter_batches(batch_size=MERGE_ROWS):
+                buffered.append(_as_schema(pa.Table.from_batches([batch]), schema))
+                rows, held = rows + batch.num_rows, held + batch.nbytes
+                if held >= MERGE_BYTES:
+                    writer.write_table(pa.concat_tables(buffered))
+                    buffered, held = [], 0
+        if buffered:
+            writer.write_table(pa.concat_tables(buffered))
+    print(f"{expedition.title}: {len(usable)} recordings, {rows:,} rows -> {output}")
     return 0
+
+
+def _one_schema(parts: List[Path]):
+    """The schema every part can be written under.
+
+    `promote_options="permissive"` is what `diagonal_relaxed` was doing before: a
+    column that is missing from a part is null in its rows, and a column that is an
+    int in one and a float in another comes out as the wider of the two.
+    """
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    schemas = []
+    for part in parts:
+        try:
+            schemas.append(pq.read_schema(part))
+        except Exception as exc:
+            logger.warning("cannot read the schema of %s: %s", part.name, exc)
+    return pa.unify_schemas(schemas, promote_options="permissive")
+
+
+def _as_schema(table, schema):
+    """One batch, under the schema the whole expedition is being written in."""
+    import pyarrow as pa
+
+    columns = []
+    for field in schema:
+        if field.name in table.column_names:
+            column = table.column(field.name)
+            columns.append(column if column.type.equals(field.type)
+                           else column.cast(field.type))
+        else:
+            columns.append(pa.nulls(table.num_rows, type=field.type))
+    return pa.Table.from_arrays(columns, schema=schema)
 
 
 def _describe(expedition_id: str):
