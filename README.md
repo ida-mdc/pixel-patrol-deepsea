@@ -449,7 +449,11 @@ is resident at about 4.8 GB, so what fits at once is roughly RAM over five gigab
 truth first — and is the thing to read for how the settings differ per archive.
 
 `nextflow/main.nf` runs them: `LIST → SELECT → ANALYSE → MERGE → SITE`, one parquet per
-recording merged into one per expedition. **`MERGE` streams**, a row group at a time,
+recording merged into one per expedition. `collect site` says so and carries on if a
+report is unreadable — `publishDir` copies are not atomic, so a run that is interrupted
+mid-publish leaves a gigabyte of parquet with no `PAR1` footer, and what that used to
+look like was a traceback out of a parquet reader three minutes into a site build.
+**`MERGE` streams**, a row group at a time,
 and that is not an optimisation: the obvious way to concatenate parquet is to read every
 part and write the pile, which needs as much memory as the expedition is big. On the
 cluster that was killed with exit 137 on EX1702 — 2.9 GB of parts against an 8 GB limit —

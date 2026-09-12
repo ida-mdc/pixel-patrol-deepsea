@@ -926,8 +926,16 @@ def combine(root: Path) -> Optional[Path]:
         # stills - and this step holds every expedition at once, so materialising
         # them to discard them a line later is what made the page build need more
         # memory than the analysis did.
-        wanted = [c for c in pl.read_parquet_schema(path) if c not in PICTURE_COLUMNS]
-        table = pl.read_parquet(path, columns=wanted)
+        try:
+            wanted = [c for c in pl.read_parquet_schema(path) if c not in PICTURE_COLUMNS]
+            table = pl.read_parquet(path, columns=wanted)
+        except Exception as exc:
+            # One report nobody can read is one expedition missing from the
+            # combined one. It is not a reason to build no page at all - and the
+            # usual cause is a copy that was interrupted, which says so here
+            # rather than as a traceback from a parquet reader.
+            logger.warning("skipping %s: %s", path.name, _why_unreadable(path, exc))
+            continue
         # Which expedition a row came from has to survive the concatenation, or
         # the combined report can group by everything except the thing a reader
         # most wants to group by.
@@ -955,11 +963,56 @@ def combine(root: Path) -> Optional[Path]:
 
 # ── site ──────────────────────────────────────────────────────────────────────
 
+def _why_unreadable(path: Path, exc: Exception) -> str:
+    """Say what is wrong with a parquet in the words of the thing that broke it.
+
+    A parquet ends with the same four bytes it starts with, so a file that does not
+    is one whose writing stopped early - which on a cluster means a `publishDir`
+    copy that was interrupted, and the fix is to merge that expedition again rather
+    than to read anything about parquet specifications.
+    """
+    try:
+        with path.open("rb") as file:
+            file.seek(-4, 2)
+            if file.read(4) != b"PAR1":
+                size = path.stat().st_size / 1e9
+                return (f"the file is cut short ({size:.2f} GB and no footer) - "
+                        f"writing it was interrupted. Merge {path.stem} again.")
+    except Exception:
+        pass
+    return str(exc)
+
+
+def unreadable(root: Path) -> List[Path]:
+    """The reports in a collection that no reader is going to get through.
+
+    Checked before anything long starts, because the alternative is finding out
+    from a traceback several minutes into a site build.
+    """
+    broken = []
+    for path in sorted((root / "parquet").glob("*.parquet")):
+        try:
+            with path.open("rb") as file:
+                if file.read(4) != b"PAR1":
+                    broken.append(path)
+                    continue
+                file.seek(-4, 2)
+                if file.read(4) != b"PAR1":
+                    broken.append(path)
+        except Exception:
+            broken.append(path)
+    return broken
+
+
 def build_site(root: Path) -> int:
     """A static viewer beside the parquets, and the page that indexes them."""
     from pixel_patrol_base import api
 
     from pixel_patrol_deepsea.catalogue_page import write_assets, write_catalogue_page
+
+    # Said once, at the top, where it can still be acted on.
+    for path in unreadable(root):
+        print(f"! {path.name}: {_why_unreadable(path, ValueError('unreadable'))}")
 
     # Always rebuilt, never skipped if it happens to exist. The site carries its own
     # copy of every widget, so a viewer left over from an earlier run serves the

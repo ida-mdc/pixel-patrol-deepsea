@@ -122,8 +122,15 @@ def _progress_of(root: Path, expedition_id: str, entry) -> Progress:
             pass
     report = root / "parquet" / f"{expedition_id}.parquet"
     if report.is_file():
-        row.report = report
-        _read_report(report, row)
+        try:
+            _read_report(report, row)
+            row.report = report
+        except Exception as exc:
+            # A report that cannot be read is an expedition with no report, which
+            # this page has always known how to say. Dying here would mean no page
+            # for any of the others.
+            logging.getLogger(__name__).warning(
+                "cannot read %s, leaving it out: %s", report.name, exc)
     # How many recordings are in the report, not how many part files happen to sit
     # next to it: the report is the artefact, and a scheduler that runs the page in
     # its own directory will have the report there and not the parts.

@@ -118,3 +118,39 @@ def test_row_groups_are_cut_by_weight_and_not_by_row_count(tmp_path):
     written = pq.ParquetFile(tmp_path / "out.parquet")
     assert written.num_row_groups == 1, "400 slim rows is not 48 MB of anything"
     assert written.metadata.num_rows == 400
+
+
+def test_a_report_cut_short_is_named_rather_than_thrown(tmp_path):
+    """What a killed `publishDir` copy leaves behind.
+
+    Three expeditions were published that way the second Nextflow aborted: a
+    gigabyte each, and no footer. The site build died in a parquet reader several
+    minutes in, which says nothing about which file or what to do about it.
+    """
+    from pixel_patrol_deepsea.collect import _why_unreadable, unreadable
+
+    (tmp_path / "parquet").mkdir(parents=True)
+    good = _part(tmp_path / "parquet", "EX2107", 4)
+    cut = tmp_path / "parquet" / "EX1606.parquet"
+    cut.write_bytes(good.read_bytes()[:-400])
+    assert [p.name for p in unreadable(tmp_path)] == ["EX1606.parquet"]
+    said = _why_unreadable(cut, ValueError("boom"))
+    assert "cut short" in said and "Merge EX1606 again" in said
+
+
+def test_the_combined_report_leaves_out_what_it_cannot_read(tmp_path, capsys):
+    """One unreadable expedition is one expedition missing from the report that
+    spans them - not a collection with no page."""
+    import polars as pl
+
+    from pixel_patrol_deepsea.collect import EVERYTHING, combine
+
+    (tmp_path / "parquet").mkdir(parents=True)
+    for name in ("EX2107", "EX2301"):
+        _part(tmp_path / "parquet", name, 5)
+    cut = tmp_path / "parquet" / "EX1606.parquet"
+    cut.write_bytes((tmp_path / "parquet" / "EX2107.parquet").read_bytes()[:-400])
+    assert combine(tmp_path) is not None
+    together = pl.read_parquet(tmp_path / "parquet" / f"{EVERYTHING}.parquet")
+    assert len(together) == 10
+    assert "EX1606" not in set(together["expedition"].to_list())
