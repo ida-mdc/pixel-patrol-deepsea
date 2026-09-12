@@ -160,10 +160,11 @@ def test_the_page_says_who_is_responsible_for_it(tmp_path):
     page = render(_two_expeditions(tmp_path))
     imprint = page[page.index('<section class="imprint"'):]
     said = " ".join(re.sub(r"<[^>]+>", " ", imprint).split())
-    for word in ("§5 DDG", "Max-Delbrück-Centrum", "13125 Berlin",
+    for word in ("§5 DDG", "Deborah Schmidt", "Max-Delbrück-Centrum", "13125 Berlin",
                  "at your own risk", "No footage is hosted here",
-                 "ella.bahry@mdc-berlin.de"):
+                 "deborah.schmidt@mdc-berlin.de"):
         assert word in said, word
+    assert "+49" not in said and "Phone" not in said
 
 
 def test_the_expedition_name_is_the_link_to_the_expedition(tmp_path):

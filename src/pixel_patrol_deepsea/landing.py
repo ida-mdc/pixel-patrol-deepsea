@@ -227,12 +227,12 @@ def render(rows, index: Optional[Dict] = None, scores: Optional[Dict] = None) ->
     <div class="imprint-grid">
       <div>
         <h3>Responsible (§5 DDG)</h3>
-        <p>Deborah Schmidt and Ella Bahry<br>
+        <p>Deborah Schmidt<br>
            Helmholtz Imaging / Max-Delbrück-Centrum für Molekulare Medizin in der
            Helmholtz-Gemeinschaft (MDC)<br>
            Robert-Rössle-Straße 10, 13125 Berlin, Germany<br>
-           <a href="mailto:ella.bahry@mdc-berlin.de">ella.bahry@mdc-berlin.de</a>
-           · +49 178 1449289</p>
+           <a href="mailto:deborah.schmidt@mdc-berlin.de"
+             >deborah.schmidt@mdc-berlin.de</a></p>
       </div>
       <div>
         <h3>Liability</h3>
