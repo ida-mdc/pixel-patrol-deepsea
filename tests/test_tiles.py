@@ -198,6 +198,6 @@ def test_a_transcoded_copy_is_still_the_recording_that_was_listed(tmp_path):
     (tmp_path / "manifests").mkdir(parents=True, exist_ok=True)
     (tmp_path / "manifests" / "EX2107.json").write_text(_json.dumps({"videos": [
         "https://ncei/EX2107_VID_Low.mp4", "https://ncei/EX2107_VID_Low_OTHER.mp4"]}))
-    got = _where(tmp_path, "EX2107", ["EX2107_VID_Low_10fps.mp4"])
+    got = _where(tmp_path, "EX2107", ["EX2107_VID_Low_10fps.mp4"], {})
     assert got["videos"] == {
         "EX2107_VID_Low_10fps.mp4": "https://ncei/EX2107_VID_Low.mp4"}

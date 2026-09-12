@@ -911,6 +911,17 @@ def build_site(root: Path) -> int:
     combine(root)
     _write_taxonomy(root)
     write_assets(root)
+    # The collection's own colours, one stripe per recording, which the page opens
+    # on. Seconds, and it reads no pictures - the colours are columns the processors
+    # already measured.
+    try:
+        from pixel_patrol_deepsea.banner import build as build_banner
+
+        drawn = build_banner(root)
+        if drawn:
+            print(f"banner -> {drawn}")
+    except Exception as exc:
+        logger.warning("could not draw the colour banner: %s", exc)
     # Every animal's picture, out of the reports and into a store the page can read
     # a screenful at a time. This is the slow part of a site build - it reads every
     # report - and it is what makes the page independent of how much was found.

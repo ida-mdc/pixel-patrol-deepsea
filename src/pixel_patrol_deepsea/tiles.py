@@ -15,6 +15,8 @@ So the crops come out of the reports and into a store beside them, paged:
                               second, confidence, agreement, looks, duration
     tiles/<taxon>/p0.jpgs     their sixty crops, end to end, raw JPEG
     tiles/<taxon>/p0.clips    the frames that animate them, end to end
+    tiles/reels/<recording>    every animal in one recording, and every look the
+                               detector had at it, for the viewer the page opens
 
 Three files per page, not one per picture. A page is one request for a screenful of
 stills, and a page nobody scrolls to is never fetched; hovering a tile fetches its
@@ -92,6 +94,9 @@ def build(root: Path, expeditions: Optional[List[Path]] = None) -> Dict:
     # expedition -> the recordings its animals came out of, for the URLs and the
     # frame size the page needs to play a moment back and draw a box on it.
     seen: Dict[str, set] = {}
+    # (expedition, recording) -> every animal in it, for the page's own little
+    # viewer: one dive, playing, with every box that belongs on screen.
+    reels: Dict[tuple, List[dict]] = {}
     for report in reports:
         expedition = report.stem
         try:
@@ -127,6 +132,14 @@ def build(root: Path, expeditions: Optional[List[Path]] = None) -> Dict:
             frames.setdefault(track.taxon, []).append(
                 list(clip.crops[:MOST_FRAMES]) if clip else [])
             seen.setdefault(expedition, set()).add(track.recording)
+            # ...and again by the recording it came out of, which is how the page
+            # shows a reader watching one dive what else is on screen.
+            reels.setdefault((expedition, track.recording), []).append({
+                "t": track.taxon, "s": entry["s"], "c": entry["c"],
+                "d": entry["d"], "n": entry["n"],
+                "was": (track.taxon, len(found[track.taxon]) - 1),
+                "k": _looks(track),
+            })
         logger.info("tiles: %s gave %d animals", expedition, len(tracks))
 
     # The store is written whole. Leaving a previous build's pages behind would
@@ -136,8 +149,13 @@ def build(root: Path, expeditions: Optional[List[Path]] = None) -> Dict:
     store.mkdir(parents=True, exist_ok=True)
 
     counts: Dict[str, int] = {}
+    # (taxon, the order it was found in) -> the page and place it ended up in, so a
+    # reel can point at a tile without holding a second copy of its picture.
+    placed: Dict[tuple, Tuple[int, int]] = {}
     for taxon, animals in found.items():
         order = sorted(range(len(animals)), key=lambda i: -animals[i]["c"])
+        for at, was in enumerate(order):
+            placed[(taxon, was)] = (at // PER_PAGE, at % PER_PAGE)
         animals = [animals[i] for i in order]
         moving = [frames[taxon][i] for i in order]
         where = store / slug(taxon)
@@ -148,10 +166,12 @@ def build(root: Path, expeditions: Optional[List[Path]] = None) -> Dict:
                         moving[first:first + PER_PAGE])
         counts[taxon] = len(animals)
 
+    takes = _write_reels(store, reels, placed)
     index = {"tree": _tree(counts, taxonomy),
              "taxa": {taxon: _about(taxon, n, taxonomy)
                       for taxon, n in sorted(counts.items())},
-             "where": {expedition: _where(root, expedition, recordings)
+             "where": {expedition: _where(root, expedition, recordings,
+                                          takes.get(expedition, {}))
                        for expedition, recordings in sorted(seen.items())}}
     (store / "index.json").write_text(json.dumps(index, separators=(",", ":")))
     logger.info("tiles: %d taxa, %d animals", len(counts), sum(counts.values()))
@@ -210,7 +230,61 @@ def _write_page(where: Path, page: int, animals: List[dict],
         (where / f"p{page}.clips").write_bytes(bytes(clips))
 
 
-def _where(root: Path, expedition: str, recordings) -> dict:
+def _looks(track) -> List[List]:
+    """Every look the detector had at one animal: when, and where in the frame.
+
+    The page draws the box as the recording plays, so one box for the whole time an
+    animal was in view is no good - an animal that swims leaves it within a second.
+    These are the moments the detector actually looked, in order, and the page moves
+    the box between them.
+    """
+    looks = []
+    for sighting in sorted(track.sightings, key=lambda s: s.second):
+        box = [int(v) for v in (sighting.box or ())][:4]
+        if len(box) == 4:
+            looks.append([round(float(sighting.second), 1), *box])
+    return looks
+
+
+def _write_reels(store: Path, reels: Dict[tuple, List[dict]],
+                 placed: Dict[tuple, Tuple[int, int]]) -> Dict[str, Dict[str, str]]:
+    """One file per recording: every animal found in it, and when.
+
+    The pages are cut by taxon, which is the right shape for "show me every sponge"
+    and the wrong one for "what else is in this dive" - and that is the question
+    somebody has the moment a recording is playing in front of them. Both are the
+    same forty-five thousand animals; this is the other index over them.
+
+    A reel holds no pictures. Each animal points at the tile it already has, by page
+    and place, so the viewer can show the crop of whatever is clicked without the
+    store carrying it twice.
+    """
+    where = store / "reels"
+    where.mkdir(parents=True, exist_ok=True)
+    takes: Dict[str, Dict[str, str]] = {}
+    taken = set()
+    for (expedition, recording), animals in sorted(reels.items()):
+        name = slug(f"{expedition}--{recording}")
+        # Two recordings whose names differ only in punctuation would slug to one
+        # file, and the second would quietly become the first one's reel.
+        while name in taken:
+            name += "-2"
+        taken.add(name)
+        listed = []
+        for animal in sorted(animals, key=lambda a: a["s"]):
+            page, at = placed.get(animal["was"], (None, None))
+            if page is None:
+                continue
+            listed.append({"t": animal["t"], "s": animal["s"], "c": animal["c"],
+                           "d": animal["d"], "n": animal["n"],
+                           "g": slug(animal["t"]), "p": page, "at": at,
+                           "k": animal["k"]})
+        (where / f"{name}.json").write_text(json.dumps(listed, separators=(",", ":")))
+        takes.setdefault(expedition, {})[recording] = name
+    return takes
+
+
+def _where(root: Path, expedition: str, recordings, takes: Dict[str, str]) -> dict:
     """How to play a moment back: the recordings' URLs, and the frame they are in.
 
     Nothing is copied or re-hosted. The page opens the archive's own file at the
@@ -251,7 +325,8 @@ def _where(root: Path, expedition: str, recordings) -> dict:
     if len(videos) < len(recordings):
         logger.info("tiles: %s has no listed URL for %d of %d recordings",
                     expedition, len(recordings) - len(videos), len(recordings))
-    return {"frame": [wide, high], "videos": videos}
+    return {"frame": [wide, high], "videos": videos,
+            "takes": {name: takes[name] for name in sorted(takes)}}
 
 
 def _about(taxon: str, count: int, taxonomy: Dict) -> dict:

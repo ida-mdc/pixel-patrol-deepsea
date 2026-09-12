@@ -582,32 +582,60 @@ contact sheet. Cyan is the only accent and the footage chose it; amber is kept f
 one thing that has to interrupt somebody.
 
 - **01 the collection** — what this is in three sentences, over the figures saying how
-  much of it there is.
-- **the disclaimer** — one line, and six short ones under it, all of them visible.
-  Behind a summary they were read by nobody, which is the same as not writing them.
+  much of it there is, with the warning beside it: a prototype for pulling statistics
+  and animal names out of unwatched footage, and five lines on what that is worth.
+  Behind them, the collection's own colours (below).
 - **02 what is in it** — half a sunburst against the page's left edge, a button per
   phylum above it (the rank the reports colour and split by), and beside it every
   picture of whatever branch is in focus, most confident first, a screenful per fetch,
   each tile playing the seconds around its own animal when you hover it — with the
   confidence and how long the animal stayed in view over the top of it and the name
   along the bottom. Clicking the middle of the ring steps back out.
+- **what you kept** — the sightings somebody starred, under the pictures they came
+  from, and a CSV of them.
 - **03 the expeditions** — how many of each one's recordings are listed and how many
   were read, footage analysed, animals or slices with animals, names, and the way into
   its own report; above them all, the report that spans every expedition, opened
-  grouped by `expedition`, with no pictures in it.
-- **04 whose work this is.**
-- **05 what you kept** — the sightings somebody starred, and a CSV of them.
+  grouped by `expedition`, with no pictures in it. The expedition's name links to the
+  ship's own page; the report is the loud one.
+- **04 whose work this is**, and an **imprint**.
 
 **Clicking a picture opens the footage there.** The archives serve their own files over
 byte ranges — NOAA's with `Access-Control-Allow-Origin: *`, and a 900 MB observatory
 recording seeks as happily as a 70 MB dive clip — so the page opens one at the second
-the animal was found, two seconds early, and draws the detector's own box over it.
-Nothing is copied or re-hosted: `tiles/index.json` carries the URL the recording was
-listed from and the frame its box is measured in, and where the manifest named no URL
-the crop is shown and the overlay says so. The star beside a tile keeps that sighting
-in `localStorage` — no account, nothing sent anywhere — and section 05 lists them
-again, with a CSV carrying the taxon, the recording, the second, the box and the URL,
-which is enough for somebody else to find the same moment in the archive.
+the animal was found, two seconds early. Nothing is copied or re-hosted:
+`tiles/index.json` carries the URL the recording was listed from and the frame its
+boxes are measured in, and where the manifest named no URL the crop is shown and the
+overlay says so.
+
+**And it keeps playing.** `tiles/reels/<recording>.json` is the other index over the
+same animals — not by taxon but by the recording they came out of, with every look the
+detector had at each: when, and where in the frame. So the overlay draws every animal
+that belongs on screen at the second being played, moving the box between the looks
+rather than pinning it where it was first drawn, and a click on any of them hands the
+stage over without interrupting the video. 285 reels, 9.5 MB, the biggest 193 KB —
+one fetch per recording somebody opens. Only the animal in focus is named on screen: a
+crowded seabed puts twenty-five boxes up at once.
+
+A sighting is a place in the page, so it is in the address bar — `#a=EX2301/…mp4/259.4`
+reopens the recording there with that animal in focus, which is what somebody sending
+the link meant to send. The star beside a tile keeps that sighting in `localStorage` —
+no account, nothing sent anywhere — and the favourites section lists them again, with a
+CSV carrying the taxon, the recording, the second, the box and the URL, which is enough
+for somebody else to find the same moment in the archive.
+
+```bash
+python -m pixel_patrol_deepsea.banner collection/   # assets/colours.png
+```
+
+**The header is the collection.** Every recording that has been read, in the order it
+was filmed, as one vertical stripe — a band per slice, top to bottom, of the mean
+colour that recording had at that moment. Side by side they are two decades of diving:
+the blue-green columns are midwater and lit seabed, the near-black ones are transits
+and night, and the occasional warm one is a vehicle's own hardware in front of its
+lamps. Nothing is stretched to fill the palette, which is why the whole thing is so
+nearly cyan. It is computed from columns the processors already wrote — seconds, no
+footage read — because the alternative is a browser opening six gigabytes of parquet.
 
 Every link is a `?data=` URL into the viewer next to it, so opening a report needs a
 static file server and nothing else — no Python, no port, no viewer process. Nothing

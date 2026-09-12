@@ -64,22 +64,25 @@ def test_the_way_into_the_collection_says_what_it_opens(tmp_path):
     assert "No pictures" in page and "grouped by expedition" in page
 
 
-def test_the_disclaimer_says_all_of_it_where_it_can_be_seen(tmp_path):
-    """Six headed paragraphs became six lines, and then stopped hiding.
+def test_the_disclaimer_stands_in_the_header(tmp_path):
+    """Six headed paragraphs became six lines, stopped hiding, and moved up.
 
-    Behind a summary they were read by nobody, which is the same as not writing
-    them. One line each, in the box, visible.
+    It reads before the thing it is a warning about rather than after it, and it
+    says what the page is: a prototype, not a survey.
     """
     page = render(_two_expeditions(tmp_path))
-    warning = page[page.index('<section class="warning"'):
-                   page.index("</section>", page.index('<section class="warning"'))]
-    assert "<details" not in warning and "<summary" not in warning
-    assert warning.count("<li>") == 6
+    hero = page[page.index('<section class="hero"'):page.index("</section>")]
+    alarm = hero[hero.index('<aside class="alarm"'):]
+    assert "<details" not in page and "<summary" not in page
+    assert "Prototype" in alarm
+    said = " ".join(re.sub(r"<[^>]+>", " ", alarm).split())
+    assert "pulling statistics and animal names" in said
+    assert alarm.count("<li>") == 5
     # Short: the whole box is nearer a paragraph than a page.
-    assert len(re.sub(r"<[^>]+>", " ", warning).split()) < 200
-    for said in ("upper bound", "never trained on", "six points of recall",
-                 "about 1.8 entries", "lamps"):
-        assert said in warning, said
+    assert len(re.sub(r"<[^>]+>", " ", alarm).split()) < 130
+    for said in ("shortlist", "never read", "upper bounds", "six points of recall",
+                 "lamps"):
+        assert said in alarm, said
 
 
 def test_the_taxonomy_is_grouped_the_way_the_reports_group_it(tmp_path):
@@ -93,7 +96,7 @@ def test_the_taxonomy_is_grouped_the_way_the_reports_group_it(tmp_path):
 
     assert GROUP_RANK == "phylum"
     page = render(_two_expeditions(tmp_path))
-    assert "Grouped by phylum" in page
+    assert "grouped by the ranks the World" in page
     # The kingdom's children are the phyla, and everything is one of the buttons.
     assert "for (const phylum of kingdom.children" in page
     assert "path: [], all: true" in page
@@ -138,3 +141,35 @@ def test_the_page_describes_nothing_in_its_own_words(tmp_path):
     # nobody else is going to explain.
     assert "const OURS" in page
     assert page.count("Undecided:") == 1 and page.count("Unplaced:") == 1
+
+
+def test_the_header_opens_on_the_collection_s_own_colours(tmp_path):
+    """The banner is the data: one stripe per recording, precomputed by `banner.py`
+    because the alternative is reading six gigabytes of parquet in a browser."""
+    from pixel_patrol_deepsea.landing import BANNER
+
+    page = render(_two_expeditions(tmp_path))
+    hero = page[page.index('<section class="hero"'):page.index("</section>")]
+    assert f'url("{BANNER}")' in page
+    assert "one stripe each" in hero
+    # ...and the drawing that used to be here is now down with the credit for it.
+    assert page.index('class="patrol"') > page.index('<section class="credits"')
+
+
+def test_the_page_says_who_is_responsible_for_it(tmp_path):
+    page = render(_two_expeditions(tmp_path))
+    imprint = page[page.index('<section class="imprint"'):]
+    said = " ".join(re.sub(r"<[^>]+>", " ", imprint).split())
+    for word in ("§5 DDG", "Max-Delbrück-Centrum", "13125 Berlin",
+                 "at your own risk", "No footage is hosted here",
+                 "ella.bahry@mdc-berlin.de"):
+        assert word in said, word
+
+
+def test_the_expedition_name_is_the_link_to_the_expedition(tmp_path):
+    """The report is the point of the row, so it gets the loud button at the end;
+    the ship's own page is what the expedition is called."""
+    page = render(_two_expeditions(tmp_path))
+    row = page[page.index("<tbody>"):page.index("</tbody>")]
+    assert '<b><a class="mission"' in row
+    assert row.index('class="mission"') < row.index('class="open"')

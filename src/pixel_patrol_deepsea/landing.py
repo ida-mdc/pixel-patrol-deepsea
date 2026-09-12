@@ -56,6 +56,9 @@ from datetime import datetime
 from typing import Dict, Optional
 
 ASSET = "assets/pixel-patrol-deepsea.png"
+# Every recording that has been read, in the order it was filmed, one stripe each.
+# Written by `banner.py` from the colours the processors measured.
+BANNER = "assets/colours.png"
 
 
 def render(rows, index: Optional[Dict] = None, scores: Optional[Dict] = None) -> str:
@@ -91,10 +94,6 @@ def render(rows, index: Optional[Dict] = None, scores: Optional[Dict] = None) ->
 </header>
 <main>
   <section class="hero">
-    <div class="hero-art">
-      <img src="{ASSET}" alt="A diver with a tablet and a torch, an anglerfish, and a
-           hydrothermal vent" loading="eager">
-    </div>
     <div class="hero-say">
       <p class="chapter">01 / the collection</p>
       <h1>Somebody has to<br>watch the tapes.</h1>
@@ -103,6 +102,20 @@ def render(rows, index: Optional[Dict] = None, scores: Optional[Dict] = None) ->
          This reads it a frame a second and asks two questions: what moved, and
          what was it.</p>
     </div>
+    <aside class="alarm" id="warning">
+      <p class="alarm-line"><b>Prototype</b> An experiment in pulling statistics and
+         animal names out of footage nobody has time to watch. Nothing on this page
+         has been checked by a person.</p>
+      <ul>
+        <li>Every name is one detector's guess: a shortlist, not an identification.</li>
+        <li>Most frames were never read - a sample of dives, a look a second.</li>
+        <li>Counts are upper bounds; one animal is often counted twice.</li>
+        <li>640×360 footage costs the detector about six points of recall.</li>
+        <li>Colour is the vehicle's lamps as much as the animal.</li>
+      </ul>
+    </aside>
+    <p class="banner-says">every recording that has been read, one stripe each, in
+       the colours it was filmed in - oldest on the left</p>
   </section>
 
   <div class="readout">
@@ -113,37 +126,15 @@ def render(rows, index: Optional[Dict] = None, scores: Optional[Dict] = None) ->
     {_cell(f"{taxa}", "names given")}
   </div>
 
-  <section class="warning" id="warning">
-    <div class="alarm">
-      <p class="alarm-line"><b>Disclaimer</b> Nothing here has been checked by anyone
-         who knows these animals, and every figure on the page is an upper bound.</p>
-      <ul>
-        <li>A demonstration that unwatched video can be read and indexed. Not a survey.</li>
-        <li>Every name is one detector's guess on footage it never trained on: a
-            shortlist, not an identification. On labelled specimens it got two of five,
-            and was wrong at 0.94 confidence on the rest.</li>
-        <li>Most frames were never read - a sample of each expedition's dives, and a
-            look about once a second.</li>
-        <li>One animal can be counted twice: the linking is geometric and splits the
-            average animal across about 1.8 entries.</li>
-        <li>The footage is published at 640×360, some older tapes at 360×240, which
-            costs the detector about six points of recall.</li>
-        <li>Colour is the vehicle's lamps as much as the animal - water takes the red
-            out within metres.</li>
-      </ul>
-    </div>
-  </section>
-
   <section class="explore" id="explore">
     <header class="explore-head">
       <p class="chapter">02 / what is in it</p>
       <h2>Everything that was found</h2>
-      <p class="lede">Every name here is one object detector's - a FathomNet YOLOv5
-         checkpoint, 499 classes, run on a frame a second - and the ranks above it
-         come from the World Register of Marine Species. Grouped by phylum, the way
-         the reports are. Click a ring to go further in and the middle of it to come
-         back out; hover a picture to watch the seconds around the animal, or click
-         it to open the recording there.</p>
+      <p class="lede">Named by one object detector - a FathomNet YOLOv5 checkpoint,
+         499 classes, on a frame a second - and grouped by the ranks the World
+         Register of Marine Species puts above those names. Click a ring to go in
+         and the middle of it to come out; hover a picture to watch it move, or
+         click it to open the recording there.</p>
       <nav class="jumps" id="jumps" aria-label="the phyla this collection found"></nav>
       <nav class="crumbs" id="crumbs" aria-label="the branch in focus"></nav>
     </header>
@@ -161,6 +152,21 @@ def render(rows, index: Optional[Dict] = None, scores: Optional[Dict] = None) ->
         <div class="sentinel" id="more"></div>
       </div>
     </div>
+  </section>
+
+  <section class="kept" id="kept" hidden>
+    <p class="chapter">what you kept</p>
+    <h2>Your favourites</h2>
+    <p class="lede">Starred sightings, kept in this browser and sent nowhere. The CSV
+       carries the name, the recording, the second and the box the detector drew,
+       which is enough for somebody else to find the moment in the archive's own
+       file.</p>
+    <p class="kept-does">
+      <a class="cta" id="keptCsv" download="deepsea-favourites.csv" href="#"
+         >download the csv &darr;</a>
+      <button class="quiet" id="keptClear">forget all of them</button>
+    </p>
+    <div class="wall kept-wall" id="keptWall"></div>
   </section>
 
   <section class="fleet">
@@ -205,28 +211,57 @@ def render(rows, index: Optional[Dict] = None, scores: Optional[Dict] = None) ->
            only where it actually has an article. Nothing on this page describes an
            animal in its own words.</p>
       </div>
-      <div>
+      <div class="credit-tool">
         <h3>This tool</h3>
         <p><a href="https://github.com/ida-mdc/pixel-patrol">Pixel Patrol</a> reads
            image and video collections and reports what is in them; this is its
-           deep-sea extension. The drawing is of Pixel Patrol herself, gone diving.</p>
+           deep-sea extension. That is Pixel Patrol herself, gone diving.</p>
+        <img class="patrol" src="{ASSET}" alt="Pixel Patrol with a tablet and a
+             torch, an anglerfish, and a hydrothermal vent" loading="lazy">
       </div>
     </div>
   </section>
 
-  <section class="kept" id="kept" hidden>
-    <p class="chapter">05 / what you kept</p>
-    <h2>Your favourites</h2>
-    <p class="lede">Starred sightings, kept in this browser and sent nowhere. The CSV
-       carries the name, the recording, the second and the box the detector drew,
-       which is enough for somebody else to find the moment in the archive's own
-       file.</p>
-    <p class="kept-does">
-      <a class="cta" id="keptCsv" download="deepsea-favourites.csv" href="#"
-         >download the csv &darr;</a>
-      <button class="quiet" id="keptClear">forget all of them</button>
-    </p>
-    <div class="wall kept-wall" id="keptWall"></div>
+  <section class="imprint">
+    <p class="chapter">imprint</p>
+    <div class="imprint-grid">
+      <div>
+        <h3>Responsible (§5 DDG)</h3>
+        <p>Deborah Schmidt and Ella Bahry<br>
+           Helmholtz Imaging / Max-Delbrück-Centrum für Molekulare Medizin in der
+           Helmholtz-Gemeinschaft (MDC)<br>
+           Robert-Rössle-Straße 10, 13125 Berlin, Germany<br>
+           <a href="mailto:ella.bahry@mdc-berlin.de">ella.bahry@mdc-berlin.de</a>
+           · +49 178 1449289</p>
+      </div>
+      <div>
+        <h3>Liability</h3>
+        <p>Pixel Patrol is provided free of charge. The MDC does not guarantee the
+           accuracy of the metrics or of the graphical representation of the data
+           processed and is not liable for any errors of the software. Use of the
+           service and any subsequent use of the generated representations is at
+           your own risk. By using the service, you agree to indemnify and hold the
+           MDC harmless from and against any third-party claims that may arise as a
+           result of your use of it.</p>
+      </div>
+      <div>
+        <h3>The data is not ours</h3>
+        <p>No footage is hosted here and none is redistributed: every recording is
+           played from the archive that published it, and every link on this page
+           points there. NOAA Ocean Exploration's video is in the public domain;
+           MBARI's DeepSea-MOT is CC BY 4.0; the Axial Seamount camera belongs to
+           the Ocean Observatories Initiative's Regional Cabled Array at the
+           University of Washington. Cite the archive, not this page.</p>
+      </div>
+      <div>
+        <h3>What was made here</h3>
+        <p>The detections, the names and the figures - from
+           <a href="https://fathomnet.org/">FathomNet</a>'s YOLOv5 weights (CC BY
+           4.0), the World Register of Marine Species (CC BY) and Wikipedia's
+           article titles (CC BY-SA). They are a machine's reading of somebody
+           else's footage, offered as a prototype and not as a survey.</p>
+      </div>
+    </div>
   </section>
 
   <footer>
@@ -240,14 +275,16 @@ def render(rows, index: Optional[Dict] = None, scores: Optional[Dict] = None) ->
   <div class="stage-box" role="dialog" aria-modal="true"
        aria-label="the moment this animal was found">
     <p class="stage-head">
+      <img class="stage-crop" id="stageCrop" alt="">
       <b id="stageName"></b><span id="stageFacts"></span>
       <button class="star" id="stageStar" title="keep this sighting">&#9734;</button>
       <button class="shut" id="stageShut" title="close (esc)">&#10005;</button>
     </p>
     <div class="stage-play" id="stagePlay"></div>
     <p class="stage-foot">
-      <label><input type="checkbox" id="stageBox" checked> the box the detector
-        drew, at the second it drew it</label>
+      <button class="quiet" id="stageBack">&#8630; back to the moment</button>
+      <label><input type="checkbox" id="stageBox" checked> the boxes, as the
+        detector drew them</label>
       <a id="stageFile" target="_blank" rel="noopener">the recording itself &nearr;</a>
       <span class="stage-note" id="stageNote"></span>
     </p>
@@ -314,13 +351,20 @@ def _lookup(index: Optional[Dict]) -> str:
                        if name in articles}, separators=(",", ":"))
 
 
-def _mission(row) -> str:
-    """The expedition's own page, where it has one that still answers."""
+def _named(row) -> str:
+    """The expedition's name, linked to its own page where it has one.
+
+    The link used to sit at the far end of the row, next to the report, competing
+    with it. An expedition's name is the obvious thing to click to read about the
+    expedition, and it leaves the end of the row to the report.
+    """
+    title = html.escape(row.title)
     link = getattr(row, "link", "")
     if not link:
-        return ""
-    return (f'<a class="mission" href="{html.escape(link, quote=True)}" '
-            f'title="what the ship was doing">mission &nearr;</a>')
+        return f"<b>{title}</b>"
+    return (f'<b><a class="mission" href="{html.escape(link, quote=True)}" '
+            f'target="_blank" rel="noopener" title="what the ship was doing"'
+            f'>{title} &nearr;</a></b>')
 
 
 def _fleet_row(row) -> str:
@@ -336,13 +380,13 @@ def _fleet_row(row) -> str:
                f'{row.with_animals:,}<span class="sub">slices</span>'
                if row.with_animals else "—")
     return f"""<tr>
-      <td><b>{html.escape(row.title)}</b><span class="sub">{html.escape(row.id)}</span></td>
+      <td>{_named(row)}<span class="sub">{html.escape(row.id)}</span></td>
       <td class="num">{html.escape(row.date or '—')}</td>
       <td class="num">{read}</td>
       <td class="num">{_clock(row.seconds)}</td>
       <td class="num">{animals}</td>
       <td class="num">{taxa}</td>
-      <td class="num">{_link(row)}{_mission(row)}</td>
+      <td class="num">{_link(row)}</td>
     </tr>"""
 
 
@@ -353,6 +397,10 @@ STYLE = """
      more of the red out, so a deep-sea frame is cyan whatever is in it - measured
      across this collection, the hue sits between 150 and 240 degrees. */
   --glow: #35d6f5; --warn: #ffb020;
+  /* The one thing on the page that is not the footage's own colour, which is the
+     point of it: a report to open is not a taxon to click, and cyan on cyan made
+     the two the same thing. */
+  --coral: #ff7a6a;
   --line: rgba(140,190,220,.16); --card: rgba(255,255,255,.03);
   /* Figures, labels and stamps are monospace throughout: this is a record of work
      and it should read like the log it is. */
@@ -381,23 +429,27 @@ a { color: var(--glow); }
 .chapter::before { content: ""; display: inline-block; width: 2rem; height: 1px;
                    background: var(--glow); vertical-align: .28em; margin-right: .7rem;
                    opacity: .55; }
-.hero { display: grid; grid-template-columns: minmax(0, 24rem) minmax(0, 1fr);
-        align-items: center; gap: 3.5rem; padding: 3.5rem 6vw 3rem;
-        background:
-          radial-gradient(90% 120% at 8% 0%, #0c2b44 0%, transparent 62%),
-          linear-gradient(180deg, var(--abyss-2), var(--abyss) 78%); }
-.hero-art { justify-self: center; max-width: 24rem; }
-/* Black line art on white, which is the wrong way round down here. Inverted, the
-   paper is very nearly black but not quite - and `screen` lifted that last level or
-   two, which on a page this dark is a visible rectangle around the drawing. The
-   contrast step clips the paper to exactly black, where screening it is a no-op. */
-.hero-art img { width: 100%; height: auto;
-                filter: invert(1) contrast(1.2) brightness(1.04);
-                mix-blend-mode: screen; opacity: .92; }
+/* The collection's own colours behind the words: one stripe per recording, in the
+   order they were filmed, scrimmed hard enough to read over. It is the data and not
+   a texture - the near-black columns are transits and night, and the warm ones are
+   a vehicle's own hardware in front of its lamps. */
+.hero { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+        align-items: center; gap: 3rem; padding: 3.2rem 6vw 3.4rem;
+        position: relative; overflow: hidden;
+        background-image:
+          linear-gradient(100deg, rgba(4,16,28,.95) 0%, rgba(4,16,28,.8) 32%,
+                          rgba(4,16,28,.5) 62%, rgba(4,16,28,.34) 100%),
+          linear-gradient(180deg, rgba(4,16,28,.3), rgba(4,16,28,.05) 45%,
+                          rgba(4,16,28,.55)),
+          url("assets/colours.png"); background-size: cover;
+        background-position: center; }
 .hero-say { max-width: 38rem; }
 .hero h1 { font-size: clamp(1.9rem, 3.4vw, 2.7rem); }
 .lede { color: var(--dim); max-width: 34rem; }
-.hero .lede { margin: 1.2rem 0 1.8rem; }
+.hero .lede { margin: 1.2rem 0 0; color: #b9d2e4; }
+.banner-says { position: absolute; left: 6vw; bottom: .6rem; margin: 0;
+               max-width: 30rem; color: rgba(180,205,225,.7);
+               font: .62rem/1.4 var(--mono); letter-spacing: .06em; }
 .cta { display: inline-block; font: .72rem/1 var(--mono); letter-spacing: .14em;
        text-transform: uppercase; text-decoration: none; color: var(--glow);
        border: 1px solid var(--glow); border-left-width: 3px; padding: .7rem 1rem;
@@ -419,22 +471,23 @@ a { color: var(--glow); }
    itself and read as a legal notice - which is how a legal notice gets skipped.
    One line in the warning colour is harder to miss than six, and the six are still
    here for whoever opens them. */
-.warning { padding: 2rem 6vw; }
-.alarm { padding: .9rem 1.2rem 1rem; color: #ffe9c9; max-width: 72rem;
-         border: 1px solid rgba(255,176,32,.4); border-left: 3px solid var(--warn);
-         background: rgba(255,176,32,.07); }
-.alarm-line { margin: 0; font-size: .95rem; }
+/* The warning stands in the header beside the title, where a reader meets it before
+   anything it is a warning about - and where, on a desktop, there was space doing
+   nothing. */
+.alarm { padding: .85rem 1.1rem .95rem; color: #ffe9c9; justify-self: end;
+         max-width: 32rem; border: 1px solid rgba(255,176,32,.4);
+         border-left: 3px solid var(--warn); background: rgba(24,16,6,.82); }
+.alarm-line { margin: 0; font-size: .92rem; }
 .alarm b { color: var(--warn); font: .68rem/1 var(--mono); letter-spacing: .18em;
            text-transform: uppercase; margin-right: .7rem; }
 /* Behind a summary, the six were behind a summary: read by nobody. They are one
    line each now and they are simply there. */
-.alarm ul { margin: .7rem 0 0; padding: 0; list-style: none;
-            display: grid; gap: .3rem .5rem; font-size: .86rem;
+.alarm ul { margin: .6rem 0 0; padding: 0; list-style: none;
+            display: grid; gap: .25rem; font-size: .82rem;
             color: rgba(255,233,201,.78); }
-.alarm li { padding-left: 1.1rem; position: relative; }
+.alarm li { padding-left: 1rem; position: relative; }
 .alarm li::before { content: "—"; position: absolute; left: 0; color: var(--warn);
                     opacity: .7; }
-@media (min-width: 1100px) { .alarm ul { grid-template-columns: 1fr 1fr; } }
 
 /* ── 02 the taxonomy, and the contact sheet beside it ─────────────────────── */
 .explore { padding: 3rem 6vw; border-top: 1px solid var(--line); }
@@ -527,7 +580,7 @@ a { color: var(--glow); }
 .tile:hover .star, .tile:focus-within .star, .tile .star.on { opacity: 1; }
 .tile figcaption { padding-right: 1.4rem; }
 
-/* ── the moment itself ────────────────────────────────────────────────────── */
+/* ── the stage ───────────────────────────────────────────────────────────── */
 /* A 100-pixel crop is not evidence of anything. The seconds around it are, and the
    archive serves its own file over byte ranges, so the page can open one at the
    second the animal was found without copying a frame of it. */
@@ -537,8 +590,13 @@ a { color: var(--glow); }
 .stage[hidden] { display: none; }
 .stage-box { width: min(72rem, 100%); max-height: 92vh; overflow: auto;
              background: var(--abyss-2); border: 1px solid var(--line); }
-.stage-head { display: flex; align-items: baseline; gap: .7rem; margin: 0;
-              padding: .7rem .9rem; border-bottom: 1px solid var(--line); }
+.stage-head { display: flex; align-items: center; gap: .7rem; margin: 0;
+              padding: .55rem .9rem; border-bottom: 1px solid var(--line); }
+/* The crop that was clicked, kept in the corner: at a metre of seabed a box is easy
+   to lose, and this is what the reader came in holding. */
+.stage-crop { width: 2.4rem; height: 2.4rem; object-fit: cover; background: #00121f;
+              flex: none; }
+.stage-crop[hidden] { display: none; }
 .stage-head b { font-size: 1rem; }
 .stage-head span { color: var(--dim); font: .72rem var(--mono); letter-spacing: .04em;
                    font-variant-numeric: tabular-nums; }
@@ -553,14 +611,25 @@ a { color: var(--glow); }
               height: 100%; object-fit: contain; display: block; background: #000; }
 .stage-play svg { position: absolute; inset: 0; width: 100%; height: 100%;
                   pointer-events: none; }
-.stage-play svg rect { fill: none; stroke: var(--glow); stroke-width: 2;
-                       vector-effect: non-scaling-stroke; }
+/* Every animal the detector found in this recording, drawn where it is now. The
+   one in focus is the bright one; the rest are there to be clicked. */
+.stage-play svg { pointer-events: none; }
+.stage-play svg rect { fill: none; stroke: rgba(140,190,220,.55); stroke-width: 1.5;
+                       vector-effect: non-scaling-stroke; cursor: pointer;
+                       pointer-events: all; }
+.stage-play svg rect:hover { stroke: var(--ink); }
+.stage-play svg rect.here { stroke: var(--glow); stroke-width: 2.5; }
+.stage-play svg text { fill: rgba(200,225,240,.85); font-family: var(--mono);
+                       font-size: 9px; paint-order: stroke; stroke: rgba(0,8,16,.85);
+                       stroke-width: 3px; pointer-events: none; }
+.stage-play svg text.here { fill: var(--glow); }
 .stage-play.no-box svg { display: none; }
 .stage-foot { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem 1.2rem;
               margin: 0; padding: .7rem .9rem; color: var(--dim);
               font: .72rem var(--mono); letter-spacing: .04em;
               border-top: 1px solid var(--line); }
 .stage-foot label { display: flex; align-items: center; gap: .4rem; cursor: pointer; }
+.stage-foot .quiet { padding: .35rem .6rem; letter-spacing: .08em; }
 .stage-foot a { text-decoration: none; }
 .stage-note { color: var(--warn); }
 
@@ -604,17 +673,18 @@ a { color: var(--glow); }
                     font-family: var(--mono); }
 /* The report is the point of the row. The expedition's own page is a courtesy
    beside it - it was the louder of the two, which had it backwards. */
-.fleet-table a.open { text-decoration: none; border: 1px solid var(--glow);
+.fleet-table a.open { text-decoration: none; border: 1px solid var(--coral);
                       border-radius: 2px; padding: .34rem .7rem; font-size: .72rem;
-                      white-space: nowrap; background: rgba(53,214,245,.12);
-                      letter-spacing: .06em; }
-.fleet-table a.open:hover { background: rgba(53,214,245,.24); }
-.fleet-table a.mission { color: var(--dim); text-decoration: none; font-size: .7rem;
-                         margin-left: .7rem; white-space: nowrap; }
-.fleet-table a.mission:hover { color: var(--ink); }
+                      white-space: nowrap; background: rgba(255,122,106,.14);
+                      letter-spacing: .06em; color: var(--coral); }
+.fleet-table a.open:hover { background: rgba(255,122,106,.28); }
+.fleet-table a.mission { color: var(--ink); text-decoration: none; }
+.fleet-table a.mission:hover { color: var(--coral); }
 .together { display: flex; flex-wrap: wrap; align-items: center; gap: .9rem;
             margin: 0 0 1.6rem; }
-.together .cta { padding: .8rem 1.1rem; }
+.together .cta { padding: .8rem 1.1rem; color: var(--coral);
+                 border-color: var(--coral); background: rgba(255,122,106,.1); }
+.together .cta:hover { background: rgba(255,122,106,.22); }
 .together span { color: var(--dim); font-size: .84rem; max-width: 30rem; }
 .note { color: var(--dim); font-size: .85rem; margin-top: 1rem; max-width: 46rem; }
 
@@ -627,7 +697,22 @@ a { color: var(--glow); }
                   font-family: var(--mono); letter-spacing: .14em;
                   text-transform: uppercase; font-weight: 400; }
 .credit-grid p { color: var(--dim); font-size: .89rem; margin: 0; }
-a.mission { margin-right: .35rem; }
+/* Black line art on white, which is the wrong way round down here. Inverted, the
+   paper is very nearly black but not quite - and `screen` lifted that last level or
+   two, which on a page this dark is a visible rectangle around the drawing. The
+   contrast step clips the paper to exactly black, where screening it is a no-op. */
+.patrol { display: block; width: 100%; max-width: 15rem; margin-top: .8rem;
+          filter: invert(1) contrast(1.2) brightness(1.04);
+          mix-blend-mode: screen; opacity: .92; }
+.imprint { padding: 2.5rem 6vw 3rem; border-top: 1px solid var(--line); }
+.imprint-grid { display: grid; gap: 1.4rem 2.4rem;
+                grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); }
+.imprint-grid h3 { font-size: .72rem; margin-bottom: .4rem; color: var(--dim);
+                   font-family: var(--mono); letter-spacing: .14em;
+                   text-transform: uppercase; font-weight: 400; }
+/* Scoped to the grid: `.imprint p` also matched the chapter line above it, zeroed
+   its margin, and printed the two on top of each other. */
+.imprint-grid p { color: var(--dim); font-size: .82rem; margin: 0; }
 footer { padding: 2rem 6vw 3.5rem; color: var(--dim); font-size: .82rem;
          border-top: 1px solid var(--line); }
 code { background: var(--card); padding: .1rem .35rem; font-family: var(--mono);
@@ -638,8 +723,9 @@ code { background: var(--card); padding: .1rem .35rem; font-family: var(--mono);
   .readout .cell:nth-child(3) { border-left: 0; padding-left: 6vw; }
 }
 @media (max-width: 900px) {
-  .hero { grid-template-columns: 1fr; gap: 1.5rem; padding: 2rem 6vw; }
-  .hero-art { max-width: 15rem; }
+  .hero { grid-template-columns: 1fr; gap: 1.5rem; padding: 2rem 6vw 2.6rem; }
+  .alarm { justify-self: stretch; max-width: none; }
+  .banner-says { position: static; text-align: left; margin-top: .6rem; }
   .explore-body { grid-template-columns: 1fr; }
   .sun svg { max-height: 22rem; }
   /* One column, and the page's own scroll is the only one worth having. */
@@ -679,7 +765,8 @@ const OURS = {
 
 const state = { index: null, path: [], taxa: [], queue: [], loading: false,
                 done: false, pages: new Map(), clips: new Map(),
-                keptKeys: new Set(), staged: null, csvUrl: '', drawingKept: 0 };
+                keptKeys: new Set(), staged: null, csvUrl: '', drawingKept: 0,
+                reels: new Map(), reelNow: [], rects: new Map(), painted: -1 };
 
 const el = (id) => document.getElementById(id);
 
@@ -690,6 +777,9 @@ const say = (n) => n.toLocaleString();
 const paged = () => window.matchMedia('(min-width: 900px)').matches;
 
 async function boot() {
+  // Read before anything writes: settling the wall rewrites the address bar, and
+  // the moment somebody was sent would be gone before it was opened.
+  const asked = askedFor();
   try {
     state.index = await (await fetch(`${TILES}/index.json`)).json();
   } catch (err) {
@@ -704,6 +794,7 @@ async function boot() {
   watchTheWall();
   wireTheStage();
   drawKept();
+  openAsked(asked);
 }
 
 /* ── the taxonomy, as rings ────────────────────────────────────────────────── */
@@ -813,21 +904,30 @@ function leftover(node, from, to, depth) {
 
 /* ── the address bar ───────────────────────────────────────────────────────── */
 
-/** Where the URL says to be: `#t=Animalia/Porifera`, or `!Porifera` for a rest arc.
+/** Where the URL says to be: `#t=Animalia/Porifera`, or `!Porifera` for a rest arc,
+ *  and `&a=EX2301/…mp4/259.4` for a moment somebody opened.
  *
  * A branch worth showing someone is worth being able to send them - most of all
- * Undecided, which is the one anybody will want to argue about. */
+ * Undecided, which is the one anybody will want to argue about - and so is a
+ * sighting. A link to this page is a link to what was on the screen. */
 function fromHash() {
-  const raw = decodeURIComponent((location.hash.match(/^#t=(.*)$/) || [])[1] || '');
+  const raw = new URLSearchParams((location.hash || '').slice(1)).get('t') || '';
   if (!raw) return [[]];
   const [trail, only] = raw.split('!');
   const path = trail.split('/').filter(Boolean);
   return [path, only || null];
 }
 
-function toHash(path, only) {
-  const trail = path.join('/') + (only ? `!${only}` : '');
-  history.replaceState(null, '', trail ? `#t=${encodeURIComponent(trail)}` : location.pathname);
+function writeHash() {
+  const trail = state.path.join('/') + (state.only ? `!${state.only}` : '');
+  const parts = [];
+  if (trail) parts.push(`t=${encodeURIComponent(trail)}`);
+  const staged = state.staged;
+  if (staged && staged.animal && staged.animal.t && !el('stage').hidden) {
+    parts.push('a=' + encodeURIComponent(
+      [staged.animal.e, staged.animal.r, staged.animal.s].join('/')));
+  }
+  history.replaceState(null, '', parts.length ? `#${parts.join('&')}` : location.pathname);
 }
 
 /** One way in per phylum, plus the whole collection and the names that are not taxa.
@@ -1078,7 +1178,7 @@ function focusOn(path, only = null) {
     });
   }
   state.done = false;
-  toHash(path, only);
+  writeHash();
   const wall = el('wall');
   wall.replaceChildren(el('more'));
   wall.scrollTop = 0;
@@ -1271,44 +1371,88 @@ function animate(figure, img, slug, page, animal) {
 /* ── the moment itself ─────────────────────────────────────────────────────── */
 
 /** What the store knows about where an animal came from: the archive's own file for
- *  its recording, and the frame its box is measured in. */
+ *  its recording, the frame its box is measured in, and the reel of everything else
+ *  found in the same recording. */
 const whereFrom = (animal) => (state.index.where || {})[animal.e] || {};
 const fileOf = (animal) => (whereFrom(animal).videos || {})[animal.r] || '';
 const frameOf = (animal) => whereFrom(animal).frame || [16, 9];
+const reelName = (animal) => (whereFrom(animal).takes || {})[animal.r] || '';
 
 /** A couple of seconds before the detection, because an animal arriving on screen
  *  is most of what tells a reader whether the box is around anything. */
 const LEAD_IN = 2;
+/* How long one look is worth drawing a box for, and how far apart two looks can be
+   and still be one animal moving rather than one animal twice. The detector looks
+   about once a second, so between two looks the box is moved along - and across a
+   longer gap it is not, because nothing was seen in between. */
+const A_LOOK = 0.7, A_STRIDE = 2.5;
+
+/** Every animal found in one recording, fetched once and kept. */
+async function reelOf(animal) {
+  const name = reelName(animal);
+  if (!name) return [];
+  if (!state.reels.has(name)) {
+    state.reels.set(name, fetch(`${TILES}/reels/${name}.json`)
+      .then(answer => answer.json()).catch(() => []));
+  }
+  return state.reels.get(name);
+}
 
 /** Open the footage at the second this animal was found.
  *
  * Nothing is copied or re-hosted: the archives serve their own files over byte
  * ranges, so a browser can seek into a 900 MB recording and fetch only the piece it
  * needs. Where the manifest named no URL - or the archive will not play in a page -
- * the crop is shown instead and the note says so. */
-function openStage(animal, slug, page, at, stillSrc) {
-  state.staged = { animal, slug, page, at };
+ * the crop is shown instead and the note says so.
+ *
+ * Every other animal the detector found in the same recording is drawn as well,
+ * where and when it was found, because the question somebody has while a dive plays
+ * in front of them is what else is on screen. Clicking one of those takes over: the
+ * video keeps playing, and the header, the star and the address bar follow it. */
+async function openStage(animal, slug, page, at, stillSrc) {
+  const before = state.staged;
+  const same = before && before.animal && !el('stage').hidden
+    && before.animal.e === animal.e && before.animal.r === animal.r;
+  state.staged = { animal, slug, page, at, still: stillSrc };
   const [wide, high] = frameOf(animal);
   const file = fileOf(animal);
   const from = Math.max(0, (animal.s || 0) - LEAD_IN);
+  if (!same) {
+    const play = el('stagePlay');
+    play.style.aspectRatio = `${wide} / ${high}`;
+    play.replaceChildren(file ? footage(file, from) : theCrop(stillSrc, animal),
+                         boxLayer(wide, high));
+    play.classList.toggle('no-box', !el('stageBox').checked);
+    state.rects = new Map();
+    state.reelNow = [];
+    el('stageNote').textContent = file ? ''
+      : 'No URL was recorded for this recording, so this is the crop and not the footage.';
+    el('stageFile').href = file ? `${file}#t=${from.toFixed(1)}` : '#';
+    el('stageFile').hidden = !file;
+  }
+  el('stage').hidden = false;
+  sayStaged();
+  if (same) { paintBoxes(true); return; }
+  followAlong();
+  state.reelNow = await reelOf(animal);
+  paintBoxes(true);
+}
+
+/** Who is in focus: the header, the crop, the star, the way back, the address bar. */
+function sayStaged() {
+  const { animal, still } = state.staged;
   el('stageName').textContent = animal.t;
   el('stageFacts').textContent = `${animal.c.toFixed(2)} · ${held(animal)} in view · `
     + `${animal.n} look${animal.n === 1 ? '' : 's'} · ${animal.e} · ${animal.r} · `
     + clock(animal.s);
-  const star = el('stageStar');
-  star.dataset.key = keyOf(animal);
-  const play = el('stagePlay');
-  play.style.aspectRatio = `${wide} / ${high}`;
-  play.replaceChildren(file ? footage(file, from) : theCrop(stillSrc, animal));
-  play.appendChild(theBox(animal, wide, high));
-  play.classList.toggle('no-box', !el('stageBox').checked);
-  el('stageFile').href = file ? `${file}#t=${from.toFixed(1)}` : '#';
-  el('stageFile').hidden = !file;
-  el('stageNote').textContent = file ? ''
-    : 'No URL was recorded for this recording, so this is the crop and not the footage.';
-  el('stage').hidden = false;
-  el('stageShut').focus();
+  const crop = el('stageCrop');
+  crop.src = still || '';
+  crop.hidden = !still;
+  crop.alt = animal.t;
+  el('stageStar').dataset.key = keyOf(animal);
+  el('stageBack').textContent = `↺ back to ${clock(animal.s)}`;
   markKept();
+  writeHash();
 }
 
 function footage(file, from) {
@@ -1337,24 +1481,134 @@ function theCrop(stillSrc, animal) {
   return img;
 }
 
-/** The box the detector drew, over the frame it drew it in.
+/** The layer the boxes are drawn on, in the coordinates of the analysed frame.
  *
- * `preserveAspectRatio="none"` is safe here and only here: the box holds the
- * coordinates of the analysed frame and the stage is given that frame's aspect
- * ratio, so the two scale together. */
-function theBox(animal, wide, high) {
+ * `meet` rather than `none`: the video is fitted into the stage the same way, so
+ * the two letterbox together whatever the window does to them. */
+function boxLayer(wide, high) {
   const svg = document.createElementNS(SVGNS, 'svg');
+  svg.setAttribute('id', 'stageBoxes');
   svg.setAttribute('viewBox', `0 0 ${wide} ${high}`);
-  svg.setAttribute('preserveAspectRatio', 'none');
-  const box = (animal.b || []).map(Number);
-  if (box.length !== 4 || !box.every(Number.isFinite)) return svg;
-  const rect = document.createElementNS(SVGNS, 'rect');
-  rect.setAttribute('x', String(box[0]));
-  rect.setAttribute('y', String(box[1]));
-  rect.setAttribute('width', String(Math.max(1, box[2] - box[0])));
-  rect.setAttribute('height', String(Math.max(1, box[3] - box[1])));
-  svg.appendChild(rect);
+  svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
   return svg;
+}
+
+/** Where an animal was at this second, between the two looks nearest to it.
+ *
+ * One box for the whole time an animal was in view is wrong the moment anything
+ * swims: it was drawn at one second and the frame has moved on. So the box moves
+ * between the looks the detector actually had, and where two looks are too far
+ * apart to call it movement, it is simply not drawn. */
+function boxAt(entry, now) {
+  const looks = entry.k || [];
+  if (!looks.length) return null;
+  if (now < looks[0][0] - A_LOOK) return null;
+  if (now > looks[looks.length - 1][0] + A_LOOK) return null;
+  const after = looks.findIndex(look => look[0] >= now);
+  if (after < 0) return looks[looks.length - 1].slice(1);
+  if (after === 0) return looks[0].slice(1);
+  const before = looks[after - 1], next = looks[after];
+  const span = next[0] - before[0];
+  if (span > A_STRIDE) {
+    if (now - before[0] <= A_LOOK) return before.slice(1);
+    if (next[0] - now <= A_LOOK) return next.slice(1);
+    return null;
+  }
+  const part = span > 0 ? (now - before[0]) / span : 0;
+  return [1, 2, 3, 4].map(i => before[i] + (next[i] - before[i]) * part);
+}
+
+const sameSighting = (entry, animal) =>
+  Boolean(animal) && entry.t === animal.t && Math.abs(entry.s - animal.s) < 0.06;
+
+/** Draw every animal that belongs on screen at the moment being played. */
+function paintBoxes(force) {
+  const svg = el('stageBoxes');
+  if (!svg) return;
+  const video = el('stagePlay').querySelector('video');
+  const now = video ? video.currentTime : (state.staged ? state.staged.animal.s : 0);
+  if (!force && Math.abs(now - state.painted) < 0.04) return;
+  state.painted = now;
+  const focus = state.staged && state.staged.animal;
+  const gone = new Set(state.rects.keys());
+  (state.reelNow || []).forEach((entry, index) => {
+    const box = boxAt(entry, now);
+    if (!box) return;
+    gone.delete(index);
+    let drawn = state.rects.get(index);
+    if (!drawn) {
+      drawn = { rect: document.createElementNS(SVGNS, 'rect'),
+                label: document.createElementNS(SVGNS, 'text') };
+      drawn.rect.addEventListener('click', () => pickFromReel(entry));
+      // Only the animal in focus is named on screen. A crowded seabed puts
+      // twenty-five boxes up at once, and twenty-five names over them is a wall of
+      // text with a dive behind it - so the rest say who they are when pointed at.
+      drawn.rect.addEventListener('mouseenter', () => {
+        drawn.label.textContent = entry.t;
+      });
+      drawn.rect.addEventListener('mouseleave', () => {
+        drawn.label.textContent = sameSighting(entry, state.staged
+          && state.staged.animal) ? entry.t : '';
+      });
+      const title = document.createElementNS(SVGNS, 'title');
+      title.textContent = `${entry.t} — ${entry.c.toFixed(2)}, ${clock(entry.s)}`;
+      drawn.rect.appendChild(title);
+      state.rects.set(index, drawn);
+      svg.append(drawn.rect, drawn.label);
+    }
+    const here = sameSighting(entry, focus);
+    if (drawn.label.textContent !== entry.t || !here) {
+      drawn.label.textContent = here ? entry.t : '';
+    }
+    drawn.rect.setAttribute('x', String(box[0]));
+    drawn.rect.setAttribute('y', String(box[1]));
+    drawn.rect.setAttribute('width', String(Math.max(1, box[2] - box[0])));
+    drawn.rect.setAttribute('height', String(Math.max(1, box[3] - box[1])));
+    drawn.rect.setAttribute('class', here ? 'here' : '');
+    drawn.label.setAttribute('x', String(box[0]));
+    drawn.label.setAttribute('y', String(Math.max(9, box[1] - 3)));
+    drawn.label.setAttribute('class', here ? 'here' : '');
+  });
+  for (const index of gone) {
+    const drawn = state.rects.get(index);
+    drawn.rect.remove();
+    drawn.label.remove();
+    state.rects.delete(index);
+  }
+}
+
+/** Follow the playhead for as long as the stage is open. */
+function followAlong() {
+  if (el('stage').hidden) return;
+  paintBoxes(false);
+  if (window.requestAnimationFrame) requestAnimationFrame(followAlong);
+}
+
+/** Take over the stage with another animal from the same recording.
+ *
+ * No seeking: the reader is watching, and this animal is on screen now. The way
+ * back to its own moment is the button in the corner. */
+async function pickFromReel(entry) {
+  const staged = state.staged;
+  if (!staged || !staged.animal) return;
+  const own = (entry.k || []).find(look => Math.abs(look[0] - entry.s) < 0.06)
+    || (entry.k || [])[0] || [];
+  const animal = { t: entry.t, e: staged.animal.e, r: staged.animal.r, s: entry.s,
+                   c: entry.c, d: entry.d, n: entry.n, a: 1, b: own.slice(1) };
+  const still = await stillOf(entry.g, entry.p, entry.at);
+  openStage(animal, entry.g, entry.p, entry.at, still);
+}
+
+/** One tile's picture, cut out of the page it lives on. */
+async function stillOf(slug, page, at) {
+  try {
+    const { animals, stills } = await pageOf(slug, page);
+    const animal = animals[at];
+    if (!animal) return '';
+    let from = 0;
+    for (const before of animals.slice(0, at)) from += before.l;
+    return asPicture(stills.slice(from, from + animal.l));
+  } catch { return ''; }
 }
 
 function shutStage() {
@@ -1367,6 +1621,28 @@ function shutStage() {
   el('stagePlay').replaceChildren();
   el('stage').hidden = true;
   state.staged = null;
+  state.rects = new Map();
+  writeHash();
+}
+
+/** The sighting the address bar asks for, if it asks for one.
+ *
+ * A link to this page is a link to what was on the screen: `#a=EX2301/…mp4/259.4`
+ * opens that recording there, with that animal in focus, which is what somebody
+ * sending the link meant to send. */
+const askedFor = () =>
+  new URLSearchParams((location.hash || '').slice(1)).get('a') || '';
+
+async function openAsked(asked) {
+  if (!asked) return;
+  const [expedition, recording, second] = asked.split('/');
+  if (!expedition || !recording || second === undefined) return;
+  const reel = await reelOf({ e: expedition, r: recording });
+  const entry = reel.find(one => Math.abs(one.s - Number(second)) < 0.06);
+  if (!entry) return;
+  state.staged = { animal: { e: expedition, r: recording } };   // for pickFromReel
+  state.reelNow = reel;
+  await pickFromReel(entry);
 }
 
 /* ── what somebody kept ───────────────────────────────────────────────────── */
@@ -1479,6 +1755,12 @@ function wireTheStage() {
   });
   el('stageBox').addEventListener('change', () => {
     el('stagePlay').classList.toggle('no-box', !el('stageBox').checked);
+  });
+  el('stageBack').addEventListener('click', () => {
+    const video = el('stagePlay').querySelector('video');
+    if (!video || !state.staged) return;
+    video.currentTime = Math.max(0, (state.staged.animal.s || 0) - LEAD_IN);
+    video.play().catch(() => { /* a paused video at the right second is fine */ });
   });
   el('stageStar').addEventListener('click', () => {
     const staged = state.staged;

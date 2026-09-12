@@ -46,8 +46,9 @@ const INDEX = {
   },
   where: {
     EX2503: { frame: [640, 360],
-              videos: { 'EX2503_VID_20250413T012000Z_ROVHD_Low.mp4': 'https://ncei/ex2503.mp4' } },
-    DSMOT: { frame: [1920, 1080], videos: {} },
+              videos: { 'EX2503_VID_20250413T012000Z_ROVHD_Low.mp4': 'https://ncei/ex2503.mp4' },
+              takes: { 'EX2503_VID_20250413T012000Z_ROVHD_Low.mp4': 'ex2503--dive' } },
+    DSMOT: { frame: [1920, 1080], videos: {}, takes: {} },
   },
   taxa: {
     Actiniaria: { slug: 'actiniaria', count: 30, pages: 1, rank: 'Order',
@@ -75,9 +76,22 @@ const ANIMALS = [
     s: 12.0, c: 0.7, a: 1, n: 1, d: 0, b: [10, 10, 60, 50], l: 1, m: 0 },
 ];
 
-/** The store, answered out of memory: an index, and a page of pictures. */
+/* One recording's reel, the shape `_write_reels` writes: every animal in it, and
+   every look the detector had at each, in order. */
+const REEL = [
+  { t: 'Actiniaria', s: 124.5, c: 0.91, d: 7.5, n: 3, g: 'actiniaria', p: 0, at: 0,
+    k: [[122.0, 90, 30, 170, 120], [124.5, 100, 40, 180, 130],
+        [126.0, 110, 50, 190, 140]] },
+  { t: 'Cnidaria', s: 127.0, c: 0.6, d: 0, n: 1, g: 'actiniaria', p: 0, at: 1,
+    k: [[127.0, 400, 200, 460, 260]] },
+  { t: 'Porifera', s: 300.0, c: 0.8, d: 2, n: 2, g: 'actiniaria', p: 0, at: 1,
+    k: [[300.0, 10, 10, 60, 60], [302.0, 12, 12, 62, 62]] },
+];
+
+/** The store, answered out of memory: an index, a reel, and a page of pictures. */
 const store = (url) => {
   if (url.endsWith('index.json')) return Promise.resolve({ json: async () => INDEX });
+  if (url.includes('/reels/')) return Promise.resolve({ json: async () => REEL });
   if (url.endsWith('.json')) return Promise.resolve({
     json: async () => (url.includes('actiniaria') ? ANIMALS : []) });
   return Promise.resolve({ ok: true, arrayBuffer: async () => new ArrayBuffer(2) });
@@ -96,16 +110,17 @@ function page() {
     <section id="kept" hidden><a id="keptCsv" href="#"></a>
       <button id="keptClear"></button><div id="keptWall"></div></section>
     <div class="stage" id="stage" hidden><div class="stage-box">
-      <p><b id="stageName"></b><span id="stageFacts"></span>
+      <p><img id="stageCrop"><b id="stageName"></b><span id="stageFacts"></span>
         <button class="star" id="stageStar"></button>
         <button id="stageShut"></button></p>
       <div class="stage-play" id="stagePlay"></div>
-      <p><input type="checkbox" id="stageBox" checked>
+      <p><button id="stageBack"></button><input type="checkbox" id="stageBox" checked>
         <a id="stageFile"></a><span id="stageNote"></span></p>
     </div></div>`;
   const run = new Function('LOOKUP', 'fetch', pageScript()
     + '\n; return { state, focusOn, drawJumps, nodeAt, openStage, toggleKept, '
-    + 'kept, asCsv, wireTheStage, refreshKept, drawKept, shutStage, tileFor };');
+    + 'kept, asCsv, wireTheStage, refreshKept, drawKept, shutStage, tileFor, '
+    + 'paintBoxes, boxAt, openAsked, askedFor, pickFromReel };');
   return run(LOOKUP, store);
 }
 
@@ -292,14 +307,10 @@ describe('a tile is a way into the footage', () => {
       .toBe('https://ncei/ex2503.mp4#t=122.5');
   });
 
-  it('draws the box in the coordinates of the frame it was drawn in', () => {
-    api.openStage(ANIMALS[0], 'actiniaria', 0, 0, 'blob:still');
-    const svg = document.querySelector('#stagePlay svg');
-    expect(svg.getAttribute('viewBox')).toBe('0 0 640 360');
-    const rect = svg.querySelector('rect');
-    expect([rect.getAttribute('x'), rect.getAttribute('y'),
-            rect.getAttribute('width'), rect.getAttribute('height')])
-      .toEqual(['100', '40', '80', '90']);
+  it('draws the boxes in the coordinates of the frame they were drawn in', async () => {
+    await api.openStage(ANIMALS[0], 'actiniaria', 0, 0, 'blob:still');
+    expect(document.querySelector('#stagePlay svg').getAttribute('viewBox'))
+      .toBe('0 0 640 360');
   });
 
   it('shows the crop, and says so, when no URL was recorded', () => {
@@ -385,3 +396,100 @@ function rowsOf(list) {
     entry.t, entry.c, entry.d, entry.n, entry.e, entry.r, entry.s,
     ...(entry.b || []), ...(entry.f || []), entry.v].join(','))];
 }
+
+
+describe('the boxes, while the recording plays', () => {
+  let api;
+  const playhead = (seconds) => {
+    const video = document.querySelector('#stagePlay video');
+    video.currentTime = seconds;
+    api.paintBoxes(true);
+  };
+  const drawn = () => [...document.querySelectorAll('#stagePlay svg rect')]
+    .map(rect => ({
+      name: rect.querySelector('title').textContent.split(' —')[0],
+      here: rect.classList.contains('here'),
+      box: ['x', 'y', 'width', 'height'].map(a => Number(rect.getAttribute(a))),
+    }));
+
+  beforeEach(async () => {
+    api = page();
+    api.state.index = INDEX;
+    api.refreshKept();
+    api.wireTheStage();
+    await api.openStage(ANIMALS[0], 'actiniaria', 0, 0, 'blob:still');
+  });
+  afterEach(() => api.shutStage());
+
+  it('draws the animal where it was at the second being played', () => {
+    playhead(124.5);
+    expect(drawn()).toEqual([
+      { name: 'Actiniaria', here: true, box: [100, 40, 80, 90] }]);
+  });
+
+  it('moves the box between the looks the detector had', () => {
+    // Halfway between the look at 122.0 and the look at 124.5. One box for the
+    // whole sighting is wrong the moment anything swims.
+    playhead(123.25);
+    expect(drawn()[0].box).toEqual([95, 35, 80, 90]);
+  });
+
+  it('shows the other animals when they are on screen, and not before', () => {
+    playhead(124.5);
+    expect(drawn().map(one => one.name)).toEqual(['Actiniaria']);
+    playhead(126.5);
+    expect(drawn().map(one => one.name)).toEqual(['Actiniaria', 'Cnidaria']);
+    // ...and the one three minutes later is nowhere near the screen.
+    expect(drawn().map(one => one.name)).not.toContain('Porifera');
+  });
+
+  it('stops drawing an animal once the detector has stopped seeing it', () => {
+    // The last look at this one was at 126.0. A box that hangs about after that is
+    // a box around whatever happens to be there now.
+    playhead(127.0);
+    expect(drawn().map(one => one.name)).toEqual(['Cnidaria']);
+  });
+
+  it('draws nothing where nothing was seen', () => {
+    playhead(200);
+    expect(drawn()).toEqual([]);
+  });
+
+  it('hands over to another animal when its box is clicked, without seeking', async () => {
+    playhead(127.0);
+    const video = document.querySelector('#stagePlay video');
+    const other = [...document.querySelectorAll('#stagePlay svg rect')]
+      .find(rect => rect.querySelector('title').textContent.startsWith('Cnidaria'));
+    other.dispatchEvent(new Event('click'));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(document.getElementById('stageName').textContent).toBe('Cnidaria');
+    expect(video.currentTime).toBe(127.0);          // still watching, not re-seeked
+    expect(document.querySelector('#stagePlay svg rect.here')
+      .querySelector('title').textContent).toContain('Cnidaria');
+  });
+
+  it('puts the moment in the address bar, so the link is the moment', () => {
+    expect(decodeURIComponent(location.hash)).toContain(
+      'a=EX2503/EX2503_VID_20250413T012000Z_ROVHD_Low.mp4/124.5');
+    api.shutStage();
+    expect(location.hash).not.toContain('a=');
+  });
+
+  it('opens what the address bar asks for', async () => {
+    api.shutStage();
+    history.replaceState(null, '', '#a=' + encodeURIComponent(
+      'EX2503/EX2503_VID_20250413T012000Z_ROVHD_Low.mp4/127'));
+    // Read before the wall settles: `focusOn` rewrites the address bar at boot, and
+    // the moment somebody was sent would be gone before it was opened.
+    await api.openAsked(api.askedFor());
+    expect(document.getElementById('stage').hidden).toBe(false);
+    expect(document.getElementById('stageName').textContent).toBe('Cnidaria');
+  });
+
+  it('goes back to the moment it was opened on', () => {
+    const video = document.querySelector('#stagePlay video');
+    video.currentTime = 300;
+    document.getElementById('stageBack').dispatchEvent(new Event('click'));
+    expect(video.currentTime).toBe(122.5);          // the detection, two seconds early
+  });
+});
