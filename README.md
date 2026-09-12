@@ -453,6 +453,18 @@ recording merged into one per expedition. `collect site` says so and carries on 
 report is unreadable — `publishDir` copies are not atomic, so a run that is interrupted
 mid-publish leaves a gigabyte of parquet with no `PAR1` footer, and what that used to
 look like was a traceback out of a parquet reader three minutes into a site build.
+`collect site` streams too, and had to: the tile store is cut from every merged
+report, and reading them the obvious way is `Killed` after twenty minutes with no
+page. A report is read a recording at a time - linking is per recording anyway - and
+the pictures go to a spool beside the store as they are met, so what is held is two
+numbers an animal rather than every still and clip in the collection. One more thing
+was hiding underneath: `pq.ParquetFile` pre-buffers column chunks by default and
+keeps them for as long as the file is open, so a loop that dropped every batch it
+was handed still ended up with all 3.1 GB of EX1702 in arrow buffers.
+`pre_buffer=False` is the whole fix. Measured over 35 GB of reports, 178,756
+animals: 192 seconds, peak RSS 2.71 GB, and what is left scales with the number of
+animals rather than with the weight of the footage.
+
 **`MERGE` streams**, a row group at a time,
 and that is not an optimisation: the obvious way to concatenate parquet is to read every
 part and write the pile, which needs as much memory as the expedition is big. On the

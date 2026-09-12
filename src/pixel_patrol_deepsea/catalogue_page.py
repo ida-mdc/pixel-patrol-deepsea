@@ -160,6 +160,10 @@ class _Clip:
 
 ITS_OWN_CLIP = 0.3
 
+# Rows read from a report at a time. A slice row carries its pictures, so this is
+# tens of megabytes rather than a number of rows worth tuning.
+READ_ROWS = 64
+
 
 def _overlap(one, other) -> float:
     """Intersection over union of two boxes, 0 when they do not touch."""
@@ -189,44 +193,110 @@ def read_animals(report: Path):
     Clips are returned keyed by recording, slice and animal, because a slice holds
     as many clips as it held animals. Keying them by slice alone handed every animal
     on a crowded seabed the same film.
+
+    Reads the whole report, which is what a caller wanting every animal at once
+    means by it. `animals_by_recording` is the same work in pieces, and is what the
+    tile store uses: GOA2004's `detections` column is 16 GB and nothing that reads
+    it whole survives a node.
+    """
+    tracks, clips = [], {}
+    for _recording, mine, its_clips in animals_by_recording(report):
+        tracks.extend(mine)
+        clips.update(its_clips)
+    return tracks, clips
+
+
+def animals_by_recording(report: Path):
+    """Every animal in a report, one recording at a time.
+
+    A recording's rows are contiguous - a merged report is its parts, concatenated,
+    and a part is one recording - so the reading can stop at each boundary, link
+    that recording's sightings into animals, hand them over and let them go. An
+    expedition is then never in memory; one recording is, and the largest of those
+    is a couple of hundred megabytes.
+
+    Linking is per recording anyway: `animals_from` groups on `(recording, id)` and
+    `track_sightings` never joins two recordings, so this yields exactly what
+    reading the whole report and linking it at the end does.
     """
     import json
 
-    import polars as pl
+    import pyarrow.parquet as pq
 
     from pixel_patrol_deepsea.identity import (
-        ANIMAL, ANIMAL_AGREEMENT, ANIMAL_TAXON, animals_from, has_ids)
+        ANIMAL, ANIMAL_AGREEMENT, ANIMAL_TAXON, animals_from)
     from pixel_patrol_deepsea.refine import Sighting, track_sightings
 
-    # Three columns out of sixty, and none of them the cached stills: this is
-    # called once per expedition on reports where the pictures are most of the
-    # gigabyte, and the animals are all inside `detections`.
-    available = pl.read_parquet_schema(report)
+    # Three columns out of sixty, and none of them the cached stills: the animals
+    # are all inside `detections`, which is most of the report's weight on its own.
+    try:
+        # `pre_buffer` defaults to reading column chunks ahead and holding them for
+        # as long as the file is open, so a report read start to finish ends up
+        # entirely in memory however small the batches are: EX1702 came to 3.3 GB
+        # of arrow buffers for a loop that dropped every batch it was handed. Off,
+        # the same loop peaks at 475 MB.
+        source = pq.ParquetFile(report, pre_buffer=False)
+    except Exception as exc:
+        logging.getLogger(__name__).warning("cannot open %s: %s", report.name, exc)
+        return
+    available = set(source.schema_arrow.names)
     if "detections" not in available:
-        return [], {}
+        return
     wanted = [c for c in ("detections", "dim_t", "child_id", "name") if c in available]
-    table = pl.read_parquet(report, columns=wanted)
-    slices = table.filter(pl.col("detections").is_not_null()
-                          & pl.col("dim_t").is_not_null())
-    recording = "child_id" if "child_id" in slices.columns else "name"
-    sightings, clips, stored, settled, backing = [], {}, [], [], []
-    for row in slices.iter_rows(named=True):
+    names = "child_id" if "child_id" in wanted else "name"
+
+    held, seen = _Recording(), set()
+    for batch in source.iter_batches(batch_size=READ_ROWS, columns=wanted):
+        for row in batch.to_pylist():
+            if row.get("detections") is None or row.get("dim_t") is None:
+                continue
+            where = str(row.get(names) or row.get("name") or "")
+            if where != held.name:
+                if held.name is not None:
+                    yield held.finish()
+                    seen.add(held.name)
+                if where in seen:
+                    # Not fatal, but it means this report was not written as parts
+                    # in order, and one animal either side of the boundary is going
+                    # to be counted as two.
+                    logging.getLogger(__name__).warning(
+                        "%s: %s comes back after another recording", report.name, where)
+                held = _Recording(where)
+            held.add(row)
+    if held.name is not None:
+        yield held.finish()
+
+
+class _Recording:
+    """One recording's sightings and clips, until the rows move on to the next."""
+
+    def __init__(self, name=None):
+        self.name = name
+        self.sightings, self.clips = [], {}
+        self.stored, self.settled, self.backing = [], [], []
+
+    def add(self, row):
+        import json
+
+        from pixel_patrol_deepsea.identity import ANIMAL, ANIMAL_AGREEMENT, ANIMAL_TAXON
+        from pixel_patrol_deepsea.refine import Sighting
+
         try:
             animals = json.loads(row["detections"])
         except Exception:
-            continue
-        where = str(row.get(recording) or row.get("name") or "")
-        key = (where, int(row["dim_t"]))
+            return
+        key = (self.name, int(row["dim_t"]))
         for animal in animals:
             crop = _decode(animal.get("crop"))
             if animal.get("clip"):
                 if crop:
                     mine = (*key, animal.get("of", 0))
-                    clips.setdefault(mine, _Clip(tuple(animal.get("box") or ()))).frames.append(
-                        (animal.get("second") or 0.0, crop))
+                    self.clips.setdefault(
+                        mine, _Clip(tuple(animal.get("box") or ()))).frames.append(
+                            (animal.get("second") or 0.0, crop))
                 continue
-            sightings.append(Sighting(
-                recording=where,
+            self.sightings.append(Sighting(
+                recording=self.name,
                 second=float(animal.get("second") or 0.0),
                 frame=int(animal.get("frame") or 0),
                 slice_t=int(row["dim_t"]),
@@ -235,22 +305,26 @@ def read_animals(report: Path):
                 box=tuple(animal.get("box") or (0, 0, 0, 0)),
                 crop=crop,
             ))
-            stored.append(animal.get(ANIMAL))
-            settled.append(animal.get(ANIMAL_TAXON))
-            backing.append(animal.get(ANIMAL_AGREEMENT))
-    for clip in clips.values():
-        clip.frames.sort()
-    # The report says which detections are one animal, where it was written by a
-    # version that knew. Deriving it again here would be a second opinion on a
-    # question already answered - and the page would disagree with the file it is
-    # made from the moment either rule changed.
-    if sightings and all(number is not None for number in stored):
-        return animals_from(sightings, stored, settled, backing), clips
-    if sightings:
-        logging.getLogger(__name__).info(
-            "%s predates stored animal ids; linking them here instead. "
-            "`collect identify` writes them in.", report.name)
-    return track_sightings(sightings), clips
+            self.stored.append(animal.get(ANIMAL))
+            self.settled.append(animal.get(ANIMAL_TAXON))
+            self.backing.append(animal.get(ANIMAL_AGREEMENT))
+
+    def finish(self):
+        from pixel_patrol_deepsea.identity import animals_from
+        from pixel_patrol_deepsea.refine import track_sightings
+
+        for clip in self.clips.values():
+            clip.frames.sort()
+        # The report says which detections are one animal, where it was written by
+        # a version that knew. Deriving it again here would be a second opinion on
+        # a question already answered.
+        if self.sightings and all(number is not None for number in self.stored):
+            tracks = animals_from(self.sightings, self.stored, self.settled, self.backing)
+        elif self.sightings:
+            tracks = track_sightings(self.sightings)
+        else:
+            tracks = []
+        return self.name, tracks, self.clips
 
 
 def animals_in_report(report: Path):

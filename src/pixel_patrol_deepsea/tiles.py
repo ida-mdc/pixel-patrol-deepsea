@@ -79,7 +79,7 @@ def build(root: Path, expeditions: Optional[List[Path]] = None) -> Dict:
     One pass per expedition report. Each animal contributes one still - its most
     confident look - and, where the detector cut one, an animation.
     """
-    from pixel_patrol_deepsea.catalogue_page import read_animals
+    from pixel_patrol_deepsea.catalogue_page import animals_by_recording
     from pixel_patrol_deepsea.fetch_taxonomy import load_taxonomy
     from pixel_patrol_deepsea.refine import is_an_animal
 
@@ -88,85 +88,91 @@ def build(root: Path, expeditions: Optional[List[Path]] = None) -> Dict:
     reports = expeditions if expeditions is not None else sorted(
         p for p in (root / "parquet").glob("*.parquet") if not p.stem.startswith("_"))
 
-    # taxon -> the animals found of it, best first
+    # taxon -> the animals found of it, best first. Metadata only: where each
+    # animal's pictures went is two numbers, and the pictures are in the spool.
     found: Dict[str, List[dict]] = {}
-    frames: Dict[str, List[List[str]]] = {}
     # expedition -> the recordings its animals came out of, for the URLs and the
     # frame size the page needs to play a moment back and draw a box on it.
     seen: Dict[str, set] = {}
     # (expedition, recording) -> every animal in it, for the page's own little
     # viewer: one dive, playing, with every box that belongs on screen.
     reels: Dict[tuple, List[dict]] = {}
-    for report in reports:
-        expedition = report.stem
-        try:
-            tracks, clips = read_animals(report)
-        except Exception as exc:
-            logger.warning("tiles: cannot read %s: %s", report.name, exc)
-            continue
-        for number, track in enumerate(tracks):
-            if not is_an_animal(track.taxon):
-                continue
-            best = track.best
-            if not best.crop:
-                continue
-            entry = {
-                "t": track.taxon,
-                "e": expedition,
-                "r": track.recording,
-                "s": round(best.second, 1),
-                "c": round(best.confidence, 3),
-                "a": round(getattr(track, "agreement", 1.0), 2),
-                "n": len(track.sightings),
-                # How long it stayed in view. The tile says this beside the
-                # confidence, because "0.94, and gone in a tenth of a second" and
-                # "0.94, and there for a minute" are not the same claim.
-                "d": round(track.seconds, 1),
-                # Where in the frame it was, so a reader who opens the recording at
-                # this second is shown which of the things on screen was meant.
-                "b": [int(v) for v in (best.box or ())][:4],
-                "i": best.crop,
-            }
-            clip = _its_clip(clips, track)
-            found.setdefault(track.taxon, []).append(entry)
-            frames.setdefault(track.taxon, []).append(
-                list(clip.crops[:MOST_FRAMES]) if clip else [])
-            seen.setdefault(expedition, set()).add(track.recording)
-            # ...and again by the recording it came out of, which is how the page
-            # shows a reader watching one dive what else is on screen.
-            reels.setdefault((expedition, track.recording), []).append({
-                "t": track.taxon, "s": entry["s"], "c": entry["c"],
-                "d": entry["d"], "n": entry["n"],
-                "was": (track.taxon, len(found[track.taxon]) - 1),
-                "k": _looks(track),
-            })
-        logger.info("tiles: %s gave %d animals", expedition, len(tracks))
+    # The pictures go straight to disk as they are read and come back when the page
+    # they belong to is written. Held in memory instead, a collection's worth of
+    # stills and clips is gigabytes that grow with every expedition added - and
+    # what that looks like is `Killed`, after twenty minutes, with no page.
+    spool = _Spool(root)
+    try:
+        for report in reports:
+            expedition, counted = report.stem, 0
+            for _recording, tracks, clips in _animals_of(report, animals_by_recording):
+                for track in tracks:
+                    if not is_an_animal(track.taxon):
+                        continue
+                    best = track.best
+                    if not best.crop:
+                        continue
+                    counted += 1
+                    clip = _its_clip(clips, track)
+                    film = list(clip.crops[:MOST_FRAMES]) if clip else []
+                    entry = {
+                        "t": track.taxon,
+                        "e": expedition,
+                        "r": track.recording,
+                        "s": round(best.second, 1),
+                        "c": round(best.confidence, 3),
+                        "a": round(getattr(track, "agreement", 1.0), 2),
+                        "n": len(track.sightings),
+                        # How long it stayed in view. The tile says this beside the
+                        # confidence, because "0.94, and gone in a tenth of a second"
+                        # and "0.94, and there for a minute" are not the same claim.
+                        "d": round(track.seconds, 1),
+                        # Where in the frame it was, so a reader who opens the
+                        # recording at this second is shown which of the things on
+                        # screen was meant.
+                        "b": [int(v) for v in (best.box or ())][:4],
+                        # Where the pictures went, rather than the pictures.
+                        "i": spool.keep(best.crop),
+                        "f": spool.keep_all(film),
+                    }
+                    found.setdefault(track.taxon, []).append(entry)
+                    seen.setdefault(expedition, set()).add(track.recording)
+                    # ...and again by the recording it came out of, which is how the
+                    # page shows a reader watching one dive what else is on screen.
+                    reels.setdefault((expedition, track.recording), []).append({
+                        "t": track.taxon, "s": entry["s"], "c": entry["c"],
+                        "d": entry["d"], "n": entry["n"],
+                        "was": (track.taxon, len(found[track.taxon]) - 1),
+                        "k": _looks(track),
+                    })
+            logger.info("tiles: %s gave %d animals", expedition, counted)
 
-    # The store is written whole. Leaving a previous build's pages behind would
-    # leave the index pointing at some of them and the taxonomy at others.
-    if store.exists():
-        shutil.rmtree(store)
-    store.mkdir(parents=True, exist_ok=True)
+        # The store is written whole. Leaving a previous build's pages behind
+        # would leave the index pointing at some of them and the taxonomy at
+        # others.
+        if store.exists():
+            shutil.rmtree(store)
+        store.mkdir(parents=True, exist_ok=True)
 
-    counts: Dict[str, int] = {}
-    # (taxon, the order it was found in) -> the page and place it ended up in, so a
-    # reel can point at a tile without holding a second copy of its picture.
-    placed: Dict[tuple, Tuple[int, int]] = {}
-    for taxon, animals in found.items():
-        order = sorted(range(len(animals)), key=lambda i: -animals[i]["c"])
-        for at, was in enumerate(order):
-            placed[(taxon, was)] = (at // PER_PAGE, at % PER_PAGE)
-        animals = [animals[i] for i in order]
-        moving = [frames[taxon][i] for i in order]
-        where = store / slug(taxon)
-        where.mkdir(parents=True, exist_ok=True)
-        for page in range((len(animals) + PER_PAGE - 1) // PER_PAGE):
-            first = page * PER_PAGE
-            _write_page(where, page, animals[first:first + PER_PAGE],
-                        moving[first:first + PER_PAGE])
-        counts[taxon] = len(animals)
+        counts: Dict[str, int] = {}
+        # (taxon, the order it was found in) -> the page and place it ended up in,
+        # so a reel can point at a tile without a second copy of its picture.
+        placed: Dict[tuple, Tuple[int, int]] = {}
+        for taxon, animals in found.items():
+            order = sorted(range(len(animals)), key=lambda i: -animals[i]["c"])
+            for at, was in enumerate(order):
+                placed[(taxon, was)] = (at // PER_PAGE, at % PER_PAGE)
+            animals = [animals[i] for i in order]
+            where = store / slug(taxon)
+            where.mkdir(parents=True, exist_ok=True)
+            for page in range((len(animals) + PER_PAGE - 1) // PER_PAGE):
+                first = page * PER_PAGE
+                _write_page(where, page, animals[first:first + PER_PAGE], spool)
+            counts[taxon] = len(animals)
 
-    takes = _write_reels(store, reels, placed)
+        takes = _write_reels(store, reels, placed)
+    finally:
+        spool.close()
     index = {"tree": _tree(counts, taxonomy),
              "taxa": {taxon: _about(taxon, n, taxonomy)
                       for taxon, n in sorted(counts.items())},
@@ -176,6 +182,66 @@ def build(root: Path, expeditions: Optional[List[Path]] = None) -> Dict:
     (store / "index.json").write_text(json.dumps(index, separators=(",", ":")))
     logger.info("tiles: %d taxa, %d animals", len(counts), sum(counts.values()))
     return index
+
+
+class _Spool:
+    """Every picture a build meets, in the order it met them, on disk.
+
+    A collection's stills and clips are gigabytes - 580 MB of them at nine
+    expeditions and growing with every one added - and the build needs them twice:
+    once as they come out of the reports, and again when the page they belong to is
+    written, which cannot happen until every animal of that taxon has been seen and
+    sorted. Holding them in between is what a node kills. Holding an offset each is
+    forty bytes.
+
+    Written beside the collection rather than in `/tmp`, because `/tmp` on a compute
+    node is small and this is the size of the store it is about to write.
+    """
+
+    def __init__(self, root: Path):
+        self.where = root / ".tiles-spool"
+        self.where.parent.mkdir(parents=True, exist_ok=True)
+        self.file = self.where.open("w+b")
+        self.at = 0
+
+    def keep(self, picture: bytes) -> Tuple[int, int]:
+        """Put one picture away, and say where it went."""
+        if not picture:
+            return (self.at, 0)
+        self.file.write(picture)
+        at, self.at = self.at, self.at + len(picture)
+        return (at, len(picture))
+
+    def keep_all(self, pictures: List[bytes]) -> Tuple[int, List[int]]:
+        """A clip's frames, end to end: one offset and the lengths."""
+        first = self.at
+        for picture in pictures:
+            self.keep(picture)
+        return (first, [len(picture) for picture in pictures])
+
+    def read(self, at: int, length: int) -> bytes:
+        if not length:
+            return b""
+        self.file.seek(at)
+        return self.file.read(length)
+
+    def close(self) -> None:
+        try:
+            self.file.close()
+        finally:
+            self.where.unlink(missing_ok=True)
+
+
+def _animals_of(report: Path, reader):
+    """One report's animals, recording by recording, or a warning and none.
+
+    A report that cannot be read is one expedition missing from the page, which the
+    page says for itself. It is not a reason to write no store.
+    """
+    try:
+        yield from reader(report)
+    except Exception as exc:
+        logger.warning("tiles: cannot read %s: %s", report.name, exc)
 
 
 def _its_clip(clips: Dict, track):
@@ -206,23 +272,27 @@ def _its_clip(clips: Dict, track):
     return None
 
 
-def _write_page(where: Path, page: int, animals: List[dict],
-                moving: List[List[bytes]]) -> None:
+def _write_page(where: Path, page: int, animals: List[dict], spool: "_Spool") -> None:
     """One page of the store: the sizes in JSON, the pictures in two blobs.
 
     The JSON never repeats a byte of a picture. `l` is how long this animal's still
     is and `f` how long each of its frames is, both in tile order, so the page
     recovers every offset by adding up what came before it.
+
+    The pictures come back out of the spool here, sixty at a time, which is the
+    only moment a build holds any of them.
     """
     stills, clips, entries = bytearray(), bytearray(), []
-    for entry, animation in zip(animals, moving):
-        still = entry.pop("i")
+    for entry in animals:
+        entry = dict(entry)
+        at, length = entry.pop("i")
+        still = spool.read(at, length)
         stills += still
-        listed = dict(entry, l=len(still), m=1 if animation else 0)
-        if animation:
-            listed["f"] = [len(frame) for frame in animation]
-            for frame in animation:
-                clips += frame
+        first, sizes = entry.pop("f")
+        listed = dict(entry, l=len(still), m=1 if sizes else 0)
+        if sizes:
+            listed["f"] = sizes
+            clips += spool.read(first, sum(sizes))
         entries.append(listed)
     (where / f"p{page}.json").write_text(json.dumps(entries, separators=(",", ":")))
     (where / f"p{page}.jpgs").write_bytes(bytes(stills))

@@ -201,3 +201,41 @@ def test_a_transcoded_copy_is_still_the_recording_that_was_listed(tmp_path):
     got = _where(tmp_path, "EX2107", ["EX2107_VID_Low_10fps.mp4"], {})
     assert got["videos"] == {
         "EX2107_VID_Low_10fps.mp4": "https://ncei/EX2107_VID_Low.mp4"}
+
+
+def test_the_pictures_do_not_pile_up_in_memory(tmp_path, monkeypatch):
+    """What killed a site build with seventeen expeditions in it.
+
+    Every still and every clip frame used to be held from the moment it was read
+    until the last page was written, because a taxon's page cannot be written until
+    every animal of it has been seen and sorted. That is gigabytes that grow with
+    the collection. They go to a spool beside the store instead, and what is held is
+    two numbers an animal.
+    """
+    from pixel_patrol_deepsea import tiles as store_module
+
+    kept = []
+    real = store_module._Spool.keep
+
+    def watch(self, picture):
+        kept.append(len(picture or b""))
+        return real(self, picture)
+
+    monkeypatch.setattr(store_module._Spool, "keep", watch)
+    store, index = _store(tmp_path, [
+        [_animal("fish", 0.9, (10, 10, 60, 50)), *_frames("fish", (10, 10, 60, 50))],
+        [_animal("crab", 0.8, (560, 300, 610, 340))]])
+    assert sum(kept) > 0, "the pictures went through the spool"
+    # ...and it takes itself away afterwards.
+    assert not (tmp_path / ".tiles-spool").exists()
+    # ...and the store is the same store.
+    animals, stills, clips = _page(store, "fish")
+    assert animals[0]["l"] == len(JPEG) and stills == JPEG
+    assert len(clips) == sum(animals[0]["f"])
+
+
+def test_an_unreadable_report_is_left_out_rather_than_fatal(tmp_path):
+    _report_with_animals(tmp_path, [[_animal("fish", 0.8)]])
+    (tmp_path / "parquet" / "BROKEN.parquet").write_bytes(b"not a parquet at all")
+    index = tiles.build(tmp_path)
+    assert index["taxa"]["fish"]["count"] == 1

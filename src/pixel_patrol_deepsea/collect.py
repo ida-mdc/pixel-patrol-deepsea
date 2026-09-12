@@ -830,7 +830,9 @@ def merge(expedition_id: str, parts: List[Path], output: Path) -> int:
     rows, held, buffered = 0, 0, []
     with pq.ParquetWriter(output, schema) as writer:
         for part in usable:
-            source = pq.ParquetFile(part)
+            # Not pre-buffered: it holds every chunk it reads ahead until the file
+            # is closed, which for a part of a tape proxy is most of the part.
+            source = pq.ParquetFile(part, pre_buffer=False)
             for batch in source.iter_batches(batch_size=MERGE_ROWS):
                 buffered.append(_as_schema(pa.Table.from_batches([batch]), schema))
                 rows, held = rows + batch.num_rows, held + batch.nbytes
