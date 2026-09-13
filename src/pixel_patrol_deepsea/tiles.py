@@ -41,6 +41,7 @@ it. No footage is read.
 
 import json
 import logging
+import os
 import re
 import shutil
 from pathlib import Path
@@ -202,11 +203,15 @@ class _Spool:
     forty bytes.
 
     Written beside the collection rather than in `/tmp`, because `/tmp` on a compute
-    node is small and this is the size of the store it is about to write.
+    node is small and this is the size of the store it is about to write. Where the
+    collection's own disk is the full one - which is the usual way round for a disk
+    holding a collection - `PP_TILES_SPOOL` names somewhere else to put it.
     """
 
     def __init__(self, root: Path):
-        self.where = root / ".tiles-spool"
+        elsewhere = os.environ.get("PP_TILES_SPOOL", "").strip()
+        self.where = (Path(elsewhere) / f".tiles-spool-{os.getpid()}" if elsewhere
+                      else root / ".tiles-spool")
         self.where.parent.mkdir(parents=True, exist_ok=True)
         self.file = self.where.open("w+b")
         self.at = 0
