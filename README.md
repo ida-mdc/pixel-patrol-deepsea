@@ -648,6 +648,16 @@ no account, nothing sent anywhere — and the favourites section lists them agai
 CSV carrying the taxon, the recording, the second, the box and the URL, which is enough
 for somebody else to find the same moment in the archive.
 
+**And a collection of them travels in a link.** There is no server here and nothing to
+host, so a favourite cannot be given an id somewhere and fetched back — but it can be
+written into the address. `#k=…` carries the four fields an animal is found again by
+(expedition, recording, second, name), deflated and base64'd; on a NOAA collection that
+is one long prefix repeated, which squeezes to about a tenth. Five sightings make a
+link of 315 characters. None of the four is a position in a file, so the store can be
+rebuilt underneath the link and it still resolves. Opening one shows *Sent to you*
+beside — not instead of — whatever the browser already had, and keeping them merges the
+two: nobody loses their own list by following a link.
+
 ```bash
 python -m pixel_patrol_deepsea.banner collection/   # assets/colours.png
 ```

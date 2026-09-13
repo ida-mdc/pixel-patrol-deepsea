@@ -110,8 +110,12 @@ function page() {
       <aside id="about"></aside>
       <div id="wall"><div id="more"></div></div>
     </section>
-    <section id="kept" hidden><a id="keptCsv" href="#"></a>
-      <button id="keptClear"></button><div id="keptWall"></div></section>
+    <section id="kept" hidden><h2 id="keptTitle"></h2><p id="keptWhat"></p>
+      <a id="keptCsv" href="#"></a><button id="keptClear"></button>
+      <button id="keptShare"></button><button id="keptTake" hidden></button>
+      <button id="keptMine" hidden></button>
+      <p id="keptLink" hidden><input id="keptUrl"><span id="keptSaid"></span></p>
+      <div id="keptWall"></div></section>
     <div class="stage" id="stage" hidden><div class="stage-box">
       <p><img id="stageCrop"><b id="stageName"></b><span id="stageFacts"></span>
         <span id="stageWhere"></span>
@@ -125,7 +129,8 @@ function page() {
   const run = new Function('LOOKUP', 'fetch', pageScript()
     + '\n; return { state, focusOn, drawJumps, nodeAt, openStage, toggleKept, '
     + 'kept, asCsv, wireTheStage, refreshKept, drawKept, shutStage, tileFor, '
-    + 'paintBoxes, boxAt, openAsked, askedFor, pickFromReel };');
+    + 'paintBoxes, boxAt, openAsked, askedFor, pickFromReel, packed, unpacked, '
+    + 'linkTo, openShared, takeShared, shareThese };');
   return run(LOOKUP, store);
 }
 
@@ -615,5 +620,80 @@ describe('what the overlay says about whose picture it is', () => {
       expect(pageScript()).toContain(`'${column}'`);
     }
     expect(pageScript()).toContain("'yes, from an object detector'");
+  });
+});
+
+describe('sending a collection to somebody', () => {
+  let api;
+  beforeEach(() => {
+    api = page();
+    api.state.index = INDEX;
+    api.refreshKept();
+    api.wireTheStage();
+  });
+
+  it('packs and unpacks the sightings, not where they sit in the store', async () => {
+    // A store is rebuilt every time a collection grows and the pages are cut by
+    // confidence, so a link that named a page and a place would rot. These four
+    // fields find the animal again wherever it has moved to.
+    api.toggleKept(ANIMALS[0], 'actiniaria', 0, 0);
+    const payload = await api.packed(api.kept());
+    expect(payload[0]).toMatch(/[zp]/);
+    const back = await api.unpacked(payload);
+    expect(back).toEqual([{ e: 'EX2503',
+                            r: 'EX2503_VID_20250413T012000Z_ROVHD_Low.mp4',
+                            s: 124.5, t: 'Actiniaria' }]);
+  });
+
+  it('makes a link that carries them', async () => {
+    api.toggleKept(ANIMALS[0], 'actiniaria', 0, 0);
+    const url = await api.linkTo(api.kept());
+    expect(url).toContain('#k=');
+    expect(url).not.toContain('undefined');
+    const payload = decodeURIComponent(url.split('#k=')[1]);
+    expect((await api.unpacked(payload))[0].t).toBe('Actiniaria');
+  });
+
+  it('squeezes a collection of many into a link somebody can send', async () => {
+    // Twenty NOAA recordings are one long prefix twenty times over, which is what
+    // deflate is for: the point of the exercise is that this fits in an address bar.
+    const many = Array.from({ length: 20 }, (unused, i) => ({
+      e: 'EX2503', r: `EX2503_VID_2025041${i % 10}T012000Z_ROVHD_Low.mp4`,
+      s: 100 + i, t: 'Actiniaria' }));
+    const url = await api.linkTo(many);
+    expect(url.length).toBeLessThan(700);
+  });
+
+  it('shows what a link brought without touching what this browser kept', async () => {
+    api.toggleKept(ANIMALS[1], 'actiniaria', 0, 1);          // mine
+    const theirs = await api.packed([{ e: 'EX2503',
+      r: 'EX2503_VID_20250413T012000Z_ROVHD_Low.mp4', s: 124.5, t: 'Actiniaria' }]);
+    await api.openShared(theirs);
+    expect(document.getElementById('keptTitle').textContent).toBe('Sent to you');
+    expect(document.getElementById('keptWhat').textContent).toContain('somebody put in a link');
+    expect(api.kept()).toHaveLength(1);                      // still only mine
+    expect(api.kept()[0].t).toBe('Actiniaria');
+    expect(api.kept()[0].e).toBe('DSMOT');
+  });
+
+  it('keeps a shared collection on top of your own when you ask', async () => {
+    api.toggleKept(ANIMALS[1], 'actiniaria', 0, 1);
+    await api.openShared(await api.packed([{ e: 'EX2503',
+      r: 'EX2503_VID_20250413T012000Z_ROVHD_Low.mp4', s: 124.5, t: 'Actiniaria' }]));
+    await api.takeShared();
+    expect(api.kept().map(one => one.e).sort()).toEqual(['DSMOT', 'EX2503']);
+    expect(document.getElementById('keptTitle').textContent).toBe('Your favourites');
+  });
+
+  it('takes a link that came from a browser with no compression in it', async () => {
+    const plain = 'p' + btoa(JSON.stringify(
+      [['EX2503', 'EX2503_VID_20250413T012000Z_ROVHD_Low.mp4', 124.5, 'Actiniaria']]))
+      .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    expect((await api.unpacked(plain))[0].s).toBe(124.5);
+  });
+
+  it('says nothing and breaks nothing when the link is rubbish', async () => {
+    await api.openShared('zzzz-not-a-payload');
+    expect(api.state.shared).toBeNull();
   });
 });

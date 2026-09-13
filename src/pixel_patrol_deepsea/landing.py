@@ -156,16 +156,18 @@ def render(rows, index: Optional[Dict] = None, scores: Optional[Dict] = None) ->
 
   <section class="kept" id="kept" hidden>
     <p class="chapter">what you kept</p>
-    <h2>Your favourites</h2>
-    <p class="lede">Starred sightings, kept in this browser and sent nowhere. The CSV
-       carries the name, the recording, the second and the box the detector drew,
-       which is enough for somebody else to find the moment in the archive's own
-       file.</p>
+    <h2 id="keptTitle">Your favourites</h2>
+    <p class="lede" id="keptWhat"></p>
     <p class="kept-does">
       <a class="cta" id="keptCsv" download="deepsea-favourites.csv" href="#"
          >download the csv &darr;</a>
+      <button class="quiet" id="keptShare">copy a link to these</button>
       <button class="quiet" id="keptClear">forget all of them</button>
+      <button class="quiet" id="keptMine" hidden>show mine instead</button>
+      <button class="quiet keep-these" id="keptTake" hidden>keep these</button>
     </p>
+    <p class="kept-link" id="keptLink" hidden>
+      <input id="keptUrl" readonly><span id="keptSaid"></span></p>
     <div class="wall kept-wall" id="keptWall"></div>
   </section>
 
@@ -662,7 +664,16 @@ a { color: var(--glow); }
 .kept h2 { font-size: clamp(1.3rem, 2.6vw, 1.9rem); }
 .kept .lede { margin: .7rem 0 1.1rem; }
 .kept-does { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem;
+             margin: 0 0 1rem; }
+.keep-these { border-color: var(--glow); color: var(--glow); }
+.kept-link { display: flex; flex-wrap: wrap; align-items: center; gap: .8rem;
              margin: 0 0 1.2rem; }
+.kept-link[hidden] { display: none; }
+.kept-link input { flex: 1 1 28rem; min-width: 0; background: #020a12; color: var(--ink);
+                   border: 1px solid var(--line); border-radius: 2px; padding: .5rem .6rem;
+                   font: .72rem var(--mono); }
+.kept-link span { color: var(--dim); font: .68rem var(--mono); letter-spacing: .1em;
+                  text-transform: uppercase; }
 .kept-wall { max-height: 30rem; }
 .quiet { background: none; border: 1px solid var(--line); border-radius: 2px;
          color: var(--dim); cursor: pointer; padding: .5rem .8rem;
@@ -791,7 +802,7 @@ const state = { index: null, path: [], taxa: [], queue: [], loading: false,
                 done: false, pages: new Map(), clips: new Map(),
                 keptKeys: new Set(), staged: null, csvUrl: '', drawingKept: 0,
                 reels: new Map(), reelNow: [], rects: new Map(), painted: -1,
-                filmTimer: null };
+                filmTimer: null, shared: null };
 
 const el = (id) => document.getElementById(id);
 
@@ -803,8 +814,10 @@ const paged = () => window.matchMedia('(min-width: 900px)').matches;
 
 async function boot() {
   // Read before anything writes: settling the wall rewrites the address bar, and
-  // the moment somebody was sent would be gone before it was opened.
+  // the moment - or the collection - somebody was sent would be gone before it was
+  // opened.
   const asked = askedFor();
+  const sent = new URLSearchParams((location.hash || '').slice(1)).get('k') || '';
   try {
     state.index = await (await fetch(`${TILES}/index.json`)).json();
   } catch (err) {
@@ -828,6 +841,7 @@ async function boot() {
   wireTheStage();
   drawKept();
   openAsked(asked);
+  openShared(sent);
 }
 
 /* ── the taxonomy, as rings ────────────────────────────────────────────────── */
@@ -1802,27 +1816,170 @@ function markKept() {
  *
  * Built whole and then put in place, because starring two tiles quickly had two of
  * these running at once: both cleared the wall, both waited on a page, and both
- * appended what they had, so a reader with one favourite was shown two of it. */
+ * appended what they had, so a reader with one favourite was shown two of it.
+ *
+ * Shows what a link brought where there is one, and what this browser kept where
+ * there is not. */
 async function drawKept() {
   const mine = ++state.drawingKept;
-  const list = kept();
+  const theirs = state.shared;
+  const list = theirs || kept();
   el('kept').hidden = !list.length;
   el('keptCsv').href = list.length ? asCsv(list) : '#';
+  sayWhoseTheseAre(list, Boolean(theirs));
   const tiles = [];
   for (const entry of list) {
     try {
-      const { animals, stills } = await pageOf(entry.slug, entry.page);
-      const animal = animals[entry.at];
-      if (!animal) continue;
-      let at = 0;
-      for (const before of animals.slice(0, entry.at)) at += before.l;
-      tiles.push(tileFor(animal, stills.slice(at, at + animal.l),
-                         entry.slug, entry.page, entry.at));
+      const found = theirs ? await foundAgain(entry) : await fromTheStore(entry);
+      if (!found) continue;
+      tiles.push(tileFor(found.animal, found.still, found.slug, found.page, found.at));
     } catch { /* a favourite whose page will not load is one tile fewer */ }
   }
   if (mine !== state.drawingKept) return;     // a later draw has taken over
   el('keptWall').replaceChildren(...tiles);
   markKept();
+}
+
+/** One of this browser's own favourites, by where it sits in the store. */
+async function fromTheStore(entry) {
+  const { animals, stills } = await pageOf(entry.slug, entry.page);
+  const animal = animals[entry.at];
+  if (!animal) return null;
+  let at = 0;
+  for (const before of animals.slice(0, entry.at)) at += before.l;
+  return { animal, still: stills.slice(at, at + animal.l),
+           slug: entry.slug, page: entry.page, at: entry.at };
+}
+
+/** Whose collection is on screen, and what can be done with it. */
+function sayWhoseTheseAre(list, theirs) {
+  el('keptTitle').textContent = theirs ? 'Sent to you' : 'Your favourites';
+  el('keptWhat').textContent = theirs
+    ? `${list.length} sighting${list.length === 1 ? '' : 's'} somebody put in a link. `
+      + 'They are not in this browser until you keep them, and keeping them does not '
+      + 'lose whatever you had.'
+    : 'Starred sightings, kept in this browser and sent nowhere. The CSV carries the '
+      + 'name, the recording, the second and the box the detector drew, which is '
+      + "enough for somebody else to find the moment in the archive's own file.";
+  el('keptTake').hidden = !theirs;
+  el('keptMine').hidden = !theirs;
+  el('keptClear').hidden = theirs;
+  el('keptShare').hidden = theirs;
+}
+
+/** Take a shared collection into this browser, on top of what is already here. */
+async function takeShared() {
+  const theirs = state.shared || [];
+  const list = kept();
+  const have = new Set(list.map(entry => entry.k));
+  for (const share of theirs) {
+    const found = await foundAgain(share);
+    if (!found) continue;
+    const animal = found.animal;
+    const key = keyOf(animal);
+    if (have.has(key)) continue;
+    have.add(key);
+    list.push({ k: key, slug: found.slug, page: found.page, at: found.at,
+                t: animal.t, e: animal.e, r: animal.r, s: animal.s, c: animal.c,
+                d: animal.d || 0, n: animal.n, w: animal.w || '', z: animal.z,
+                b: animal.b || [], v: fileOf(animal), f: frameOf(animal) });
+  }
+  state.shared = null;
+  history.replaceState(null, '', location.href.split('#')[0]);
+  keepThese(list);
+}
+
+/* ── sending them to somebody ──────────────────────────────────────────────── */
+
+/* A shared collection travels in the link itself. There is no server here and
+   nothing to host: the page is a folder, so a favourite cannot be given an id
+   somewhere and fetched back. What it can be is written into the address.
+ *
+ * Four fields an animal is found again by - expedition, recording, second, name -
+ * deflated and base64'd, which on a NOAA collection is mostly one prefix repeated
+ * and squeezes to about a tenth. Twenty favourites make a link of a few hundred
+ * characters. The store can be rebuilt underneath it and the link still resolves,
+ * because none of those four is a position in a file. */
+
+const shareOf = (entry) => [entry.e, entry.r, entry.s, entry.t];
+
+function toBase64Url(bytes) {
+  let binary = '';
+  for (let at = 0; at < bytes.length; at += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(at, at + 0x8000));
+  }
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function fromBase64Url(text) {
+  const padded = String(text).replace(/-/g, '+').replace(/_/g, '/');
+  const binary = atob(padded + '='.repeat((4 - padded.length % 4) % 4));
+  return Uint8Array.from(binary, ch => ch.charCodeAt(0));
+}
+
+/** The kept list as one string for the address bar: `z` deflated, `p` plain. */
+async function packed(list) {
+  const bytes = new TextEncoder().encode(JSON.stringify(list.map(shareOf)));
+  if (!window.CompressionStream) return `p${toBase64Url(bytes)}`;
+  try {
+    const squeezed = await new Response(new Blob([bytes]).stream()
+      .pipeThrough(new CompressionStream('deflate-raw'))).arrayBuffer();
+    return `z${toBase64Url(new Uint8Array(squeezed))}`;
+  } catch {
+    return `p${toBase64Url(bytes)}`;
+  }
+}
+
+async function unpacked(payload) {
+  const body = fromBase64Url(String(payload).slice(1));
+  const bytes = String(payload)[0] === 'z'
+    ? new Uint8Array(await new Response(new Blob([body]).stream()
+        .pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer())
+    : body;
+  return JSON.parse(new TextDecoder().decode(bytes))
+    .map(([e, r, second, t]) => ({ e, r, s: Number(second), t }));
+}
+
+/** A link that carries these sightings, whoever opens it. */
+async function linkTo(list) {
+  const here = location.href.split('#')[0];
+  return `${here}#k=${encodeURIComponent(await packed(list))}`;
+}
+
+/** One shared sighting, found again in this collection.
+ *
+ * By what it is and when, not by where it sits in the store: the pages are cut by
+ * confidence and a rebuild moves everything, so a link that named a page and a
+ * place would rot the next time the collection grew. */
+async function foundAgain(share) {
+  const reel = await reelOf(share);
+  const near = (one) => Math.abs(one.s - share.s) < 0.06;
+  const entry = reel.find(one => one.t === share.t && near(one)) || reel.find(near);
+  if (!entry) return null;
+  const { animals, stills } = await pageOf(entry.g, entry.p);
+  const animal = animals[entry.at];
+  if (!animal) return null;
+  let from = 0;
+  for (const before of animals.slice(0, entry.at)) from += before.l;
+  return { animal, still: stills.slice(from, from + animal.l),
+           slug: entry.g, page: entry.p, at: entry.at };
+}
+
+/** Open what a link brought: theirs, beside yours rather than over it.
+ *
+ * Somebody else's collection does not overwrite the one in this browser - it is
+ * shown as what it is, with a button that takes it. Nobody should lose their own
+ * list by following a link. */
+async function openShared(payload) {
+  if (!payload) return;
+  try {
+    state.shared = await unpacked(payload);
+  } catch {
+    state.shared = null;
+    return;
+  }
+  drawKept();
+  el('kept').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 /** The favourites as a file somebody else could use.
@@ -1880,6 +2037,32 @@ function wireTheStage() {
     if (staged) toggleKept(staged.animal, staged.slug, staged.page, staged.at);
   });
   el('keptClear').addEventListener('click', () => keepThese([]));
+  el('keptShare').addEventListener('click', shareThese);
+  el('keptTake').addEventListener('click', takeShared);
+  el('keptMine').addEventListener('click', () => {
+    state.shared = null;
+    history.replaceState(null, '', location.href.split('#')[0]);
+    drawKept();
+  });
+}
+
+/** Put a link to this collection where it can be copied.
+ *
+ * Written into a field as well as onto the clipboard: a browser can refuse the
+ * clipboard, and "copied" with nothing copied is worse than showing the link. */
+async function shareThese() {
+  const list = kept();
+  if (!list.length) return;
+  const url = await linkTo(list);
+  el('keptLink').hidden = false;
+  el('keptUrl').value = url;
+  el('keptUrl').select();
+  try {
+    await navigator.clipboard.writeText(url);
+    el('keptSaid').textContent = `copied · ${list.length} sightings`;
+  } catch {
+    el('keptSaid').textContent = 'select it and copy';
+  }
 }
 
 const escape = (text) => String(text).replace(/[<>&]/g, ch =>
