@@ -2966,8 +2966,15 @@ export function compositionTraces(rows, taxonomy, rank, ctx) {
   // Biggest first, so the stack reads from the dominant band up and the legend
   // is in the order a reader would name them.
   const bands = [...totals.entries()].sort((a, b) => b[1] - a[1]).map(([g]) => g);
-  const shown = bands.slice(0, MOST_GROUPS);
-  const rest = bands.slice(MOST_GROUPS);
+  // Every group, when the bands are the report's own groups. The cap is there for
+  // the taxonomy split, which is three hundred names deep and unbounded; a
+  // collection's expeditions are neither, the reader chose to split by them, and
+  // they carry the same colours here as in every other card. Folding eight of
+  // seventeen into a grey "8 more" hid exactly what somebody split by expedition
+  // to see - which of them, and when.
+  const cap = split.byGroup ? bands.length : MOST_GROUPS;
+  const shown = bands.slice(0, cap);
+  const rest = bands.slice(cap);
   const traces = shown.map(band => ({
     type: 'bar', name: split.label(band),
     x: buckets, y: buckets.map(b => perBucket.get(b).get(band) ?? 0),
@@ -3400,16 +3407,18 @@ async function drawAxis(panel, ctx, taxonomy, rank, counting) {
   head.innerHTML = `<strong>${animals.toLocaleString()}</strong> animals over `
     + `<strong>${buckets}</strong> ${axis.deep ? `${axis.step} m depth bins`
       : `${axis.label.replace('by ', '')}s`}, in <strong>${groups}</strong> `
-    + `${bands}${groups === 1 || split.byGroup ? '' : 's'}`;
+    + `${bands}${groups === 1 || /s$/i.test(String(bands)) ? '' : 's'}`;
   host.innerHTML = '';
   if (seconds) sayWhatTheRateDid(host, seconds, shown === traces);
   ctx.plot.append(host, shown, {
-    height: 380, barmode: 'stack',
-    margin: { l: 68, r: 16, t: 8, b: 64 },
-    xaxis: { title: axis.title, type: 'category' },
+    // Taller, and the legend gets its own room underneath: with a group per
+    // expedition it is a colour key for the whole report, not a footnote.
+    height: 480, barmode: 'stack',
+    margin: { l: 68, r: 16, t: 8, b: 72 },
+    xaxis: { title: axis.title, type: 'category', automargin: true },
     yaxis: { title: seconds?.size ? counting.axis : COUNTS[0].axis, rangemode: 'tozero' },
     showlegend: true,
-    legend: { orientation: 'h', y: -0.24, x: 0 },
+    legend: { orientation: 'h', y: -0.18, x: 0, yanchor: 'top' },
   });
 }
 
