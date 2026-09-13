@@ -783,8 +783,16 @@ async function boot() {
   try {
     state.index = await (await fetch(`${TILES}/index.json`)).json();
   } catch (err) {
-    el('wall').innerHTML = '<p class="empty">No pictures were written beside this page. '
-      + 'Run <code>collect site</code> where the reports are.</p>';
+    // Two different problems with the same symptom - a page and no pictures - and
+    // the wrong answer to one of them is to rebuild a store that is already there.
+    // A browser will not let a page opened from a disk read the files beside it.
+    el('wall').innerHTML = location.protocol === 'file:'
+      ? '<p class="empty">This page was opened from a disk rather than from a server, '
+        + 'and a browser will not let it read the pictures beside it. Serve the '
+        + 'folder instead - <code>python3 -m http.server</code> in this directory, '
+        + 'then open <code>http://localhost:8000</code>. The reports need it too.</p>'
+      : '<p class="empty">No pictures were written beside this page. '
+        + 'Run <code>collect site</code> where the reports are.</p>';
     return;
   }
   // What was kept first: the tiles read it as they are drawn.

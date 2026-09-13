@@ -493,3 +493,36 @@ describe('the boxes, while the recording plays', () => {
     expect(video.currentTime).toBe(122.5);          // the detection, two seconds early
   });
 });
+
+describe('a page that cannot read the store beside it', () => {
+  /** The page, with a fetch that refuses the way a browser refuses. */
+  const wallAfterBoot = async () => {
+    document.body.innerHTML = '<div id="wall"><div id="more"></div></div>'
+      + '<nav id="jumps"></nav><nav id="crumbs"></nav><p id="sunRead"></p>'
+      + '<svg id="sunburst"></svg><aside id="about"></aside>'
+      + '<section id="kept" hidden><a id="keptCsv"></a><button id="keptClear">'
+      + '</button><div id="keptWall"></div></section>';
+    const refuse = () => Promise.reject(new TypeError('Failed to fetch'));
+    const run = new Function('LOOKUP', 'fetch', pageScript() + '\n; return { boot };');
+    await run({}, refuse).boot();
+    return document.getElementById('wall').textContent;
+  };
+
+  it('tells a served page the store is missing', async () => {
+    expect(await wallAfterBoot()).toContain('collect site');
+  });
+
+  it('tells a page opened off a disk that that is the problem', async () => {
+    // The same symptom - a page and no pictures - and the wrong fix is to rebuild
+    // a store that is already sitting next to it.
+    window.happyDOM.setURL('file:///somewhere/footage/index.html');
+    try {
+      const said = await wallAfterBoot();
+      expect(said).toContain('opened from a disk');
+      expect(said).toContain('http.server');
+      expect(said).not.toContain('collect site');
+    } finally {
+      window.happyDOM.setURL('http://localhost/');
+    }
+  });
+});
