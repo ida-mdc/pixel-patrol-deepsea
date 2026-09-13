@@ -70,8 +70,6 @@ class Progress:
     seconds: float = 0.0
     sightings: int = 0
     animals: int = 0
-    tracks: List = field(default_factory=list)   # one per animal, with its crops
-    clips: Dict = field(default_factory=dict)    # (recording, slice) -> steady frames
     vehicle: int = 0         # tracks that turned out to be the ROV's own hardware
     best: Dict[str, object] = field(default_factory=dict)   # taxon -> best look at it
     stills: int = 0
@@ -206,7 +204,7 @@ def read_animals(report: Path):
     return tracks, clips
 
 
-def animals_by_recording(report: Path):
+def animals_by_recording(report: Path, pictures: bool = True):
     """Every animal in a report, one recording at a time.
 
     A recording's rows are contiguous - a merged report is its parts, concatenated,
@@ -245,7 +243,7 @@ def animals_by_recording(report: Path):
     wanted = [c for c in ("detections", "dim_t", "child_id", "name") if c in available]
     names = "child_id" if "child_id" in wanted else "name"
 
-    held, seen = _Recording(), set()
+    held, seen = _Recording(pictures=pictures), set()
     for batch in source.iter_batches(batch_size=READ_ROWS, columns=wanted):
         for row in batch.to_pylist():
             if row.get("detections") is None or row.get("dim_t") is None:
@@ -261,7 +259,7 @@ def animals_by_recording(report: Path):
                     # to be counted as two.
                     logging.getLogger(__name__).warning(
                         "%s: %s comes back after another recording", report.name, where)
-                held = _Recording(where)
+                held = _Recording(where, pictures=pictures)
             held.add(row)
     if held.name is not None:
         yield held.finish()
@@ -270,8 +268,11 @@ def animals_by_recording(report: Path):
 class _Recording:
     """One recording's sightings and clips, until the rows move on to the next."""
 
-    def __init__(self, name=None):
+    def __init__(self, name=None, pictures=True):
         self.name = name
+        # A caller counting animals wants none of the crops, and decoding every
+        # one of them is most of what reading a report costs.
+        self.pictures = pictures
         self.sightings, self.clips = [], {}
         self.stored, self.settled, self.backing = [], [], []
 
@@ -287,7 +288,9 @@ class _Recording:
             return
         key = (self.name, int(row["dim_t"]))
         for animal in animals:
-            crop = _decode(animal.get("crop"))
+            if animal.get("clip") and not self.pictures:
+                continue          # a clip is a picture and nothing else
+            crop = _decode(animal.get("crop")) if self.pictures else None
             if animal.get("clip"):
                 if crop:
                     mine = (*key, animal.get("of", 0))
@@ -421,19 +424,29 @@ def _read_report(report: Path, row: Progress) -> None:
     # Animals straight out of the report, where the detector left them - minus the
     # ROV's own arm, which a fish detector reports as a fish for as long as it is
     # deployed and which was the largest "animal" on this page.
+    #
+    # Counted as they go past rather than collected: this used to hold every track
+    # and every clip frame of every expedition on the row, which on a collection
+    # this size is the page build reading - and keeping - thirty gigabytes to print
+    # four numbers per expedition. Nothing ever read them back.
     from pixel_patrol_deepsea.refine import is_an_animal, looks_like_vehicle
 
     width, height = _frame_size(report)
-    tracks, row.clips = read_animals(report)
-    if tracks:
-        hardware = [t for t in tracks
-                    if not is_an_animal(t.taxon) or looks_like_vehicle(t, width, height)]
-        animals = [t for t in tracks if t not in hardware]
-        row.tracks = animals
-        row.vehicle = len(hardware)
-        row.animals = len(animals)
-        row.sightings = sum(t.frames for t in animals)
-        row.taxa = sorted({t.taxon for t in animals})
+    animals = vehicle = sightings = 0
+    taxa = set()
+    for _recording, tracks, _clips in animals_by_recording(report, pictures=False):
+        for track in tracks:
+            if not is_an_animal(track.taxon) or looks_like_vehicle(track, width, height):
+                vehicle += 1
+                continue
+            animals += 1
+            sightings += track.frames
+            taxa.add(track.taxon)
+    if animals or vehicle:
+        row.vehicle = vehicle
+        row.animals = animals
+        row.sightings = sightings
+        row.taxa = sorted(taxa)
     sightings = report.parent.parent / "sightings" / f"{row.id}.parquet"
     if sightings.is_file():
         try:
