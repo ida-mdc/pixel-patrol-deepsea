@@ -71,7 +71,8 @@ const LOOKUP = { Cnidaria: 'Cnidaria', Hexacorallia: 'Hexacorallia',
    a duration, a box, and the recording it came out of. */
 const ANIMALS = [
   { t: 'Actiniaria', e: 'EX2503', r: 'EX2503_VID_20250413T012000Z_ROVHD_Low.mp4',
-    s: 124.5, c: 0.91, a: 1, n: 4, d: 7.5, b: [100, 40, 180, 130], l: 1, m: 0 },
+    s: 124.5, c: 0.91, a: 1, n: 4, d: 7.5, b: [100, 40, 180, 130], l: 1, m: 0,
+    w: '2025-04-13T01:22:04+00:00', z: 1847.3 },
   { t: 'Actiniaria', e: 'DSMOT', r: 'MD_BTL.mp4',
     s: 12.0, c: 0.7, a: 1, n: 1, d: 0, b: [10, 10, 60, 50], l: 1, m: 0 },
 ];
@@ -111,6 +112,7 @@ function page() {
       <button id="keptClear"></button><div id="keptWall"></div></section>
     <div class="stage" id="stage" hidden><div class="stage-box">
       <p><img id="stageCrop"><b id="stageName"></b><span id="stageFacts"></span>
+        <span id="stageWhere"></span>
         <button class="star" id="stageStar"></button>
         <button id="stageShut"></button></p>
       <div class="stage-play" id="stagePlay"></div>
@@ -400,8 +402,10 @@ function rowsOf(list) {
 
 describe('the boxes, while the recording plays', () => {
   let api;
+  /** A video with data in it, at a given second. */
   const playhead = (seconds) => {
     const video = document.querySelector('#stagePlay video');
+    Object.defineProperty(video, 'readyState', { value: 4, configurable: true });
     video.currentTime = seconds;
     api.paintBoxes(true);
   };
@@ -420,6 +424,17 @@ describe('the boxes, while the recording plays', () => {
     await api.openStage(ANIMALS[0], 'actiniaria', 0, 0, 'blob:still');
   });
   afterEach(() => api.shutStage());
+
+  it('draws the animal that was clicked, before the recording has loaded', () => {
+    // A video with no data in it reads zero, and boxes drawn for the first second
+    // of a dive belong to some other animal or to none. What was clicked is the
+    // truth until the footage catches up with it.
+    const video = document.querySelector('#stagePlay video');
+    expect(video.readyState).toBe(0);
+    api.paintBoxes(true);
+    expect(drawn()).toEqual([
+      { name: 'Actiniaria', here: true, box: [100, 40, 80, 90] }]);
+  });
 
   it('draws the animal where it was at the second being played', () => {
     playhead(124.5);
@@ -524,5 +539,36 @@ describe('a page that cannot read the store beside it', () => {
     } finally {
       window.happyDOM.setURL('http://localhost/');
     }
+  });
+});
+
+describe('what the overlay says about a sighting', () => {
+  let api;
+  beforeEach(async () => {
+    api = page();
+    api.state.index = INDEX;
+    api.refreshKept();
+    api.wireTheStage();
+    await api.openStage(ANIMALS[0], 'actiniaria', 0, 0, 'blob:still');
+  });
+  afterEach(() => api.shutStage());
+
+  it('says where and when it was, and how deep', () => {
+    // A crop of a frame says none of this, and it is what anybody asks of a
+    // deep-sea picture after what it is.
+    const said = document.getElementById('stageWhere').textContent;
+    expect(said).toContain('1847 m');
+    expect(said).toContain('2025-04-13 01:22 UTC');
+    expect(said).toContain('EX2503');
+    expect(said).toContain('EX2503_VID_20250413T012000Z_ROVHD_Low.mp4');
+  });
+
+  it('leaves out a depth or a clock the report never had', async () => {
+    await api.openStage(ANIMALS[1], 'actiniaria', 0, 1, 'blob:still');
+    const said = document.getElementById('stageWhere').textContent;
+    expect(said).toContain('DSMOT');
+    expect(said).not.toContain('undefined');
+    expect(said).not.toContain('NaN');
+    expect(said).not.toMatch(/\bm\b/);
   });
 });

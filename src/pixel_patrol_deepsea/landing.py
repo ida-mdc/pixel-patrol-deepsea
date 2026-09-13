@@ -276,7 +276,8 @@ def render(rows, index: Optional[Dict] = None, scores: Optional[Dict] = None) ->
        aria-label="the moment this animal was found">
     <p class="stage-head">
       <img class="stage-crop" id="stageCrop" alt="">
-      <b id="stageName"></b><span id="stageFacts"></span>
+      <span class="stage-said"><b id="stageName"></b>
+        <span id="stageFacts"></span><br><span id="stageWhere"></span></span>
       <button class="star" id="stageStar" title="keep this sighting">&#9734;</button>
       <button class="shut" id="stageShut" title="close (esc)">&#10005;</button>
     </p>
@@ -597,9 +598,13 @@ a { color: var(--glow); }
 .stage-crop { width: 2.4rem; height: 2.4rem; object-fit: cover; background: #00121f;
               flex: none; }
 .stage-crop[hidden] { display: none; }
-.stage-head b { font-size: 1rem; }
+.stage-head b { font-size: 1rem; margin-right: .5rem; }
+.stage-head .stage-said { display: block; min-width: 0; }
 .stage-head span { color: var(--dim); font: .72rem var(--mono); letter-spacing: .04em;
                    font-variant-numeric: tabular-nums; }
+#stageWhere { display: block; margin-top: .2rem; color: #9fc2da; }
+#stageWhere .sep { color: #44596b; margin: 0 .1rem; }
+#stageWhere .reel { color: var(--dim); }
 .stage-head .star, .stage-head .shut { margin-left: auto; background: none; border: 0;
               color: var(--dim); cursor: pointer; font-size: 1.1rem; line-height: 1;
               padding: 0 .2rem; }
@@ -766,7 +771,8 @@ const OURS = {
 const state = { index: null, path: [], taxa: [], queue: [], loading: false,
                 done: false, pages: new Map(), clips: new Map(),
                 keptKeys: new Set(), staged: null, csvUrl: '', drawingKept: 0,
-                reels: new Map(), reelNow: [], rects: new Map(), painted: -1 };
+                reels: new Map(), reelNow: [], rects: new Map(), painted: -1,
+                filmTimer: null };
 
 const el = (id) => document.getElementById(id);
 
@@ -1342,6 +1348,16 @@ function starFor(animal, slug, page, at) {
   return star;
 }
 
+/** How deep it was, where the vehicle's track said so. */
+const deep = (metres) => (metres || metres === 0) ? `${Math.round(metres)} m` : '';
+
+/** When it was filmed, in the archive's own UTC, trimmed to the minute. */
+function stamp(when) {
+  if (!when) return '';
+  const said = String(when).replace('T', ' ').replace('+00:00', '');
+  return escape(said.slice(0, 16)) + ' UTC';
+}
+
 /** How long the animal was in view. One look is a moment, not a duration. */
 function held(animal) {
   const seconds = animal.d || 0;
@@ -1428,8 +1444,9 @@ async function openStage(animal, slug, page, at, stillSrc) {
   if (!same) {
     const play = el('stagePlay');
     play.style.aspectRatio = `${wide} / ${high}`;
-    play.replaceChildren(file ? footage(file, from) : theCrop(stillSrc, animal),
-                         boxLayer(wide, high));
+    play.replaceChildren(
+      file ? footage(file, from, slug, page, at) : theCrop(stillSrc, animal, slug, page, at),
+      boxLayer(wide, high));
     play.classList.toggle('no-box', !el('stageBox').checked);
     state.rects = new Map();
     state.reelNow = [];
@@ -1450,9 +1467,18 @@ async function openStage(animal, slug, page, at, stillSrc) {
 function sayStaged() {
   const { animal, still } = state.staged;
   el('stageName').textContent = animal.t;
-  el('stageFacts').textContent = `${animal.c.toFixed(2)} · ${held(animal)} in view · `
-    + `${animal.n} look${animal.n === 1 ? '' : 's'} · ${animal.e} · ${animal.r} · `
-    + clock(animal.s);
+  el('stageFacts').textContent = [
+    animal.c.toFixed(2),
+    `${held(animal)} in view`,
+    `${animal.n} look${animal.n === 1 ? '' : 's'}`,
+  ].join(' · ');
+  // Where and when it was, which is what anybody asks of a deep-sea picture after
+  // what it is. The depth and the clock come out of the report; the recording is
+  // the archive's own file name, and it is the thing to cite.
+  el('stageWhere').innerHTML = [
+    deep(animal.z), stamp(animal.w), `${escape(animal.e)} · ${clock(animal.s)}`,
+    `<span class="reel">${escape(animal.r)}</span>`,
+  ].filter(Boolean).join(' <span class="sep">·</span> ');
   const crop = el('stageCrop');
   crop.src = still || '';
   crop.hidden = !still;
@@ -1463,7 +1489,7 @@ function sayStaged() {
   writeHash();
 }
 
-function footage(file, from) {
+function footage(file, from, slug, page, at) {
   const video = document.createElement('video');
   video.src = `${file}#t=${from.toFixed(1)}`;
   video.controls = true;
@@ -1476,17 +1502,53 @@ function footage(file, from) {
     if (Math.abs(video.currentTime - from) > 1) video.currentTime = from;
   });
   video.addEventListener('error', () => {
-    el('stageNote').textContent = 'The archive would not play this file in a page. '
-      + 'The link below opens it at the same second.';
+    // The archive is down, or the file is one this browser will not decode. Either
+    // way there is something to show: the crop, and the clip cut around it.
+    el('stageNote').textContent = 'The archive would not play this file here.';
+    const staged = state.staged;
+    const crop = theCrop(staged && staged.still, staged ? staged.animal : {},
+                         slug, page, at);
+    video.replaceWith(crop);
   });
   return video;
 }
 
-function theCrop(stillSrc, animal) {
+/** The animal itself, where the footage will not play.
+ *
+ * The still is what the tile showed and it is the least this can do; the clip the
+ * detector cut is six frames of the same seconds, and it is already in the store.
+ * A reader who cannot get the recording should at least see the animal move. */
+function theCrop(stillSrc, animal, slug, page, at) {
   const img = document.createElement('img');
   img.src = stillSrc || '';
   img.alt = animal.t;
+  playTheClip(img, slug, page, at);
   return img;
+}
+
+async function playTheClip(img, slug, page, at) {
+  clearInterval(state.filmTimer);
+  state.filmTimer = null;
+  if (slug === undefined || page === undefined || at === undefined) return;
+  try {
+    const [{ animals }, blob] = await Promise.all([pageOf(slug, page), clipsOf(slug, page)]);
+    const animal = animals[at];
+    if (!animal || !animal.m || !(animal.f || []).length) return;
+    let from = clipStart(animals, animal);
+    const frames = animal.f.map(size => {
+      const picture = asPicture(blob.slice(from, from + size));
+      from += size;
+      return picture;
+    });
+    if (!frames.length || el('stage').hidden) return;
+    let step = 0;
+    state.filmTimer = setInterval(() => {
+      if (el('stage').hidden) { clearInterval(state.filmTimer); return; }
+      img.src = frames[step++ % frames.length];
+    }, 140);
+    el('stageNote').textContent = el('stageNote').textContent
+      + ' Playing the seconds the detector cut instead.';
+  } catch { /* the still is what there is */ }
 }
 
 /** The layer the boxes are drawn on, in the coordinates of the analysed frame.
@@ -1533,8 +1595,13 @@ const sameSighting = (entry, animal) =>
 function paintBoxes(force) {
   const svg = el('stageBoxes');
   if (!svg) return;
+  // Until the video has data and has got to where it was asked to start, its
+  // clock reads zero - and boxes drawn for the first second of a recording are
+  // some other animal's, or none. The second somebody clicked is the truth until
+  // the footage catches up with it.
   const video = el('stagePlay').querySelector('video');
-  const now = video ? video.currentTime : (state.staged ? state.staged.animal.s : 0);
+  const live = video && video.readyState >= 2 && video.currentTime > 0;
+  const now = live ? video.currentTime : (state.staged ? state.staged.animal.s : 0);
   if (!force && Math.abs(now - state.painted) < 0.04) return;
   state.painted = now;
   const focus = state.staged && state.staged.animal;
@@ -1620,6 +1687,8 @@ async function stillOf(slug, page, at) {
 }
 
 function shutStage() {
+  clearInterval(state.filmTimer);
+  state.filmTimer = null;
   const video = el('stagePlay').querySelector('video');
   if (video) {                    // or it goes on fetching the recording unwatched
     video.pause();

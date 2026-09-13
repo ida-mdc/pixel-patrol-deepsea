@@ -790,7 +790,8 @@ MERGE_ROWS = 64
 MERGE_BYTES = 48_000_000
 
 
-def merge(expedition_id: str, parts: List[Path], output: Path) -> int:
+def merge(expedition_id: str, parts: List[Path], output: Path,
+          clips: bool = False) -> int:
     """One parquet per expedition, from one parquet per recording.
 
     Rows are concatenated rather than recomputed: in pixel-patrol a video file is
@@ -808,6 +809,15 @@ def merge(expedition_id: str, parts: List[Path], output: Path) -> int:
     has no detection columns, and a run from a week ago may have fewer of them than
     today's. So the schemas are unified first - by reading the schemas, which costs
     a footer each - and every batch is aligned to that before it is written.
+
+    **The clip frames are left behind**, which is what `clips=False` means and why
+    it is the default. Measured across nine expeditions, the frames the gallery
+    animates with are 84% of a report: 5.49 GB of 6.55, against 1.05 GB of stills
+    and 13 MB of every number on the page. They are cut again into the tile store
+    the collection page browses, so a report carrying them is the second copy, and
+    it is the copy that has to be moved, stored and opened over a network. The
+    parts keep everything; `clips=True` puts them in the report as well, for a
+    collection of one dive on a laptop where none of that matters.
     """
     import pyarrow as pa
     import pyarrow.parquet as pq
@@ -827,22 +837,65 @@ def merge(expedition_id: str, parts: List[Path], output: Path) -> int:
         b"pp_loader": b"video",
     })
     output.parent.mkdir(parents=True, exist_ok=True)
-    rows, held, buffered = 0, 0, []
+    rows, held, buffered, left = 0, 0, [], 0
     with pq.ParquetWriter(output, schema) as writer:
         for part in usable:
             # Not pre-buffered: it holds every chunk it reads ahead until the file
             # is closed, which for a part of a tape proxy is most of the part.
             source = pq.ParquetFile(part, pre_buffer=False)
             for batch in source.iter_batches(batch_size=MERGE_ROWS):
-                buffered.append(_as_schema(pa.Table.from_batches([batch]), schema))
-                rows, held = rows + batch.num_rows, held + batch.nbytes
+                table = _as_schema(pa.Table.from_batches([batch]), schema)
+                if not clips:
+                    table, dropped = _without_clips(table)
+                    left += dropped
+                buffered.append(table)
+                rows, held = rows + batch.num_rows, held + table.nbytes
                 if held >= MERGE_BYTES:
                     writer.write_table(pa.concat_tables(buffered))
                     buffered, held = [], 0
         if buffered:
             writer.write_table(pa.concat_tables(buffered))
-    print(f"{expedition.title}: {len(usable)} recordings, {rows:,} rows -> {output}")
+    said = f"{expedition.title}: {len(usable)} recordings, {rows:,} rows"
+    if left:
+        said += f", {left:,} clip frames left in the parts"
+    print(f"{said} -> {output}")
     return 0
+
+
+# The detector writes its clips into `detections` beside the animals, one entry per
+# frame, flagged. They are the frames the gallery animates with and they are most
+# of a report's weight.
+def _without_clips(table):
+    """One batch with the clip frames taken out of its detections.
+
+    The column is JSON, so this is a parse and a dump per row - the same cost the
+    tile store already pays to read them, and it happens once per collection rather
+    than every time somebody opens a report over a network.
+    """
+    import json
+
+    import pyarrow as pa
+
+    if "detections" not in table.column_names:
+        return table, 0
+    kept, dropped = [], 0
+    for raw in table.column("detections").to_pylist():
+        if not raw:
+            kept.append(raw)
+            continue
+        try:
+            animals = json.loads(raw)
+        except Exception:
+            kept.append(raw)
+            continue
+        theirs = [a for a in animals if not a.get("clip")]
+        dropped += len(animals) - len(theirs)
+        kept.append(json.dumps(theirs, separators=(",", ":")) if theirs else None)
+    # In the column's own type: polars writes `large_string` and pyarrow writes
+    # `string`, and a report can be either.
+    at = table.column_names.index("detections")
+    field = table.field(at)
+    return table.set_column(at, field, pa.array(kept, type=field.type)), dropped
 
 
 def _one_schema(parts: List[Path]):
@@ -1015,6 +1068,16 @@ def build_site(root: Path) -> int:
     # Said once, at the top, where it can still be acted on.
     for path in unreadable(root):
         print(f"! {path.name}: {_why_unreadable(path, ValueError('unreadable'))}")
+    # A recording's URL is joined out of the manifest it was listed from, so a
+    # collection copied without its manifests builds a page whose pictures open
+    # nothing. Silently, until now: the tiles are all there and every one of them
+    # is a dead end.
+    for report in sorted((root / "parquet").glob("*.parquet")):
+        if report.stem.startswith("_"):
+            continue
+        if not (root / "manifests" / f"{report.stem}.json").is_file():
+            print(f"! no manifests/{report.stem}.json - nothing in that expedition "
+                  f"will have a recording to open. Copy it beside the reports.")
 
     # Always rebuilt, never skipped if it happens to exist. The site carries its own
     # copy of every widget, so a viewer left over from an earlier run serves the
@@ -1172,6 +1235,10 @@ def main(argv=None) -> int:
     joining.add_argument("expedition")
     joining.add_argument("parts", nargs="+", type=Path)
     joining.add_argument("-o", "--output", type=Path, required=True)
+    joining.add_argument("--with-clips", action="store_true",
+                         help="keep the clip frames in the report. They are 84% of "
+                              "it and the tile store has them; this is for a "
+                              "collection nobody has to move.")
 
     naming = verbs.add_parser("identify", help="write animal ids into reports that "
                                               "predate them")
@@ -1204,7 +1271,7 @@ def main(argv=None) -> int:
     if args.verb == "identify":
         return identify_reports(args.target)
     if args.verb == "merge":
-        return merge(args.expedition, args.parts, args.output)
+        return merge(args.expedition, args.parts, args.output, clips=args.with_clips)
     if args.verb == "score":
         return score(args.expedition, args.root)
     return build_site(args.root)

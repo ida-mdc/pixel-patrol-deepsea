@@ -154,3 +154,53 @@ def test_the_combined_report_leaves_out_what_it_cannot_read(tmp_path, capsys):
     together = pl.read_parquet(tmp_path / "parquet" / f"{EVERYTHING}.parquet")
     assert len(together) == 10
     assert "EX1606" not in set(together["expedition"].to_list())
+
+
+def _clips(rows=3, frames=4):
+    """Detections as the detector writes them: the animals, and the clip frames
+    it cut beside them, flagged."""
+    import json as _json
+
+    out = []
+    for row in range(rows):
+        animals = [{"class": "fish", "conf": 0.8, "box": [1, 2, 3, 4],
+                    "crop": "AAAA" * 40}]
+        animals += [{"class": "fish", "conf": 0.8, "box": [1, 2, 3, 4], "clip": True,
+                     "of": 0, "crop": "BBBB" * 400} for _ in range(frames)]
+        out.append(_json.dumps(animals))
+    return out
+
+
+def test_a_merged_report_leaves_the_clip_frames_behind(tmp_path):
+    """They are 84% of a report - 5.49 GB of 6.55 across nine expeditions - and the
+    tile store cuts them again from the parts. A report carrying them is the second
+    copy, and the one that has to be moved and opened over a network."""
+    import json as _json
+
+    parts = [_part(tmp_path / "parts", "dive", 3, {"detections": _clips()})]
+    merge("EX2107", parts, tmp_path / "slim.parquet")
+    out = pl.read_parquet(tmp_path / "slim.parquet")
+    kept = [_json.loads(raw) for raw in out["detections"].to_list()]
+    assert all(len(animals) == 1 for animals in kept), "the animals stay"
+    assert not any(a.get("clip") for animals in kept for a in animals)
+    # ...and the weight goes with them. Bytes on disk say nothing at three rows of
+    # repeating test data, which compresses to nothing; the payload is the measure.
+    was = sum(len(raw) for raw in pl.read_parquet(parts[0])["detections"].to_list())
+    now = sum(len(raw or "") for raw in out["detections"].to_list())
+    assert now < was / 10
+
+
+def test_the_clips_can_be_kept_for_a_collection_nobody_has_to_move(tmp_path):
+    import json as _json
+
+    parts = [_part(tmp_path / "parts", "dive", 3, {"detections": _clips()})]
+    merge("EX2107", parts, tmp_path / "whole.parquet", clips=True)
+    out = pl.read_parquet(tmp_path / "whole.parquet")
+    kept = [_json.loads(raw) for raw in out["detections"].to_list()]
+    assert sum(1 for animals in kept for a in animals if a.get("clip")) == 12
+
+
+def test_a_recording_with_no_detections_survives_the_trim(tmp_path):
+    parts = [_part(tmp_path / "parts", "quiet", 2, {"detections": [None, None]})]
+    assert merge("EX2107", parts, tmp_path / "out.parquet") == 0
+    assert pl.read_parquet(tmp_path / "out.parquet")["detections"].to_list() == [None, None]

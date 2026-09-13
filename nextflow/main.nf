@@ -36,6 +36,10 @@ params.outdir      = "collection"
 params.expeditions = null      // comma-separated ids; default is the whole catalogue
 params.fps         = 10        // thin to this rate before analysing; 0 keeps the original
 params.sliceFrames = 10        // 1 s at 10 fps
+// The clip frames are 84% of a report and the tile store cuts them again from the
+// parts, so a merged report leaves them behind. `--with-clips` puts them back, for
+// a collection nobody has to move off the machine that made it.
+params.withClips   = false
 
 // What to analyse of each expedition. All three are caps, not quotas: an
 // expedition with fewer dives than `dives` gives what it has. The default is
@@ -186,7 +190,7 @@ process MERGE {
     script:
     """
     ${params.python} -m pixel_patrol_deepsea.collect merge ${expedition} ${parts} \\
-        -o ${expedition}.parquet
+        -o ${expedition}.parquet ${params.withClips ? '--with-clips' : ''}
     """
 }
 

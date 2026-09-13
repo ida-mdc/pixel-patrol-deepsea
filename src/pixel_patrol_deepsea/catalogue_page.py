@@ -198,7 +198,7 @@ def read_animals(report: Path):
     it whole survives a node.
     """
     tracks, clips = [], {}
-    for _recording, mine, its_clips in animals_by_recording(report):
+    for _recording, mine, its_clips, _moments in animals_by_recording(report):
         tracks.extend(mine)
         clips.update(its_clips)
     return tracks, clips
@@ -240,7 +240,11 @@ def animals_by_recording(report: Path, pictures: bool = True):
     available = set(source.schema_arrow.names)
     if "detections" not in available:
         return
-    wanted = [c for c in ("detections", "dim_t", "child_id", "name") if c in available]
+    wanted = [c for c in ("detections", "dim_t", "child_id", "name",
+                          # Where and when the slice was filmed. A crop of a frame
+                          # says nothing about either, and they are the two things
+                          # anybody asks about a deep-sea picture.
+                          "recorded_at", "depth_m") if c in available]
     names = "child_id" if "child_id" in wanted else "name"
 
     held, seen = _Recording(pictures=pictures), set()
@@ -275,6 +279,8 @@ class _Recording:
         self.pictures = pictures
         self.sightings, self.clips = [], {}
         self.stored, self.settled, self.backing = [], [], []
+        # slice -> when it was filmed and how deep, for the moments that have it
+        self.moments = {}
 
     def add(self, row):
         import json
@@ -287,6 +293,10 @@ class _Recording:
         except Exception:
             return
         key = (self.name, int(row["dim_t"]))
+        when, deep = row.get("recorded_at"), row.get("depth_m")
+        if when or deep is not None:
+            self.moments[key[1]] = (str(when) if when else "",
+                                    None if deep is None else round(float(deep), 1))
         for animal in animals:
             if animal.get("clip") and not self.pictures:
                 continue          # a clip is a picture and nothing else
@@ -327,7 +337,7 @@ class _Recording:
             tracks = track_sightings(self.sightings)
         else:
             tracks = []
-        return self.name, tracks, self.clips
+        return self.name, tracks, self.clips, self.moments
 
 
 def animals_in_report(report: Path):
@@ -434,7 +444,7 @@ def _read_report(report: Path, row: Progress) -> None:
     width, height = _frame_size(report)
     animals = vehicle = sightings = 0
     taxa = set()
-    for _recording, tracks, _clips in animals_by_recording(report, pictures=False):
+    for _recording, tracks, _clips, _when in animals_by_recording(report, pictures=False):
         for track in tracks:
             if not is_an_animal(track.taxon) or looks_like_vehicle(track, width, height):
                 vehicle += 1

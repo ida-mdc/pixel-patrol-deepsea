@@ -85,8 +85,8 @@ def build(root: Path, expeditions: Optional[List[Path]] = None) -> Dict:
 
     taxonomy = load_taxonomy()
     store = root / "tiles"
-    reports = expeditions if expeditions is not None else sorted(
-        p for p in (root / "parquet").glob("*.parquet") if not p.stem.startswith("_"))
+    sources = ([(report.stem, [report]) for report in expeditions]
+               if expeditions is not None else _sources(root))
 
     # taxon -> the animals found of it, best first. Metadata only: where each
     # animal's pictures went is two numbers, and the pictures are in the spool.
@@ -103,48 +103,55 @@ def build(root: Path, expeditions: Optional[List[Path]] = None) -> Dict:
     # what that looks like is `Killed`, after twenty minutes, with no page.
     spool = _Spool(root)
     try:
-        for report in reports:
-            expedition, counted = report.stem, 0
-            for _recording, tracks, clips in _animals_of(report, animals_by_recording):
-                for track in tracks:
-                    if not is_an_animal(track.taxon):
-                        continue
-                    best = track.best
-                    if not best.crop:
-                        continue
-                    counted += 1
-                    clip = _its_clip(clips, track)
-                    film = list(clip.crops[:MOST_FRAMES]) if clip else []
-                    entry = {
-                        "t": track.taxon,
-                        "e": expedition,
-                        "r": track.recording,
-                        "s": round(best.second, 1),
-                        "c": round(best.confidence, 3),
-                        "a": round(getattr(track, "agreement", 1.0), 2),
-                        "n": len(track.sightings),
-                        # How long it stayed in view. The tile says this beside the
-                        # confidence, because "0.94, and gone in a tenth of a second"
-                        # and "0.94, and there for a minute" are not the same claim.
-                        "d": round(track.seconds, 1),
-                        # Where in the frame it was, so a reader who opens the
-                        # recording at this second is shown which of the things on
-                        # screen was meant.
-                        "b": [int(v) for v in (best.box or ())][:4],
-                        # Where the pictures went, rather than the pictures.
-                        "i": spool.keep(best.crop),
-                        "f": spool.keep_all(film),
-                    }
-                    found.setdefault(track.taxon, []).append(entry)
-                    seen.setdefault(expedition, set()).add(track.recording)
-                    # ...and again by the recording it came out of, which is how the
-                    # page shows a reader watching one dive what else is on screen.
-                    reels.setdefault((expedition, track.recording), []).append({
-                        "t": track.taxon, "s": entry["s"], "c": entry["c"],
-                        "d": entry["d"], "n": entry["n"],
-                        "was": (track.taxon, len(found[track.taxon]) - 1),
-                        "k": _looks(track),
-                    })
+        for expedition, paths in sources:
+            counted = 0
+            for path in paths:
+                for _recording, tracks, clips, moments in _animals_of(
+                        path, animals_by_recording):
+                    for track in tracks:
+                        if not is_an_animal(track.taxon):
+                            continue
+                        best = track.best
+                        if not best.crop:
+                            continue
+                        counted += 1
+                        when, deep = moments.get(best.slice_t, ("", None))
+                        clip = _its_clip(clips, track)
+                        film = list(clip.crops[:MOST_FRAMES]) if clip else []
+                        entry = {
+                            "t": track.taxon,
+                            "e": expedition,
+                            "r": track.recording,
+                            "s": round(best.second, 1),
+                            "c": round(best.confidence, 3),
+                            "a": round(getattr(track, "agreement", 1.0), 2),
+                            "n": len(track.sightings),
+                            # How long it stayed in view. The tile says this beside the
+                            # confidence, because "0.94, and gone in a tenth of a second"
+                            # and "0.94, and there for a minute" are not the same claim.
+                            "d": round(track.seconds, 1),
+                            # Where in the frame it was, so a reader who opens the
+                            # recording at this second is shown which of the things on
+                            # screen was meant.
+                            "b": [int(v) for v in (best.box or ())][:4],
+                            # When it was filmed and how deep, which is what anybody
+                            # asks of a deep-sea picture after what it is.
+                            "w": when,
+                            "z": deep,
+                            # Where the pictures went, rather than the pictures.
+                            "i": spool.keep(best.crop),
+                            "f": spool.keep_all(film),
+                        }
+                        found.setdefault(track.taxon, []).append(entry)
+                        seen.setdefault(expedition, set()).add(track.recording)
+                        # ...and again by the recording it came out of, which is how the
+                        # page shows a reader watching one dive what else is on screen.
+                        reels.setdefault((expedition, track.recording), []).append({
+                            "t": track.taxon, "s": entry["s"], "c": entry["c"],
+                            "d": entry["d"], "n": entry["n"], "w": when, "z": deep,
+                            "was": (track.taxon, len(found[track.taxon]) - 1),
+                            "k": _looks(track),
+                        })
             logger.info("tiles: %s gave %d animals", expedition, counted)
 
         # The store is written whole. Leaving a previous build's pages behind
@@ -300,6 +307,27 @@ def _write_page(where: Path, page: int, animals: List[dict], spool: "_Spool") ->
         (where / f"p{page}.clips").write_bytes(bytes(clips))
 
 
+def _sources(root: Path) -> List[Tuple[str, List[Path]]]:
+    """Where the pictures are, per expedition: the parts if they are here.
+
+    A merged report no longer carries the clip frames - they are 84% of it and this
+    store is where they belong - so the store is cut from the parts, one parquet per
+    recording, which keep everything. A collection copied without them still builds:
+    the merged reports have the stills, and the animations are what is missing.
+    """
+    parts = root / "parts"
+    found: List[Tuple[str, List[Path]]] = []
+    for report in sorted((root / "parquet").glob("*.parquet")):
+        if report.stem.startswith("_"):
+            continue
+        its_parts = sorted((parts / report.stem).glob("*.parquet"))
+        found.append((report.stem, its_parts or [report]))
+        if not its_parts:
+            logger.info("tiles: no parts for %s, reading the merged report instead",
+                        report.stem)
+    return found
+
+
 def _looks(track) -> List[List]:
     """Every look the detector had at one animal: when, and where in the frame.
 
@@ -347,6 +375,7 @@ def _write_reels(store: Path, reels: Dict[tuple, List[dict]],
                 continue
             listed.append({"t": animal["t"], "s": animal["s"], "c": animal["c"],
                            "d": animal["d"], "n": animal["n"],
+                           "w": animal.get("w", ""), "z": animal.get("z"),
                            "g": slug(animal["t"]), "p": page, "at": at,
                            "k": animal["k"]})
         (where / f"{name}.json").write_text(json.dumps(listed, separators=(",", ":")))
@@ -392,7 +421,11 @@ def _where(root: Path, expedition: str, recordings, takes: Dict[str, str]) -> di
                     or stem.startswith(listed_stem + "-"):
                 videos[str(recording)] = url
                 break
-    if len(videos) < len(recordings):
+    if not videos and recordings:
+        logger.warning("tiles: %s has no manifest beside it, so none of its %d "
+                       "recordings can be opened from the page",
+                       expedition, len(recordings))
+    elif len(videos) < len(recordings):
         logger.info("tiles: %s has no listed URL for %d of %d recordings",
                     expedition, len(recordings) - len(videos), len(recordings))
     return {"frame": [wide, high], "videos": videos,
