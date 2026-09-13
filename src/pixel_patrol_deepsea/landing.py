@@ -188,12 +188,17 @@ def render(rows, index: Optional[Dict] = None, scores: Optional[Dict] = None) ->
     <div class="credit-grid">
       <div>
         <h3>The footage</h3>
-        <p>Every frame was filmed, published and paid for by somebody else. NOAA Ocean
-           Exploration's Okeanos Explorer cruises and its earlier programmes are in the
-           public domain; MBARI's DeepSea-MOT sequences are CC BY; the Axial Seamount
-           camera belongs to the Ocean Observatories Initiative's Regional Cabled Array,
-           run by the University of Washington. Each expedition above links to its own
-           archive, which is the thing to cite.</p>
+        <p>Every frame was filmed, published and paid for by somebody else, and the
+           three archives here do not ask for the same thing. NOAA Ocean Exploration's
+           video is in the public domain and asks to be credited to
+           <b>NOAA Ocean Exploration</b>. MBARI's DeepSea-MOT is
+           <b>CC BY-SA 4.0</b>, so the crops taken from it carry that licence too, and
+           it is cited as Barnard et al. 2025, <i>DeepSea MOT</i>, arXiv:2509.03499.
+           The Axial Seamount camera is the Ocean Observatories Initiative's Regional
+           Cabled Array, run by the University of Washington: open with no licence
+           named, and its terms require acknowledging the <b>National Science
+           Foundation</b> and the <b>WHOI OOI Program Office</b>. Every picture on this
+           page says which of the three it is.</p>
       </div>
       <div>
         <h3>The detector</h3>
@@ -204,12 +209,16 @@ def render(rows, index: Optional[Dict] = None, scores: Optional[Dict] = None) ->
       </div>
       <div>
         <h3>The names</h3>
-        <p>Ranks and identifiers come from the
-           <a href="https://www.marinespecies.org/">World Register of Marine Species</a>,
-           resolved once per class name; article titles from
-           <a href="https://en.wikipedia.org/">Wikipedia</a>, and a name is linked there
-           only where it actually has an article. Nothing on this page describes an
-           animal in its own words.</p>
+        <p><b>Every name on this page is an automated guess</b> - one object
+           detector's answer for one frame, not an identification, and wrong often
+           enough that the page says so wherever a name appears. Ranks and
+           identifiers come from the
+           <a href="https://www.marinespecies.org/">World Register of Marine Species</a>
+           (text CC BY; WoRMS Editorial Board, 2026, doi:10.14284/170), resolved once
+           per class name; article titles from
+           <a href="https://en.wikipedia.org/">Wikipedia</a> (CC BY-SA), and a name is
+           linked there only where it actually has an article. Nothing on this page
+           describes an animal in its own words.</p>
       </div>
       <div class="credit-tool">
         <h3>This tool</h3>
@@ -246,12 +255,14 @@ def render(rows, index: Optional[Dict] = None, scores: Optional[Dict] = None) ->
       </div>
       <div>
         <h3>The data is not ours</h3>
-        <p>No footage is hosted here and none is redistributed: every recording is
-           played from the archive that published it, and every link on this page
-           points there. NOAA Ocean Exploration's video is in the public domain;
-           MBARI's DeepSea-MOT is CC BY 4.0; the Axial Seamount camera belongs to
-           the Ocean Observatories Initiative's Regional Cabled Array at the
-           University of Washington. Cite the archive, not this page.</p>
+        <p>No recording is hosted here: each one plays from the archive that
+           published it. The crops and the few seconds of film beside them are
+           derived from that footage and are redistributed under its terms - public
+           domain for NOAA Ocean Exploration, CC BY-SA 4.0 for MBARI's DeepSea-MOT
+           (so these derivatives are CC BY-SA 4.0 as well), and open with a required
+           acknowledgement of the NSF and the WHOI OOI Program Office for the Ocean
+           Observatories Initiative's Regional Cabled Array at the University of
+           Washington. Cite the archive, not this page.</p>
       </div>
       <div>
         <h3>What was made here</h3>
@@ -289,6 +300,7 @@ def render(rows, index: Optional[Dict] = None, scores: Optional[Dict] = None) ->
       <a id="stageFile" target="_blank" rel="noopener">the recording itself &nearr;</a>
       <span class="stage-note" id="stageNote"></span>
     </p>
+    <p class="stage-terms" id="stageTerms"></p>
   </div>
 </div>
 <script>const LOOKUP = {_lookup(index)};</script>
@@ -637,6 +649,13 @@ a { color: var(--glow); }
 .stage-foot .quiet { padding: .35rem .6rem; letter-spacing: .08em; }
 .stage-foot a { text-decoration: none; }
 .stage-note { color: var(--warn); }
+/* Whose footage this is, and what the name on it is worth. Under the picture
+   rather than in a page-long disclaimer somewhere above it. */
+.stage-terms { margin: 0; padding: .5rem .9rem .6rem; border-top: 1px solid var(--line);
+               color: var(--dim); font: .68rem/1.5 var(--mono); letter-spacing: .04em; }
+.stage-terms .credit { color: #9fc2da; }
+.stage-terms .guess { color: var(--warn); }
+.stage-terms .sep { color: #44596b; margin: 0 .15rem; }
 
 /* ── 05 what somebody kept ────────────────────────────────────────────────── */
 .kept { padding: 3rem 6vw; border-top: 1px solid var(--line); }
@@ -1479,6 +1498,15 @@ function sayStaged() {
     deep(animal.z), stamp(animal.w), `${escape(animal.e)} · ${clock(animal.s)}`,
     `<span class="reel">${escape(animal.r)}</span>`,
   ].filter(Boolean).join(' <span class="sep">·</span> ');
+  // Whose frame this is, and what the name over it is worth. Both belong on the
+  // thing itself: a crop travels, and it arrives without the page around it.
+  const terms = whereFrom(animal);
+  el('stageTerms').innerHTML = [
+    terms.credit ? `<span class="credit">${escape(terms.credit)}</span>` : '',
+    terms.licence ? escape(terms.licence) : '',
+    `<span class="guess">${escape(animal.t)} is one detector's guess, not an `
+      + `identification</span>`,
+  ].filter(Boolean).join(' <span class="sep">·</span> ');
   const crop = el('stageCrop');
   crop.src = still || '';
   crop.hidden = !still;
@@ -1803,14 +1831,22 @@ async function drawKept() {
  * reader opens the archive's own file and finds the same animal, whatever happens
  * to this page. */
 function asCsv(list) {
-  const head = ['taxon', 'confidence', 'seconds_in_view', 'looks', 'expedition',
-                'recording', 'second', 'x0', 'y0', 'x1', 'y1',
-                'frame_width', 'frame_height', 'video'];
+  // `taxon_is_a_guess` is a column rather than a footnote because a CSV is the one
+  // thing here that leaves and gets read somewhere else, by somebody who never saw
+  // the disclaimer. Same for whose footage each row came from.
+  const head = ['taxon', 'taxon_is_a_guess', 'confidence', 'seconds_in_view', 'looks',
+                'expedition', 'recording', 'second', 'when', 'depth_m',
+                'x0', 'y0', 'x1', 'y1', 'frame_width', 'frame_height', 'video',
+                'credit', 'licence'];
   const rows = [head, ...list.map(entry => {
     const box = (entry.b || []).concat(['', '', '', '']).slice(0, 4);
     const frame = (entry.f || []).concat(['', '']).slice(0, 2);
-    return [entry.t, entry.c, entry.d, entry.n, entry.e, entry.r, entry.s,
-            ...box, ...frame, entry.v || ''];
+    const terms = (state.index.where || {})[entry.e] || {};
+    return [entry.t, 'yes, from an object detector', entry.c, entry.d, entry.n,
+            entry.e, entry.r, entry.s, entry.w || '',
+            entry.z === undefined || entry.z === null ? '' : entry.z,
+            ...box, ...frame, entry.v || '',
+            terms.credit || '', terms.licence || ''];
   })];
   const csv = rows.map(row => row.map(cell => {
     const text = cell === undefined || cell === null ? '' : String(cell);

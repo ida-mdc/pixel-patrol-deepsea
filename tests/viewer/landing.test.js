@@ -47,8 +47,10 @@ const INDEX = {
   where: {
     EX2503: { frame: [640, 360],
               videos: { 'EX2503_VID_20250413T012000Z_ROVHD_Low.mp4': 'https://ncei/ex2503.mp4' },
-              takes: { 'EX2503_VID_20250413T012000Z_ROVHD_Low.mp4': 'ex2503--dive' } },
-    DSMOT: { frame: [1920, 1080], videos: {}, takes: {} },
+              takes: { 'EX2503_VID_20250413T012000Z_ROVHD_Low.mp4': 'ex2503--dive' },
+              licence: 'public domain', credit: 'NOAA Ocean Exploration' },
+    DSMOT: { frame: [1920, 1080], videos: {}, takes: {},
+             licence: 'CC BY-SA 4.0', credit: 'MBARI (DeepSea-MOT)' },
   },
   taxa: {
     Actiniaria: { slug: 'actiniaria', count: 30, pages: 1, rank: 'Order',
@@ -118,6 +120,7 @@ function page() {
       <div class="stage-play" id="stagePlay"></div>
       <p><button id="stageBack"></button><input type="checkbox" id="stageBox" checked>
         <a id="stageFile"></a><span id="stageNote"></span></p>
+      <p id="stageTerms"></p>
     </div></div>`;
   const run = new Function('LOOKUP', 'fetch', pageScript()
     + '\n; return { state, focusOn, drawJumps, nodeAt, openStage, toggleKept, '
@@ -570,5 +573,47 @@ describe('what the overlay says about a sighting', () => {
     expect(said).not.toContain('undefined');
     expect(said).not.toContain('NaN');
     expect(said).not.toMatch(/\bm\b/);
+  });
+});
+
+describe('what the overlay says about whose picture it is', () => {
+  let api;
+  beforeEach(async () => {
+    api = page();
+    api.state.index = INDEX;
+    api.refreshKept();
+    api.wireTheStage();
+    await api.openStage(ANIMALS[0], 'actiniaria', 0, 0, 'blob:still');
+  });
+  afterEach(() => api.shutStage());
+
+  it('credits the archive the frame came from', () => {
+    const said = document.getElementById('stageTerms').textContent;
+    expect(said).toContain('NOAA Ocean Exploration');
+    expect(said).toContain('public domain');
+  });
+
+  it('carries the share-alike one as share-alike', async () => {
+    await api.openStage(ANIMALS[1], 'actiniaria', 0, 1, 'blob:still');
+    const said = document.getElementById('stageTerms').textContent;
+    expect(said).toContain('MBARI');
+    expect(said).toContain('CC BY-SA 4.0');
+  });
+
+  it('says the name is a guess, over the picture, every time', () => {
+    // Not only in a disclaimer at the top of a page somebody scrolled past.
+    expect(document.getElementById('stageTerms').textContent)
+      .toContain("Actiniaria is one detector's guess, not an identification");
+  });
+
+  it('puts the guess and the credit in the csv as columns', () => {
+    api.toggleKept(ANIMALS[0], 'actiniaria', 0, 0);
+    const rows = api.asCsv(api.kept());
+    expect(rows).toMatch(/^blob:/);          // the page hands over a blob URL
+    // The columns a stranger opens the file to, named in the page's own source.
+    for (const column of ['taxon_is_a_guess', 'credit', 'licence', 'when', 'depth_m']) {
+      expect(pageScript()).toContain(`'${column}'`);
+    }
+    expect(pageScript()).toContain("'yes, from an object detector'");
   });
 });

@@ -429,7 +429,27 @@ def _where(root: Path, expedition: str, recordings, takes: Dict[str, str]) -> di
         logger.info("tiles: %s has no listed URL for %d of %d recordings",
                     expedition, len(recordings) - len(videos), len(recordings))
     return {"frame": [wide, high], "videos": videos,
-            "takes": {name: takes[name] for name in sorted(takes)}}
+            "takes": {name: takes[name] for name in sorted(takes)},
+            **_terms_of(expedition)}
+
+
+def _terms_of(expedition: str) -> dict:
+    """What this expedition's footage may be used for, and who to credit.
+
+    Carried per expedition rather than said once at the foot of the page, because
+    the page shows crops of three archives at once and they do not agree: one is
+    public domain, one is share-alike, and one has no licence at all and a required
+    acknowledgement. Whatever is on screen, the credit for it should be too.
+    """
+    from pixel_patrol_deepsea.catalogue import catalogue_path, load_catalogue
+
+    try:
+        known = {e.id: e for e in load_catalogue(catalogue_path())}
+        terms = known[expedition].terms
+    except Exception:
+        return {}
+    return {"licence": terms.licence, "credit": terms.credit,
+            "cite": terms.cite, "terms": terms.url}
 
 
 def _about(taxon: str, count: int, taxonomy: Dict) -> dict:

@@ -204,3 +204,15 @@ def test_a_recording_with_no_detections_survives_the_trim(tmp_path):
     parts = [_part(tmp_path / "parts", "quiet", 2, {"detections": [None, None]})]
     assert merge("EX2107", parts, tmp_path / "out.parquet") == 0
     assert pl.read_parquet(tmp_path / "out.parquet")["detections"].to_list() == [None, None]
+
+
+def test_a_report_says_what_its_names_are_worth_and_whose_footage_it_is(tmp_path):
+    """A report is opened on its own, by people who never saw the page. The two
+    things they could otherwise walk away believing are that the names are
+    identifications and that the footage is ours."""
+    parts = [_part(tmp_path / "parts", "dive", 2)]
+    merge("EX2107", parts, tmp_path / "out.parquet")
+    said = (pq.read_schema(tmp_path / "out.parquet").metadata or {})[b"pp_description"]
+    said = said.decode()
+    assert "automated guess from an object detector, not an identification" in said
+    assert "NOAA Ocean Exploration (public domain)" in said

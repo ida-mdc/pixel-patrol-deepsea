@@ -1885,6 +1885,9 @@ const galleryWidget = {
   info: [
     'One tile per detected event, ranked so the most unusual come first.',
     '',
+    '**The name on a tile is an automated guess** - one detector\'s answer for one frame, wrong',
+    'often enough that it should be read as a shortlist and not as an identification.',
+    '',
     'Tiles come out of the report itself, so they need no access to the recordings. Where a',
     'detector found something the tile shows a close-up of the animal and animates the crops it',
     'has, a tenth of a second apart; otherwise it shows the slice stills. Clicking a tile plays',
@@ -2652,6 +2655,11 @@ const taxonomyWidget = {
   label: 'What Was Found',
   shortLabel: 'Taxonomy',
   info: [
+    '**Every name in this tree is an automated guess.** One object detector, one frame at a',
+    'time, on footage it was not trained on - a shortlist for a person to check, not an',
+    'identification. The ranks above the names come from the World Register of Marine Species;',
+    'the names themselves come from the model.',
+    '',
     'Every animal the report found, arranged by what it is. Click a ring to descend into it.',
     '',
     'Two readings of the same tree:',

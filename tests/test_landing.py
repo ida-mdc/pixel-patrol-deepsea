@@ -161,7 +161,7 @@ def test_the_page_says_who_is_responsible_for_it(tmp_path):
     imprint = page[page.index('<section class="imprint"'):]
     said = " ".join(re.sub(r"<[^>]+>", " ", imprint).split())
     for word in ("§5 DDG", "Deborah Schmidt", "Max-Delbrück-Centrum", "13125 Berlin",
-                 "at your own risk", "No footage is hosted here",
+                 "at your own risk", "No recording is hosted here",
                  "deborah.schmidt@mdc-berlin.de"):
         assert word in said, word
     assert "+49" not in said and "Phone" not in said
@@ -174,3 +174,29 @@ def test_the_expedition_name_is_the_link_to_the_expedition(tmp_path):
     row = page[page.index("<tbody>"):page.index("</tbody>")]
     assert '<b><a class="mission"' in row
     assert row.index('class="mission"') < row.index('class="open"')
+
+
+def test_the_page_says_whose_footage_each_picture_is(tmp_path):
+    """Three archives, three different answers, and a page that shows crops of all
+    of them at once. Read off their own terms in September 2026."""
+    page = render(_two_expeditions(tmp_path))
+    said = " ".join(re.sub(r"<[^>]+>", " ", page).split())
+    assert "public domain" in said and "NOAA Ocean Exploration" in said
+    # MBARI's benchmark is share-alike, which the page said was CC BY for a while.
+    assert "CC BY-SA 4.0" in said
+    assert "arXiv:2509.03499" in said
+    # The observatory names no licence and requires two acknowledgements.
+    assert "National Science Foundation" in said and "WHOI OOI Program Office" in said
+    assert "doi:10.14284/170" in said          # WoRMS, whose text is CC BY
+
+
+def test_a_name_is_never_presented_as_an_identification(tmp_path):
+    """The one thing this page must not let somebody walk away believing."""
+    page = render(_two_expeditions(tmp_path))
+    said = " ".join(re.sub(r"<[^>]+>", " ", page).split())
+    assert "Every name on this page is an automated guess" in said
+    assert "not an identification" in said
+    # ...in the overlay over the picture itself, and in the CSV that leaves with
+    # somebody who never saw the page.
+    assert "is one detector's guess, not an" in page
+    assert "taxon_is_a_guess" in page

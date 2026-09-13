@@ -59,10 +59,83 @@ class Expedition:
     vessel: str = ""
     date: str = ""
     notes: str = ""
+    # What this archive allows and asks for, where it differs from what its
+    # organisation allows and asks for generally. Almost always empty: the terms
+    # belong to the archive, not to the cruise, so they are looked up by `archive`
+    # in RIGHTS below and only written here when one expedition is an exception.
+    rights: str = ""
+    credit: str = ""
 
     @property
     def title(self) -> str:
         return self.name or self.id
+
+    @property
+    def terms(self) -> "Terms":
+        """What may be done with this expedition's footage, and who to credit.
+
+        Checked at the source rather than assumed, because the three archives this
+        collection reads from do not agree: NOAA's video is in the public domain,
+        MBARI's benchmark is share-alike, and the observatory's is open with a
+        required acknowledgement and no licence named at all. A page that shows
+        crops of all three has to say so per expedition, and a CSV that leaves with
+        somebody has to carry it.
+        """
+        known = RIGHTS.get(self.archive, RIGHTS[""])
+        return Terms(licence=self.rights or known.licence,
+                     credit=self.credit or known.credit,
+                     cite=known.cite, url=known.url)
+
+
+@dataclass(frozen=True)
+class Terms:
+    """The licence of an archive's footage, and the credit it asks for."""
+    licence: str
+    credit: str
+    cite: str = ""
+    url: str = ""
+
+    @property
+    def share_alike(self) -> bool:
+        return "BY-SA" in self.licence.upper()
+
+
+# Read off each archive's own terms, in September 2026, with the page they are
+# stated on. Quoted rather than paraphrased where the wording is the obligation.
+RIGHTS: Dict[str, Terms] = {
+    "NOAA Ocean Exploration": Terms(
+        licence="public domain",
+        credit="NOAA Ocean Exploration",
+        cite="Video published by NOAA Ocean Exploration. \"All video on the portal "
+             "is in the public domain and should be credited to NOAA Ocean "
+             "Exploration.\" A caption carrying the word \"copyright\" is the "
+             "exception and needs permission.",
+        url="https://oceanexplorer.noaa.gov/news/media-kit.html"),
+    "MBARI, via Hugging Face": Terms(
+        licence="CC BY-SA 4.0",
+        credit="MBARI (DeepSea-MOT)",
+        cite="Barnard, K., Liu, E., Walz, K., Schlining, B., Jacobsen Stout, N. & "
+             "Lundsten, L. (2025). DeepSea MOT: A benchmark dataset for "
+             "multi-object tracking on deep-sea video. arXiv:2509.03499. "
+             "Share-alike: anything derived from these frames carries the same "
+             "licence.",
+        url="https://huggingface.co/datasets/MBARI-org/DeepSea-MOT"),
+    "Ocean Observatories Initiative Regional Cabled Array": Terms(
+        licence="open, with acknowledgement (no licence named)",
+        credit="NSF Ocean Observatories Initiative, WHOI OOI Program Office, and "
+               "the Regional Cabled Array (University of Washington)",
+        cite="OOI User Terms and Conditions: users \"are required to specifically "
+             "acknowledge the National Science Foundation and the WHOI OOI Program "
+             "Office when core data/infrastructure is used and individual "
+             "researchers, groups, or organizations when project specific data is "
+             "used\", and \"must include an appropriate citation crediting the "
+             "source\". The data may be redistributed at no cost, and are for "
+             "research and education rather than operational use.",
+        url="https://oceanobservatories.org/wp-content/uploads/2024/01/"
+            "1102-00020_Data_User_Terms_Conditions_OOI_2019-01-02_Ver_2-00.pdf"),
+    "": Terms(licence="unknown - check before redistributing",
+              credit="the archive that published it"),
+}
 
 
 @dataclass

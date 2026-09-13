@@ -831,9 +831,15 @@ def merge(expedition_id: str, parts: List[Path], output: Path,
     schema = schema.with_metadata({
         **(schema.metadata or {}),
         b"pp_project_name": expedition.title.encode(),
-        b"pp_description": (f"{expedition.notes} {expedition.archive}, "
-                            f"{expedition.vessel}, {expedition.date}. "
-                            f"{len(usable)} recordings.").strip().encode(),
+        b"pp_description": (
+            f"{expedition.notes} {expedition.archive}, {expedition.vessel}, "
+            f"{expedition.date}. {len(usable)} recordings. "
+            # Said in the file rather than only on the page, because a report is
+            # opened on its own, by people who never saw the page.
+            f"Every species name in this report is an automated guess from an "
+            f"object detector, not an identification. Footage: "
+            f"{expedition.terms.credit} ({expedition.terms.licence})."
+        ).strip().encode(),
         b"pp_loader": b"video",
     })
     output.parent.mkdir(parents=True, exist_ok=True)
