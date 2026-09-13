@@ -213,11 +213,29 @@ def slice_rows(table):
     return table.filter(wanted)
 
 
-def summarise(path: Path) -> Optional[ReportSummary]:
+# What a summary never looks at. `detections` alone is 92% of a report - the clip
+# frames are inside it - and a summary is counts, names, a clock and a position.
+UNREAD = ("detections", "slice_thumbnail")
+
+
+def summarise(path: Path, pictures: bool = False) -> Optional[ReportSummary]:
+    """What one report holds, without reading the pictures in it.
+
+    The page over a collection calls this once per expedition, and reading the
+    whole report to count its slices meant reading every clip frame in it: 36 GB
+    across seventeen expeditions, against the 200 MB of columns anything here
+    actually touches. `stills` still comes out right - a parquet's row groups carry
+    their own null counts, so how many slices have a thumbnail is in the footer.
+
+    `pictures=True` also reads the best crop per taxon, which only the older
+    card-per-expedition page ever wanted.
+    """
     import polars as pl
 
     try:
-        table = pl.read_parquet(path)
+        columns = list(pl.read_parquet_schema(path))
+        skip = set(UNREAD) | (set() if pictures else {"detection_crop"})
+        table = pl.read_parquet(path, columns=[c for c in columns if c not in skip])
     except Exception:
         return None
     if "obs_level" not in table.columns:
@@ -233,7 +251,7 @@ def summarise(path: Path) -> Optional[ReportSummary]:
         names=sorted(table["name"].unique().to_list()) if "name" in table.columns else [],
         seconds=_footage_seconds(slices),
         slices=len(slices),
-        stills=int(slices["slice_thumbnail"].is_not_null().sum()) if "slice_thumbnail" in slices.columns else 0,
+        stills=_stills(path, slices),
         scored=int(slices["detection_count"].is_not_null().sum()) if "detection_count" in slices.columns else 0,
         with_animals=0,
     )
@@ -244,6 +262,29 @@ def summarise(path: Path) -> Optional[ReportSummary]:
         if len(seen) and "detection_top_class" in seen.columns:
             summary.taxa = _best_look_per_taxon(seen)
     return summary
+
+
+def _stills(path: Path, slices) -> int:
+    """How many slices carry a cached thumbnail, without reading one of them.
+
+    Every row group records how many nulls each of its columns holds, so this is
+    two reads of a footer rather than a gigabyte of JPEG.
+    """
+    import pyarrow.parquet as pq
+
+    if "slice_thumbnail" in slices.columns:
+        return int(slices["slice_thumbnail"].is_not_null().sum())
+    try:
+        meta = pq.ParquetFile(path, pre_buffer=False).metadata
+        at = meta.schema.names.index("slice_thumbnail")
+    except Exception:
+        return 0
+    rows = nulls = 0
+    for group in range(meta.num_row_groups):
+        column = meta.row_group(group).column(at)
+        rows += meta.row_group(group).num_rows
+        nulls += column.statistics.null_count if column.statistics else 0
+    return max(0, rows - nulls)
 
 
 def _best_look_per_taxon(seen) -> Dict[str, Taxon]:

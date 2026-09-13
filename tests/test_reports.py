@@ -54,10 +54,46 @@ def test_counts_only_the_slices_that_had_an_animal(tmp_path):
 def test_keeps_the_most_confident_look_at_each_species(tmp_path):
     # Same species twice; the chip should carry the better of the two scores.
     path = _report(tmp_path / "r.parquet", _slices(["beroe", "beroe", "shrimp"]))
-    taxa = summarise(path).taxa
+    taxa = summarise(path, pictures=True).taxa
     assert set(taxa) == {"beroe", "shrimp"}
     assert taxa["beroe"].best == pytest.approx(0.51)
     assert taxa["beroe"].thumbnail.startswith("data:image/jpeg;base64,")
+
+
+def test_a_summary_reads_no_pictures_unless_it_is_asked_to(tmp_path, monkeypatch):
+    """Counting the slices in a report used to read every clip frame in it.
+
+    Seventeen expeditions is 36 GB of reports and about 200 MB of columns a summary
+    touches, and the page over them calls this once each - which is how writing the
+    page came to take longer than analysing a recording.
+    """
+    import polars
+
+    asked = []
+    real = polars.read_parquet
+
+    def watch(source, **kwargs):
+        asked.append(kwargs.get("columns"))
+        return real(source, **kwargs)
+
+    path = _report(tmp_path / "r.parquet", _slices(["beroe", "shrimp"]))
+    monkeypatch.setattr(polars, "read_parquet", watch)
+    summary = summarise(path)
+    read = set(asked[0] or [])
+    assert "detections" not in read and "slice_thumbnail" not in read
+    assert "detection_crop" not in read
+    assert "detection_top_class" in read and "obs_level" in read
+    # ...and the numbers are the same ones.
+    assert summary.slices == 2 and summary.with_animals == 2
+    assert set(summary.taxa) == {"beroe", "shrimp"}
+    assert summary.taxa["beroe"].crop is None
+
+
+def test_how_many_slices_have_a_thumbnail_comes_out_of_the_footer(tmp_path):
+    """A parquet's row groups say how many nulls each column holds, so the count
+    needs no picture read - which is the only reason it can still be reported."""
+    path = _report(tmp_path / "r.parquet", _slices(["beroe", None, "shrimp"]))
+    assert summarise(path).stills == summarise(path, pictures=True).stills == 3
 
 
 def test_ignores_files_that_are_not_reports(tmp_path):
