@@ -827,8 +827,10 @@ async function boot() {
     el('wall').innerHTML = location.protocol === 'file:'
       ? '<p class="empty">This page was opened from a disk rather than from a server, '
         + 'and a browser will not let it read the pictures beside it. Serve the '
-        + 'folder instead - <code>python3 -m http.server</code> in this directory, '
-        + 'then open <code>http://localhost:8000</code>. The reports need it too.</p>'
+        + 'folder instead - <code>python -m pixel_patrol_deepsea.serve .</code> in '
+        + 'this directory, then open <code>http://localhost:8000</code>. The reports '
+        + 'need it too, and the big ones need a server that answers byte ranges, '
+        + 'which <code>python -m http.server</code> does not.</p>'
       : '<p class="empty">No pictures were written beside this page. '
         + 'Run <code>collect site</code> where the reports are.</p>';
     return;

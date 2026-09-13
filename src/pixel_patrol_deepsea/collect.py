@@ -1,12 +1,13 @@
 """Collect an archive of expedition video into one parquet per expedition.
 
-Four verbs, each doing one thing, so a scheduler can run them independently and
-only redo what changed:
+Each verb does one thing, so a scheduler can run them independently and only redo
+what changed:
 
     python -m pixel_patrol_deepsea.collect list  EX2107 -o manifests/EX2107.json
     python -m pixel_patrol_deepsea.collect one   <video-url> -o parts/x.parquet -e EX2107
     python -m pixel_patrol_deepsea.collect merge EX2107 parts/*.parquet -o parquet/EX2107.parquet
     python -m pixel_patrol_deepsea.collect site  collection/
+    python -m pixel_patrol_deepsea.collect serve collection/
 
 `one` is the expensive verb and the only one that touches video. It stages the
 recording into a scratch directory, analyses it, and deletes it - so a run of any
@@ -1284,6 +1285,11 @@ def main(argv=None) -> int:
     site = verbs.add_parser("site", help="build the viewer and the catalogue page")
     site.add_argument("root", type=Path)
 
+    serving = verbs.add_parser("serve", help="serve a built collection on localhost, "
+                                            "byte ranges and all")
+    serving.add_argument("root", type=Path)
+    serving.add_argument("-p", "--port", type=int, default=8000)
+
     args = parser.parse_args(argv)
     if args.verb == "list":
         return list_videos(args.expedition, args.output)
@@ -1306,6 +1312,9 @@ def main(argv=None) -> int:
         return merge(args.expedition, args.parts, args.output, clips=args.with_clips)
     if args.verb == "score":
         return score(args.expedition, args.root)
+    if args.verb == "serve":
+        from pixel_patrol_deepsea.serve import serve
+        return serve(args.root, args.port)
     return build_site(args.root)
 
 
