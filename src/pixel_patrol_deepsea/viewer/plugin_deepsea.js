@@ -2185,6 +2185,7 @@ async function renderMeasurements(host, ctx) {
       categoriesOrder: ctx.groups,
       catLabelFn:      ctx.groupLabel,
       sideInfo:        why,
+      layout:          TALL,
     });
     if (!cell.childElementCount) cell.remove();
   }
@@ -2267,6 +2268,41 @@ export function verdictSource(ctx, kind) {
   };
 }
 
+/* The shape every per-expedition distribution in this report is drawn at.
+ *
+ * Plotly sizes a plot as a box and then fits the axis inside whatever the tick
+ * labels leave of it, so a collection grouped by expedition - names of forty-odd
+ * characters, set vertically - was four fifths labels and a centimetre of plot.
+ * Angled ticks are the same words in a third of the height, `automargin` gives
+ * them exactly the room they need, and the extra height is then the plot's.
+ *
+ * Merged over whatever the engine computes, so a caller that wants something else
+ * says so after this. */
+const TALL = {
+  height: 460,
+  margin: { t: 64, b: 8, l: 64, r: 16 },
+  xaxis: { tickangle: -35, automargin: true, ticklabelposition: 'outside' },
+};
+
+/** How many of the groups have no verdicts to plot, said in words.
+ *
+ * `collect identify` writes them into a report that predates them, reading no
+ * footage, so this is a thing a reader can act on rather than a hole in a plot. */
+async function groupsWithoutVerdicts(ctx) {
+  const source = verdictSource(ctx, 'frozen');
+  if (!source || !ctx.groups?.length) return '';
+  try {
+    const [row = {}] = await ctx.queryRows(
+      `SELECT count(DISTINCT grp) AS judged FROM ${source.table} ${source.where}`);
+    const short = ctx.groups.length - Number(row.judged ?? 0);
+    if (short <= 0) return '';
+    const what = ctx.state?.groupCol || 'groups';
+    return `${short} of ${ctx.groups.length} ${what}`;
+  } catch {
+    return '';
+  }
+}
+
 /** A recording's name, short enough for a hover label. */
 function shortName(name) {
   const bare = String(name).split('/').pop();
@@ -2277,6 +2313,11 @@ async function renderVerdictShares(host, ctx, summaries) {
   const distribution = ctx.plot.engine?.renderDistribution;
   if (!distribution) return;
   const { flexGrid, groupingLabel } = ctx.plot;
+  // A report analysed before the verdicts were written has none of them, and a
+  // collection can hold both. The plot simply left those groups out, which is how
+  // two plots on one screen came to show a different number of expeditions with
+  // nothing saying why - so say it.
+  const missing = await groupsWithoutVerdicts(ctx);
   // Two across, always: each of these carries a note beside it, and four verdicts
   // in one row leaves neither the note nor the plot enough width to be read.
   const { wrap, flexBasisPct } = flexGrid(host, 2);
@@ -2293,13 +2334,15 @@ async function renderVerdictShares(host, ctx, summaries) {
       catLabel:        groupingLabel(''),
       yLabel:          'per cent of the recording',
       title:           `${meta.label} footage`
-                       + `<br><sup>one point per recording; n=${summaries.length}</sup>`,
+                       + `<br><sup>one point per recording; n=${summaries.length}`
+                       + `${missing ? `; ${missing} not judged yet` : ''}</sup>`,
       showSignificance: !!ctx.state?.showSignificance,
       series:          { isCategory: true },
       categoriesOrder: ctx.groups,
       catLabelFn:      ctx.groupLabel,
       sideInfo:        VERDICT_NOTES[kind],
       allPointsBelow:  500,
+      layout:          TALL,
     });
     if (!cell.childElementCount) cell.remove();
   }

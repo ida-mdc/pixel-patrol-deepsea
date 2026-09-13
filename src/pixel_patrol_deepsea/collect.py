@@ -932,6 +932,32 @@ def _as_schema(table, schema):
     return pa.Table.from_arrays(columns, schema=schema)
 
 
+def _grouped_as(expedition_id: str) -> str:
+    """What an expedition is called on an axis.
+
+    Every widget in the combined report groups by this, so it is read sideways
+    under a plot forty times over - and the titles are sentences: "Océano Profundo
+    2018: Exploring Deep-sea Habitats off Puerto Rico" is sixty-four characters and
+    took four fifths of the height of the plot it was labelling.
+
+    The date first, because the question a collection spanning 2000 to 2026 invites
+    is which of these is recent, and a label that sorts alphabetically into
+    chronological order answers it without a legend. Then the name up to its colon,
+    which is where these titles stop naming and start describing.
+    """
+    import re
+
+    expedition = _describe(expedition_id)
+    name = str(expedition.title or expedition_id).split(":")[0].strip()
+    when = str(getattr(expedition, "date", "") or "").strip()
+    if when:
+        # "2004-07 Gulf of Alaska Seamount Expedition 2004" says the year twice.
+        name = re.sub(r"[,\s]+(19|20)\d{2}(\s*[-\u2013]\s*(19|20)\d{2})?$", "", name)
+    if len(name) > 34:
+        name = name[:33].rstrip() + "\u2026"
+    return f"{when} {name}".strip() if when else name
+
+
 def _describe(expedition_id: str):
     from pixel_patrol_deepsea.catalogue import Expedition
     try:
@@ -994,7 +1020,7 @@ def combine(root: Path) -> Optional[Path]:
         # Which expedition a row came from has to survive the concatenation, or
         # the combined report can group by everything except the thing a reader
         # most wants to group by.
-        table = table.with_columns(pl.lit(_describe(path.stem).title).alias("expedition"))
+        table = table.with_columns(pl.lit(_grouped_as(path.stem)).alias("expedition"))
         frames.append(table)
         names.append(path.stem)
     together = pl.concat(frames, how="diagonal_relaxed")

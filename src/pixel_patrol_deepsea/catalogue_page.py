@@ -36,7 +36,6 @@ HIDDEN_WIDGETS = (
     "image-table",               # the table the other widgets exist to save reading
     "metadata",                  # the loader's own fields, already in the header line
     "stats-across-dims-basic",   # generic intensity statistics across dims
-    "summary",
     "sunburst",                  # a file-and-folder ring: an expedition is one directory
     "violin-basic",
 )
