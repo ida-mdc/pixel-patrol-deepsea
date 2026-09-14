@@ -331,6 +331,19 @@ describe('a tile is a way into the footage', () => {
     expect(document.getElementById('stageFile').hidden).toBe(true);
   });
 
+  it('names the host when the recording will not play', () => {
+    // Almost always the archive is having a day and nothing here is wrong: NCEI
+    // answered 503 for every file under `/data/oceans` at one point, and the page
+    // said only "the archive would not play this file here", which reads like the
+    // page's own fault. A reader who can see whose host it was can check it.
+    api.openStage(ANIMALS[0], 'actiniaria', 0, 0, 'blob:still');
+    document.querySelector('#stagePlay video').dispatchEvent(new Event('error'));
+    expect(document.getElementById('stageNote').textContent).toContain('ncei');
+    // ...and the animal is still shown, from the crop the store already holds.
+    expect(document.querySelector('#stagePlay video')).toBeNull();
+    expect(document.querySelector('#stagePlay img')).toBeTruthy();
+  });
+
   it('stops fetching the recording when it is closed', () => {
     api.openStage(ANIMALS[0], 'actiniaria', 0, 0, 'blob:still');
     api.shutStage();

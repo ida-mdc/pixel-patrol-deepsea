@@ -1533,6 +1533,15 @@ function sayStaged() {
   writeHash();
 }
 
+/** Whose file this is, for a message about it failing. */
+function hostOf(url) {
+  try {
+    return new URL(url, location.href).hostname;
+  } catch {
+    return 'The archive';
+  }
+}
+
 function footage(file, from, slug, page, at) {
   const video = document.createElement('video');
   video.src = `${file}#t=${from.toFixed(1)}`;
@@ -1548,7 +1557,13 @@ function footage(file, from, slug, page, at) {
   video.addEventListener('error', () => {
     // The archive is down, or the file is one this browser will not decode. Either
     // way there is something to show: the crop, and the clip cut around it.
-    el('stageNote').textContent = 'The archive would not play this file here.';
+    //
+    // Named, because the answer is almost always that the archive is having a day
+    // and nothing here is wrong - NCEI answered 503 for every file under
+    // `/data/oceans` for as long as it took to work that out - and a reader who
+    // can see whose host it was can check it, or open the recording with the link
+    // beside this one and get the same answer from the archive itself.
+    el('stageNote').textContent = `${hostOf(file)} would not play this file here.`;
     const staged = state.staged;
     const crop = theCrop(staged && staged.still, staged ? staged.animal : {},
                          slug, page, at);
