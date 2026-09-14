@@ -140,7 +140,7 @@ def test_a_report_is_never_read_whole_to_slim_it(tmp_path, monkeypatch):
     monkeypatch.setattr(module, "READ_ROWS", 4)
     # A flat-colour crop compresses to almost nothing, so the row group has to
     # be cut small enough that a test's worth of data still fills more than one.
-    monkeypatch.setattr(module, "WRITE_BYTES", 2_000)
+    monkeypatch.setattr(module, "ROW_GROUP_BYTES", 2_000)
     report = _report(tmp_path / "EX2107.parquet", rows=40)
     assert module.slim(report) == 80
     assert pyarrow.parquet.ParquetFile(report).num_row_groups > 1

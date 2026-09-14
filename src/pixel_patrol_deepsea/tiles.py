@@ -47,6 +47,9 @@ import shutil
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+# The ranks the taxonomy is written with, read from whoever writes it.
+from pixel_patrol_deepsea.fetch_taxonomy import RANKS
+
 logger = logging.getLogger(__name__)
 
 # Animals per page. Sixty is about a screenful and a half at the grid's tile size,
@@ -59,7 +62,6 @@ MOST_FRAMES = 6
 # they sort last, so a reader who never scrolls sees the detector's best work.
 LOW_CONFIDENCE = 0.0
 
-RANKS = ("kingdom", "phylum", "class", "order", "family", "genus")
 
 
 def slug(name: str) -> str:

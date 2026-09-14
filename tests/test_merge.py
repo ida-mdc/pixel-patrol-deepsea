@@ -101,7 +101,7 @@ def test_no_part_is_ever_read_whole(tmp_path, monkeypatch):
     monkeypatch.setattr(polars, "read_parquet", refuse)
     # A row group of 50 kB rather than 48 MB, so a test's worth of data is cut the
     # way an expedition's is.
-    monkeypatch.setattr(collect, "MERGE_BYTES", 50_000)
+    monkeypatch.setattr(collect, "ROW_GROUP_BYTES", 50_000)
     parts = [_part(tmp_path / "parts", f"dive{i}", 150) for i in range(4)]
     assert merge("EX2107", parts, tmp_path / "out.parquet") == 0
     # ...and the writing is not one row group of everything either, or the reader of

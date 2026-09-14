@@ -33,6 +33,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence
 
+from pixel_patrol_deepsea.reports import ROW_GROUP_BYTES
+
 logger = logging.getLogger(__name__)
 
 # Below this much frame-to-frame change, nothing is moving at all.
@@ -263,7 +265,6 @@ def _recording_column(columns: Sequence[str]) -> str:
 # one row group. Rows carry pictures, so the second is in bytes: see `collect.merge`,
 # which cuts its row groups the same way and for the same reason.
 READ_ROWS = 256
-WRITE_BYTES = 48_000_000
 
 
 def describe(report: Path) -> int:
@@ -390,7 +391,7 @@ def _rewrite_with(report: Path, source, answers: Dict[str, "object"]) -> None:
                 at += batch.num_rows
                 buffered.append(table)
                 held += table.nbytes
-                if held >= WRITE_BYTES:
+                if held >= ROW_GROUP_BYTES:
                     writer.write_table(pa.concat_tables(buffered))
                     buffered, held = [], 0
             if buffered:

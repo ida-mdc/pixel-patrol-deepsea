@@ -215,6 +215,14 @@ def slice_rows(table):
 
 # What a summary never looks at. `detections` alone is 92% of a report - the clip
 # frames are inside it - and a summary is counts, names, a clock and a position.
+# How much of a report to put in one row group, for every pass that writes one -
+# the merge, the triage, the slimming. The viewer reads these over HTTP ranges, so
+# the size is a bargain between two wastes: a row group smaller than this is a
+# request that buys almost nothing, and one much larger drags down columns the query
+# never asked for. Rows here carry pictures, so it is counted in bytes rather than
+# in rows - slim rows and fat rows want a row group of about the same weight.
+ROW_GROUP_BYTES = 48_000_000
+
 UNREAD = ("detections", "slice_thumbnail")
 
 

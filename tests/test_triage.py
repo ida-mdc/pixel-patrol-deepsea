@@ -290,7 +290,7 @@ def test_a_report_is_never_read_whole_to_judge_it(tmp_path, monkeypatch):
     # A batch of sixteen rows and a row group of 20 kB, so that a test's worth of
     # data is cut the way an expedition's is.
     monkeypatch.setattr(triage, "READ_ROWS", 16)
-    monkeypatch.setattr(triage, "WRITE_BYTES", 20_000)
+    monkeypatch.setattr(triage, "ROW_GROUP_BYTES", 20_000)
     report = _report(tmp_path / "EX2107.parquet", recordings=2, slices=40)
     assert triage.describe(report) == 2
     assert pyarrow.parquet.ParquetFile(report).num_row_groups > 1

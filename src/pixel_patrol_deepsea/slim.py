@@ -50,6 +50,8 @@ import sys
 from pathlib import Path
 from typing import List, Optional
 
+from pixel_patrol_deepsea.reports import ROW_GROUP_BYTES
+
 logger = logging.getLogger(__name__)
 
 # Columns that carry a picture the page has a better copy of.
@@ -61,7 +63,6 @@ CROP_QUALITY = 75
 # A WebP file begins "RIFF", which is this once base64 has had it.
 WEBP_IN_BASE64 = "UklGR"
 READ_ROWS = 64
-WRITE_BYTES = 48_000_000
 
 
 def slim(report: Path) -> int:
@@ -89,7 +90,7 @@ def slim(report: Path) -> int:
                     done += count
                 buffered.append(table)
                 held += table.nbytes
-                if held >= WRITE_BYTES:
+                if held >= ROW_GROUP_BYTES:
                     writer.write_table(pa.concat_tables(buffered))
                     buffered, held = [], 0
             if buffered:

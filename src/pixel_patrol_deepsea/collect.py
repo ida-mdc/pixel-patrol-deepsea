@@ -831,7 +831,9 @@ def _analyse_quietly(url: str, output: Path, expedition_id: str, fps, slice_fram
 # on how many animals were in it, and a row group should be neither a tenth of a
 # megabyte nor the whole expedition. This is also the whole of what a merge holds.
 MERGE_ROWS = 64
-MERGE_BYTES = 48_000_000
+# The row group is sized once, in `reports`, because every pass that writes a report
+# is making the same bargain with the viewer's range reads.
+from pixel_patrol_deepsea.reports import ROW_GROUP_BYTES  # noqa: E402
 
 
 def merge(expedition_id: str, parts: List[Path], output: Path,
@@ -900,7 +902,7 @@ def merge(expedition_id: str, parts: List[Path], output: Path,
                     left += dropped
                 buffered.append(table)
                 rows, held = rows + batch.num_rows, held + table.nbytes
-                if held >= MERGE_BYTES:
+                if held >= ROW_GROUP_BYTES:
                     writer.write_table(pa.concat_tables(buffered))
                     buffered, held = [], 0
         if buffered:
