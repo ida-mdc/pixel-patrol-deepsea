@@ -92,7 +92,7 @@ describe('timecode export', () => {
   it('writes one row per event with both seconds and a readable timecode', () => {
     const csv = eventsToCsv([event()], () => 30).split('\n');
     expect(csv[0]).toBe('recording,start_seconds,end_seconds,start_timecode,kind,movement,'
-      + 'score,animals,taxon,confidence');
+      + 'score,animals,taxon,certainty_0_to_1');
     expect(csv[1]).toBe('dive.mp4,30.00,40.00,00:00:30,dwell,0.8860,4.20,,,');
   });
 

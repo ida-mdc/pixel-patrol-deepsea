@@ -707,14 +707,14 @@ function tileFor(animal, still, slug, page, at) {
   figure.appendChild(img);
   const meta = document.createElement('div');
   meta.className = 'meta';
-  meta.innerHTML = `<b>${animal.c.toFixed(2)}</b><span>${held(animal)}</span>`;
+  meta.innerHTML = `<b>${sure(animal.c)}</b><span>${held(animal)}</span>`;
   figure.appendChild(meta);
   const caption = document.createElement('figcaption');
   caption.textContent = animal.t;
   figure.appendChild(caption);
   figure.appendChild(starFor(animal, slug, page, at));
-  figure.title = `${animal.t} · ${animal.e} · ${clock(animal.s)} · ${animal.n} `
-    + `look${animal.n === 1 ? '' : 's'}`
+  figure.title = `Detector guess: ${animal.t} · ${animal.e} · ${clock(animal.s)} · `
+    + `${sure(animal.c)} certainty · ${animal.n} frame${animal.n === 1 ? '' : 's'}`
     + (animal.a < 1 ? ` · agreed ${Math.round(animal.a * 100)}%` : '')
     + ' — click to open the footage here';
   const open = () => openStage(animal, slug, page, at, img.src);
@@ -750,6 +750,16 @@ function stamp(when) {
   const said = String(when).replace('T', ' ').replace('+00:00', '');
   return escape(said.slice(0, 16)) + ' UTC';
 }
+
+/** How sure the detector was, as something a reader can read.
+ *
+ * A bare `0.94` beside a picture is a number with no unit and no scale - it was on
+ * the tiles for months and it says nothing to anybody who has not been told what it
+ * is. Per cent needs no telling. It is still the detector's own number and still
+ * means what it always meant: how sure the model is, not how likely the name is to
+ * be right. */
+const sure = (confidence) => `${Math.round(confidence * 100)}%`;
+
 
 /** How long the animal was in view. One look is a moment, not a duration. */
 function held(animal) {
@@ -859,11 +869,11 @@ async function openStage(animal, slug, page, at, stillSrc) {
 /** Who is in focus: the header, the crop, the star, the way back, the address bar. */
 function sayStaged() {
   const { animal, still } = state.staged;
-  el('stageName').textContent = animal.t;
+  el('stageName').textContent = "Detector guess: " + animal.t;
   el('stageFacts').textContent = [
-    animal.c.toFixed(2),
+    `${sure(animal.c)} certainty`,
     `${held(animal)} in view`,
-    `${animal.n} look${animal.n === 1 ? '' : 's'}`,
+    `${animal.n} frame${animal.n === 1 ? '' : 's'}`,
   ].join(' · ');
   // Where and when it was, which is what anybody asks of a deep-sea picture after
   // what it is. The depth and the clock come out of the report; the recording is
@@ -878,8 +888,6 @@ function sayStaged() {
   el('stageTerms').innerHTML = [
     terms.credit ? `<span class="credit">${escape(terms.credit)}</span>` : '',
     terms.licence ? escape(terms.licence) : '',
-    `<span class="guess">${escape(animal.t)} is one detector's guess, not an `
-      + `identification</span>`,
   ].filter(Boolean).join(' <span class="sep">·</span> ');
   const crop = el('stageCrop');
   crop.src = still || '';
@@ -1043,7 +1051,7 @@ function paintBoxes(force) {
           && state.staged.animal) ? entry.t : '';
       });
       const title = document.createElementNS(SVGNS, 'title');
-      title.textContent = `${entry.t} — ${entry.c.toFixed(2)}, ${clock(entry.s)}`;
+      title.textContent = `${entry.t} — ${sure(entry.c)} certainty, ${clock(entry.s)}`;
       drawn.rect.appendChild(title);
       state.rects.set(index, drawn);
       svg.append(drawn.rect, drawn.label);
@@ -1378,7 +1386,9 @@ function csvText(list) {
   // `taxon_is_a_guess` is a column rather than a footnote because a CSV is the one
   // thing here that leaves and gets read somewhere else, by somebody who never saw
   // the disclaimer. Same for whose footage each row came from.
-  const head = ['taxon', 'taxon_is_a_guess', 'confidence', 'seconds_in_view', 'looks',
+  // The page says 94%; a file somebody loads into something else wants the number
+  // the detector actually produced, and a header that says which it is.
+  const head = ['taxon', 'taxon_is_a_guess', 'certainty_0_to_1', 'seconds_in_view', 'frames',
                 'expedition', 'recording', 'second', 'when', 'depth_m',
                 'x0', 'y0', 'x1', 'y1', 'frame_width', 'frame_height', 'video',
                 'credit', 'licence'];

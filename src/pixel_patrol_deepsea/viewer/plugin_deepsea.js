@@ -775,6 +775,15 @@ async function previewShots(ctx, most) {
     .map(bytes => ({ src: URL.createObjectURL(new Blob([bytes], { type: 'image/jpeg' })) }));
 }
 
+/** How sure the detector was, as something a reader can read.
+ *
+ * A bare `0.94` beside a picture is a number with no unit and no scale. Per cent
+ * needs no explaining, and it is the same number: how sure the model is, not how
+ * likely the name is to be right.
+ */
+export const certainty = (confidence) => `${Math.round(confidence * 100)}%`;
+
+
 /** A crop as something an `<img>` will take.
  *
  * Sniffed rather than assumed. A report written before the crops were slimmed
@@ -1033,7 +1042,7 @@ function appendAnimalTile(grid, shots) {
     : `seen in ${shots.length} frame${shots.length === 1 ? '' : 's'}`;
   card.appendChild(Object.assign(document.createElement('figcaption'), {
     innerHTML: (named ? `<span class="pp-name">${escapeHtmlText(named)}`
-      + (sure.length ? ` <em>${Math.max(...sure).toFixed(2)}</em>` : '') + '</span>' : '')
+      + (sure.length ? ` <em>${certainty(Math.max(...sure))}</em>` : '') + '</span>' : '')
       + `<span class="pp-when">${looks}</span>`,
   }));
   grid.appendChild(card);
@@ -1083,7 +1092,7 @@ function animalImages(event, animals) {
 /** What the tile is of, when anything named it. */
 function eventName(event) {
   if (!event.topClass) return '';
-  const sure = Number.isFinite(event.confidence) ? ` <em>${event.confidence.toFixed(2)}</em>` : '';
+  const sure = Number.isFinite(event.confidence) ? ` <em>${certainty(event.confidence)}</em>` : '';
   return `<span class="pp-name">${escapeHtmlText(event.topClass)}${sure}</span>`;
 }
 
@@ -1137,7 +1146,8 @@ function renderGalleryScope(host, recordings, onChange) {
  * attention, so the list has to be able to leave the report.
  */
 export function eventsToCsv(events, fpsOf) {
-  const header = 'recording,start_seconds,end_seconds,start_timecode,kind,movement,score,animals,taxon,confidence';
+  const header = 'recording,start_seconds,end_seconds,start_timecode,kind,movement,'
+    + 'score,animals,taxon,certainty_0_to_1';
   const lines = events.map((event) => {
     const fps = fpsOf(event);
     const start = toSeconds(event.fromT, fps);

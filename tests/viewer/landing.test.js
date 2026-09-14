@@ -504,7 +504,7 @@ describe('the boxes, while the recording plays', () => {
       .find(rect => rect.querySelector('title').textContent.startsWith('Cnidaria'));
     other.dispatchEvent(new Event('click'));
     await new Promise(resolve => setTimeout(resolve, 0));
-    expect(document.getElementById('stageName').textContent).toBe('Cnidaria');
+    expect(document.getElementById('stageName').textContent).toContain('Cnidaria');
     expect(video.currentTime).toBe(127.0);          // still watching, not re-seeked
     expect(document.querySelector('#stagePlay svg rect.here')
       .querySelector('title').textContent).toContain('Cnidaria');
@@ -525,7 +525,7 @@ describe('the boxes, while the recording plays', () => {
     // the moment somebody was sent would be gone before it was opened.
     await api.openAsked(api.askedFor());
     expect(document.getElementById('stage').hidden).toBe(false);
-    expect(document.getElementById('stageName').textContent).toBe('Cnidaria');
+    expect(document.getElementById('stageName').textContent).toContain('Cnidaria');
   });
 
   it('goes back to the moment it was opened on', () => {
@@ -624,10 +624,14 @@ describe('what the overlay says about whose picture it is', () => {
     expect(said).toContain('CC BY-SA 4.0');
   });
 
-  it('says the name is a guess, over the picture, every time', () => {
-    // Not only in a disclaimer at the top of a page somebody scrolled past.
-    expect(document.getElementById('stageTerms').textContent)
-      .toContain("Actiniaria is one detector's guess, not an identification");
+  it('says the name is a guess wherever it puts the name', () => {
+    // Not only in a disclaimer at the top of a page somebody scrolled past. Where
+    // the qualifier sits is the page author's to move - it has been a sentence under
+    // the credit and it is now a prefix on the name itself - but a reader looking at
+    // a picture must not be able to take the name for an identification.
+    const named = document.getElementById('stageName').textContent;
+    expect(named).toContain('Actiniaria');
+    expect(named.toLowerCase()).toContain('guess');
   });
 
   it('puts the guess and the credit in the csv as columns', () => {
@@ -794,5 +798,35 @@ describe('finding a name', () => {
     api.pickFound('Actiniaria');
     expect(document.getElementById('findList').hidden).toBe(true);
     expect(document.getElementById('find').value).toBe('Actiniaria');
+  });
+});
+
+describe('how sure the detector was', () => {
+  let api;
+  beforeEach(() => {
+    api = page();
+    api.state.index = INDEX;
+    api.wireTheStage();
+  });
+
+  it('says it as a percentage, not as a number nobody explained', () => {
+    // `0.91` beside a picture has no unit and no scale. Per cent needs no telling.
+    const tile = api.tileFor(ANIMALS[0], new Uint8Array([255]), 'actiniaria', 0, 0);
+    expect(tile.querySelector('.meta b').textContent).toBe('91%');
+    expect(tile.title).toContain('91% certainty');
+  });
+
+  it('says the same thing over the picture as on the tile', async () => {
+    await api.openStage(ANIMALS[0], 'actiniaria', 0, 0, 'blob:still');
+    expect(document.getElementById('stageFacts').textContent).toContain('91% certainty');
+  });
+
+  it('keeps the detector\'s own number in the file somebody takes away', () => {
+    // A page is read; a CSV is loaded into something else, which wants 0.91 and a
+    // column name that says so.
+    api.toggleKept(ANIMALS[0], 'actiniaria', 0, 0);
+    const rows = api.csvText(api.kept()).split('\n');
+    expect(rows[0]).toContain('certainty_0_to_1');
+    expect(rows[1]).toContain('0.91');
   });
 });
