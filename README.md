@@ -296,8 +296,10 @@ Read the precision column as a floor, not a figure — see
 
 ### How that was arrived at
 
-The sweep behind this is in [`examples/calibration/`](examples/calibration/), scripts and
-all, because a measurement nobody can repeat is an opinion.
+The sweep behind this was run against MBARI's DeepSea-MOT, the only footage here with a
+box around every animal in every frame. What it concluded is in `detector.py`, beside the
+constants it decided; `collect score` re-measures it end to end, and that is the number on
+the collection page.
 
 All five annotated DeepSea-MOT sequences, 300 native-resolution frames, every detection
 kept down to a floor of 0.001 so the threshold could be swept afterwards rather than
@@ -444,9 +446,6 @@ catalogue, 4996 m, which nothing here knew while its reports were unreadable.
 
 `--jobs` is bounded by memory, not cores: a worker running the fused detector on HD footage
 is resident at about 4.8 GB, so what fits at once is roughly RAM over five gigabytes.
-
-`examples/overnight.py` is a plan across all of it — the whole catalogue, resumable, ground
-truth first — and is the thing to read for how the settings differ per archive.
 
 `nextflow/main.nf` runs them: `LIST → SELECT → ANALYSE → MERGE → SITE`, one parquet per
 recording merged into one per expedition. `collect site` says so and carries on if a
@@ -833,18 +832,11 @@ to analyse end to end, a transcoded local proxy is cheaper than the network: NOA
 8.2-hour dive is 6.8 GB as published and 370 MB at 640×360 and 10 fps, which is less
 than a *sixth* of what streaming a third of it would cost.
 
-`examples/deepsea_report.py` puts it together — fetch, transcode, process, refine, index:
+`collect run` puts it together — choose, fetch, transcode, analyse, merge — one
+expedition at a time, and `nextflow/main.nf` runs that across the catalogue:
 
 ```bash
-python deepsea_report.py --refine        # midwater sequences, crops and sightings
-python deepsea_report.py --with-specimens # a clip of each named midwater specimen
-python deepsea_report.py --with-noaa     # a full-length benthic dive tape
-python deepsea_report.py --check-names   # score the detector against the record names
-python deepsea_report.py --index         # rewrite the page listing every report
-python deepsea_report.py --view          # just open what is already built
-
-# everything, unattended:
-python deepsea_report.py --with-specimens --refine --index --no-view
+python -m pixel_patrol_deepsea.collect run EX2107 collection/ --jobs 4
 ```
 
 ## A cost worth knowing

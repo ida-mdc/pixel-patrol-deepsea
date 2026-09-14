@@ -104,7 +104,7 @@ def test_the_same_box_under_a_different_name_is_one_animal_renamed():
     label counts one jellyfish twice the moment the name flickers. Measured against
     DeepSea-MOT's own identities, insisting split the average animal across 2.8
     tracks; letting the name change where the boxes actually overlap brings that to
-    1.7 and costs a handful of merges. See examples/calibration/tracking.py.
+    1.7 and costs a handful of merges.
     """
     from pixel_patrol_deepsea.refine import track_sightings
 

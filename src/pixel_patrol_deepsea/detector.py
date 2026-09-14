@@ -52,6 +52,11 @@ INPUT_SIZE = int(os.environ.get("PIXEL_PATROL_DETECTOR_SIZE", "1280"))
 #
 # Fusing sizes is the version of the same idea that works, because it changes the
 # scale the animal arrives at without cutting anything up.
+#
+# Asking the following frames whether they saw it too - corroboration across time
+# rather than across scale - reached 0.641, which is inside the noise for 3.4 times
+# the compute, and weighting by that agreement rather than gating on it was actively
+# harmful at 0.348. Neither is worth trying again.
 FUSED_SIZES = tuple(int(s) for s in
                     os.environ.get("PIXEL_PATROL_DETECTOR_SIZES", "640,960,1280").split(",")
                     if s.strip())
