@@ -1,859 +1,163 @@
-# PixelPatrol Deep-Sea Package (`pixel-patrol-deepsea`)
+# PixelPatrol Deep-Sea (`pixel-patrol-deepsea`)
 
-Extension for **PixelPatrol** for reading long video recordings — footage that nobody
-has watched yet, where the first question is *which minutes are worth a person's time*.
+A prototype. It reads deep-sea video nobody has watched — NOAA Ocean Exploration's dive
+tapes, MBARI's annotated [DeepSea-MOT](https://huggingface.co/datasets/MBARI-org/DeepSea-MOT)
+sequences, the cabled camera at Axial Seamount — and answers the first question anyone has
+of ten thousand hours of footage: **which minutes are worth a person's time.**
 
-Built and validated against raw submersible dive tapes from
-[NOAA Ocean Exploration](https://www.ncei.noaa.gov/data/oceans/oer/video/), MBARI's
-annotated [DeepSea-MOT](https://huggingface.co/datasets/MBARI-org/DeepSea-MOT) sequences,
-and the cabled camera at Axial Seamount run by the
-[Ocean Observatories Initiative](https://oceanobservatories.org/). Seventeen expeditions,
-274 hours, 2000 to 2026 — none of it copied: every recording is read from the archive
-that published it.
+Seventeen expeditions, 274 hours, 2000 to 2026. Nothing is copied: every recording is read
+from the archive that published it, and the collection page opens the archive's own file at
+the second an animal was found.
+
+It is an extension for [PixelPatrol](https://github.com/ida-mdc/pixel-patrol) — processors
+that measure each slice of footage, a loader that reads an expedition manifest, and widgets
+for the static viewer.
 
 ## Installing
 
-The package is an extension: it registers processors, a loader and a viewer plugin with
-[PixelPatrol](https://github.com/ida-mdc/pixel-patrol) through entry points, and it
-needs `pixel-patrol-base` and `pixel-patrol-loader-video` to do anything. `pyproject.toml`
-resolves those from a checkout of the main repository **beside this one**:
+`pyproject.toml` resolves the framework from a checkout **beside this one**:
 
 ```
 repos/
-  pixel-patrol/            # the framework, packages/pixel-patrol-base et al.
+  pixel-patrol/            # the framework
   pixel-patrol-deepsea/    # this repository
 ```
 
 ```bash
-uv sync                                   # or: pip install -e .
-python -m pixel_patrol_deepsea.fetch_detector   # the animal detector, ~200 MB
+uv sync                                          # or: pip install -e .
+python -m pixel_patrol_deepsea.fetch_detector    # the animal detector, ~200 MB
+pytest && npm install && npm test
 ```
 
-The Python tests need nothing else; the widget tests need the JS toolchain:
+The detector is a separate step on purpose: the weights are CC-BY-4.0 but the code that
+loads them (YOLOv5 v6.2) is GPL-3.0, and this package is MIT. Without it everything works
+except the naming of animals.
+
+## Using it
+
+An expedition is an entry in `expeditions.yaml` — a listing URL, how deep to walk it, which
+files to take. Adding one is the whole of "collect this too".
 
 ```bash
-pytest
-npm install && npm test
+collect="python -m pixel_patrol_deepsea.collect"
+
+$collect run   EX2107 collection/ --jobs 4 --dives 4 --per-dive 6   # choose, fetch, analyse, merge
+$collect judge collection/parquet/                                  # re-decide what the footage was doing
+$collect slim  collection/parquet/                                  # drop the pictures a report holds twice
+$collect site  collection/                                          # the viewer and the collection page
+$collect serve collection/                                          # look at it
 ```
 
-## Processors
+`run` is the expensive verb and the only one that touches video; `list`, `choose`, `one`
+and `merge` are its steps, for when a scheduler wants them separately.
+`nextflow/main.nf` runs those across a cluster: `LIST → SELECT → ANALYSE → MERGE → SITE`.
 
-- **`slice-thumbnail`** — a small JPEG of every slice, about 3 KB each. This is what makes
-  the report readable: previews and animations come out of the parquet instead of being
-  seeked out of a remote recording, so the gallery fills instantly and works offline.
-- **`raster-temporal`** — frame-to-frame movement along `T`: the mean and peak absolute
-  difference between consecutive frames, plus the pair count they average over. Every
-  other raster metric is computed *within* a frame, so none of them can see motion.
-- **`raster-motion`** — objects moving independently of the camera, found with no model
-  and no class list, so it can flag an animal no detector was trained on. The camera's own
-  motion is estimated by phase correlation and removed before anything is subtracted;
-  where it is too fast to register, or the scene too three-dimensional for one shift to
-  describe, that is reported rather than guessed at. Reports `camera_speed` in px/s, which
-  is a triage signal in its own right — an ROV holding station is looking at something.
-- **`raster-particles`** — counts small bright particles per slice, using a band-pass
-  filter and a minimum area. In midwater footage those particles are largely the animals
-  (0.85 precision, 0.39 recall against DeepSea-MOT). Near a lit seafloor they are marine
-  snow and the measure inverts. It is a particulate-load measure, not an animal detector;
-  the module docstring records both measurements.
-- **`slice-colour-spread`** — the colour *distribution* of each slice, where `slice-colour`
-  writes its mean: a twelve-bin hue histogram weighted by saturation, an eight-bin
-  saturation histogram, and Hasler and Susstrunk's colourfulness score. Twenty-three floats
-  a slice, about a hundred bytes, so "how colourful is this recording, and in what way" is
-  a column scan over the report rather than a second pass over the footage — and it cannot
-  be recovered later from a mean or a thumbnail, which is why it is computed while the
-  pixels are in hand. Bleaching moves *saturation*, not hue: a bleached colony stays bright
-  and loses its chroma, so `colour_saturated_fraction` is the axis to plot. Read the two
-  warnings in `colour_numpy_metrics` first — below the photic zone the lighting is the
-  vehicle's own, so backing the ROV off a colony lowers colourfulness with nothing having
-  changed. On MBARI's midwater sequence the measurement comes out entirely cyan, 150–240°,
-  with no red weight at all, which is what water absorbing red within metres looks like.
-- **`slice-location`** — where and when each slice was filmed: `latitude`, `longitude`,
-  `depth_m`, `altitude_m`, `recorded_at`, `footprint`, and `location_source` saying which
-  published record the fix came from. The one processor here that looks at no pixels at
-  all; see [Where and when the footage was taken](#where-and-when-the-footage-was-taken).
+Choosing matters more than it sounds: a deep dive spends hours descending through open
+water and publishes every minute of it, so `--dives 4 --per-dive 6` takes six recordings
+spread across the bottom time of the four deepest dives, read out of each dive's own
+report. `--jobs` is bounded by memory rather than cores — a worker running the fused
+detector on HD footage sits at about 4.8 GB.
 
-These need per-slice granularity, so process with a `T` slice size:
+## What it measures
 
-```bash
-pixel-patrol process dive_tapes/ -o dive.parquet --loader video --slice-size T=30
-```
+Per slice of footage, into one parquet per recording:
 
-### Which detector to run
+- **`slice-thumbnail`** — a small JPEG of every slice, so previews come out of the report
+  rather than out of a remote recording.
+- **`raster-temporal`** — frame-to-frame movement. Every other raster metric is computed
+  *within* a frame, so none of them can see motion.
+- **`raster-motion`** — objects moving independently of the camera, found with no model and
+  no class list, so it can flag an animal no detector was trained on. Also reports
+  `camera_speed`, which is a triage signal of its own: an ROV holding station is looking at
+  something.
+- **`raster-particles`** — small bright particles. In midwater those are largely the
+  animals; near a lit seafloor they are marine snow and the measure inverts.
+- **`slice-colour`** and **`slice-colour-spread`** — what colour the slice is, and how that
+  colour is distributed.
+- **`slice-location`** — where and when the slice was filmed, from the dive's own
+  navigation. Writes the column names pixel-patrol-geospatial's map widget looks for.
+- **`raster-detections`** *(needs the detector)* — how many animals are in the slice, what
+  the most confident one was called, and a crop of each.
 
-Three are fetchable, and the choice matters more than any tuning:
+Afterwards, three passes over the finished report: **identity** links detections into
+individual animals, **triage** decides what each slice of footage was doing (frozen,
+subject, unnamed, dwell, empty, active), and **slim** drops the pictures a report holds
+twice.
 
-| `--model` | classes | for |
+## What you get
+
+Four widgets in the static viewer — an **Event Gallery** of ranked tiles, **Footage
+Triage** with one row per recording, a **Footage Timeline** of the movement curve, and a
+**Footage Barcode** that puts hours of video on one strip.
+
+And a **collection page** over every expedition: half a sunburst of the taxonomy, a wall of
+every animal found, a search box over the 373 names, and a click that opens the archive's
+own recording at the second the animal was there, with the detector's box drawn over it.
+Sightings can be starred, exported as CSV, and shared as a link.
+
+## Does it work
+
+End to end over MBARI's five annotated sequences — 4,433 detections against 5,878
+annotated animals:
+
+| | precision | recall |
 | --- | --- | --- |
-| `general` | 499 | the default. FathomNet's MBARI-315k, midwater and benthic, with words for `Porifera`, `Crinoidea`, `Actinopterygii` — and for `equipment` and `geologic` |
-| `fish` | 1 | megafishdetector, MIT. Precise boxes on fish, but everything it fires on is called `fish` |
-| `midwater` | 22 | gelatinous zooplankton and no fish class at all |
+| everything in the report | 0.91 | 0.68 |
+| at the viewer's default floor of 0.06 | 0.97 | 0.62 |
+| at a floor of 0.37 | 0.99 | 0.43 |
 
-Measured on thirty frames of benthic dive footage: `fish` returned six detections, all
-labelled `fish`. `general` returned twenty — `Porifera` 0.64, `Ceriantharia` 0.74,
-`Actinopterygii` 0.51, plus `Anguilliformes`, `Lycenchelys`, `Crinoidea`, `Munidopsis`,
-`Polychaeta`. The sponges in that footage are sponges either way; only one of the two
-says so, and a page that counts animals is only as honest as the vocabulary behind it.
+Two things to read alongside that:
 
-### Optional: an actual animal detector
+**The precision is a floor, not a figure.** The most confident detections with no
+annotation under them turn out, cropped and looked at, to be real sea pens and shrimp the
+benchmark does not label — it tracks a chosen set of animals rather than claiming nothing
+else is in frame.
 
-`raster-detections` runs a [FathomNet](https://fathomnet.org)-trained detector and reports
-how many animals are in each slice, and what the most confident one was called. It appears
-in `pixel-patrol list` only once you have fetched a model:
+**A confident name is not a correct name.** Against five midwater clips named after the
+specimen in them, the detector was right twice — emphatically right where the animal is in
+its vocabulary, and wrong at 0.94 on both siphonophores and a lobate ctenophore, reaching
+for `trachylinae` every time. The confidence sort ranks *what to look at*, not *what it
+is*, which is why every name this package writes says it is a guess.
 
-```bash
-python -m pixel_patrol_deepsea.fetch_detector
-```
-
-That is a separate step on purpose. The weights are CC-BY-4.0, but the code that loads them
-— YOLOv5 v6.2 — is **GPL-3.0**, and this package is MIT, so nothing GPL is shipped or
-declared as a dependency. Tune it with `PIXEL_PATROL_DETECTOR_SIZE` (default 1280),
-`PIXEL_PATROL_DETECTOR_CONFIDENCE` (0.25) and `PIXEL_PATROL_DETECTOR_EVERY` (3 seconds).
-
-Measured against MBARI's annotated midwater sequences: 0.85 precision at 0.27 recall at
-1280 px, or 0.95 precision at 0.10 recall at the default confidence. Read it as a floor on
-what is present, not a census — and note it only knows the 22 categories it was trained on,
-so it is a midwater model applied to midwater footage.
-
-## Widgets
-
-- **Event Gallery** — the detected stretches as ranked tiles across every recording, each
-  animating through stills held in the parquet. Where a detector ran it opens ranked by
-  animals, and can be narrowed to one species or sorted by how sure the detector was.
-  Where the report can find things it opens on **what was found** - subjects and unnamed
-  movers - and leaves out the bands that only describe the footage. On the eight-hour
-  dive that is 244 tiles rather than 345: the other 101 are camera movement over open
-  water. *Every kind* is one click away for a QC pass, where frozen tape and long holds
-  are the point. Export the timecodes as CSV for an annotation tool.
-- **Footage Triage** — one row per recording: length, how much of it is dead, held, empty
-  or busy, and how many animals of which species. The question you have before you watch
-  anything. Opens sorted by animals wherever a detector ran.
-- **Footage Timeline** — the movement curve for one recording, with detected stretches
-  shaded by kind — including the stretches where a detector named an animal — and a table
-  you can open.
-- **Footage Barcode** — one colour strip per recording, drawn to scale, so hours of video
-  read at a glance and several recordings compare side by side. A ribbon underneath marks
-  where the animals were; hovering reads back the timecode, the count and the species.
+`collect score` re-measures all of it against whatever ground truth an expedition has.
 
 ## Where the code is
 
 PixelPatrol has three sockets — a **processor** measures a block of pixels, a **loader**
-turns a file into records, a **viewer extension** adds widgets — and this package fills
-all three. Walking the import graph out from the entry points in `plugin_registry`, that
-accounts for 3,203 lines of Python and the 3,749-line viewer extension: every processor
-above, the maths they call, the detector wrapper, the navigation lookup, the manifest
-loader, every widget.
+turns a file into records, a **viewer extension** adds widgets — and this package fills all
+three: 3,203 lines of Python and a 3,749-line viewer extension.
 
-The other 6,259 lines sit outside, in three groups, because there is no socket for them:
+The other 6,259 lines sit outside, because there is no socket for them:
 
 | | lines | what it is |
 | --- | --- | --- |
-| before pp runs | ~1,200 | which expeditions exist, which recordings to take, fetching and transcoding them. PixelPatrol starts at a folder of files; this is what fills the folder. |
-| after pp runs | ~2,400 | passes over a finished report — merge, triage, identity, slimming, scoring. Each reads a parquet pp wrote and writes a better one, and pp has no notion of a pass over its own output. |
-| the collection | ~2,700 | the landing page, the tile store behind it, the colour banner, the CLI, the static server. pp views *one* report; a collection of them is not a thing it has. |
-
-The middle group is the one worth a socket. Triage, identity and slimming are generic —
-judge what a recording was doing, decide which detections are the same animal, drop the
-pictures a report holds twice — and none of them know anything about the sea.
-
-## Keeping the video remote
-
-Previews come from the parquet, so the report is fully usable with no access to the footage
-at all. Give it a **footage base URL** — or open the report with `?footage=<base-url>` — and
-clicking an event additionally streams that stretch from wherever the recordings live,
-seeked to its timecode.
-
-That split matters. An earlier version grabbed preview frames by seeking the recording, which
-cost 43 MB of range requests to fill one screen and left tiles blank for seconds. Stored
-stills cost about 3 KB each and appear immediately.
-
-Two things this depends on. The viewer sets `Cross-Origin-Embedder-Policy: require-corp`
-for DuckDB-WASM, so cross-origin video needs `crossorigin="anonymous"` (the widgets set it)
-and a host that answers CORS or sends `Cross-Origin-Resource-Policy`. Seeking needs the
-host to answer HTTP range requests with `206`. NOAA's archive does both.
-
-## What it can name, and what it cannot
-
-The detector knows twenty-two classes, all midwater:
-
-> bathochordaeus (and its inner and outer filter), beroe, calycophorae nectosome,
-> cephalopoda, cydippida, leptothecata, lobata, naked pteropod, oikopleura inner
-> filter, paddle worm, physonectae nectosome, poeobius, prayidae nectosome,
-> pyrosoma, scyphozoa, shelled pteropod, shrimp, solitary salp, thalassocalyce,
-> trachylinae
-
-**There is no fish class.** Gelatinous zooplankton, a shrimp, a squid and a couple of
-worms is the whole vocabulary, so a fish drifting through the frame is either missed
-or called something it is not. And on footage of the seafloor the names are wrong
-outright: on a NOAA dive tape, gold coral, the ROV's laser dots and its sample
-carousel all came back as `scyphozoa` above 0.9 confidence. Detections outside open
-water are a prompt to look, never a label to keep.
-
-## Finding the animals twice over
-
-Inference is the expensive part of the pipeline, and an animal stays in frame far longer
-than one slice — a median of 182 frames in midwater and 290 on the bottom, measured
-against MBARI's annotated sequences. Sampling one frame a second already sees 96–99% of
-the distinct animals a full read would. So detection is two passes:
-
-1. **Coarse**, inside the pipeline. `PIXEL_PATROL_DETECTOR_EVERY` skips all but every Nth
-   second, and only the first colour channel is looked at — the pipeline hands each
-   channel to its own leaf block, so running all three costs triple for three greyscale
-   copies of one moment.
-2. **Fine**, `refine.py`. Takes the slices that came back with something, merges hits of
-   the same species within 4 s, pads ±2 s, and walks just those stretches at 4 fps. Every
-   detection gets a crop and a row, in colour.
-
-The coarse pass therefore shows the detector one channel replicated three times, which is
-not what it was trained on. Measured both ways on the same frames, it is a wash rather
-than a loss — 52 detections against 29 on one clip, 13 against 17 on another, with best
-confidence 0.02–0.05 lower in grey. Midwater footage is nearly monochrome to begin with.
-What it does cost is the *look* of the crop, and that is what `merge_crops_into_report`
-swaps back after the fine pass.
-
-**Which detections are the same animal is written into the report**, not worked out
-again by whoever reads it. Every detection in `detections` carries an `animal`: an
-integer, unique within its recording, shared by every detection of that individual and
-by the clip frames cut for it, so `(name, animal)` is one animal wherever it is read —
-the collection page, a notebook, anything later. `collect one` decides it, because it is
-the only thing that holds a whole recording at a time; `collect identify collection/`
-backfills reports made before this, deriving the ids from the detections already in the
-file without touching any footage. There is deliberately no per-slice count of animals:
-a row is a slice and an individual spans many of them, so such a column could not be
-summed up the tree without counting most animals several times.
-
-`--refine` writes `sightings.parquet` and `sightings.csv` — **one row per animal**, not
-per slice — with taxon, confidence, box, frame and timecode, keyed by `name` and `dim_t`
-so it joins straight onto the report. The report itself stays one row per slice: it is an
-aggregation tree over image dimensions, and an animal is not one of those axes.
-
-## A free ground truth, and what it says
-
-Some archives name a record after the animal in it, which makes it a labelled test the
-detector never saw. Five such midwater clips — the `RAD2-*` specimen records published on
-Zenodo, no longer part of this catalogue but the measurement stands — gave 748 refined
-sightings:
-
-| record | detector's best call | the record's own answer | |
-| --- | --- | --- | --- |
-| Atolla | `scyphozoa` 0.94 ×88 | same | ✅ |
-| Bathochordaeus | `bathochordaeus inner filter` 0.89 ×70 | plus `outer filter` 0.83 ×65 and `bathochordaeus` 0.77 ×92 | ✅ |
-| Halistemma | `trachylinae` 0.94 ×23 | `physonectae nectosome` 0.30 ×1 | ❌ |
-| Praya | `pyrosoma` 0.89 ×50 | `prayidae`/`calycophorae nectosome` — absent | ❌ |
-| Lampocteis | `trachylinae` 0.96 ×60 | `lobata` — absent (`cydippida` 0.57 ×13 is at least a ctenophore) | ❌ |
-
-**Two of five at the top.** The pattern is not random: it is right, and emphatically so,
-where the animal is squarely in its vocabulary — a scyphozoan jellyfish, and a giant
-larvacean whose inner and outer mucus filters it separates as distinct classes. It is
-wrong, at 0.94 and higher, on both siphonophores and on the lobate ctenophore, where it
-reaches for `trachylinae` every time.
-
-So a confident name is not a correct name, and the confidence sort ranks *what to look
-at* rather than *what it is*. That is why every name this package writes — in a report, on
-the page, in an exported CSV — says it is a guess.
-
-## Finding as many as possible without saying anything that is not there
-
-### What the pipeline actually does
-
-End to end, `collect run DSMOT` over the five annotated sequences the catalogue held at
-the time, at every slice — 288 frames, 4,433 detections against 5,878 annotated animals:
-
-| | detections | annotated | precision | recall |
-| --- | --- | --- | --- | --- |
-| `BD` benthic | 2,426 | 2,870 | **0.94** | **0.79** |
-| `BS` benthic | 855 | 1,388 | 0.84 | 0.52 |
-| `MWD` midwater | 867 | 1,284 | 0.93 | 0.63 |
-| `MWS` midwater | 225 | 194 | 0.80 | **0.92** |
-| `MD_FLN` midwater | 60 | 142 | 0.68 | 0.29 |
-| all together | 4,433 | 5,878 | **0.91** | **0.68** |
-
-`BD` was 0.91 precision and 0.69 recall before this; it is now more precise *and*
-finds ten points more of the animals. `BS` moved from 0.51 to 0.52 and will not move
-further — a third of its annotations are never proposed at any confidence, which is
-the model rather than a threshold. The three others had never been scored at all.
-
-`MD_BTL` is a sixth sequence now and not in these numbers. All eleven sequences MBARI
-publishes carry ground truth — four of them in the `gt/` directory the MOT format
-specifies rather than beside the recording, which is the only reason this one looked for
-a while like it had none. It is 10 MB with 374 boxes; the five that are still left out are
-4K and 2.2 GB each, and two of those five are the same footage under two names.
-
-`MD_FLN` is the one that does badly, and it fails for the same reason full resolution
-does. Its animals fill the frame — the largest annotated box is 1164×1080 — and a model
-that wants them at two thirds of HD has no size at which that arrives correctly.
-Reading the frame at *smaller* sizes is what would help there, which is the opposite
-of the fix for everything else and is why it is a knob (`--detector-sizes`) rather than
-a constant.
-
-Everything above is what is *in the report*. What a reader sees depends on where they
-put the floor, and the pooled curve is the honest way to state that, because a
-threshold does not know which recording a row came from:
-
-| floor | precision | recall |
-| --- | --- | --- |
-| any | 0.905 | 0.683 |
-| 0.04 | 0.950 | 0.649 |
-| **0.06** (the viewer's default) | **0.967** | **0.621** |
-| 0.37 | 0.990 | 0.425 |
-
-Read the precision column as a floor, not a figure — see
-[below](#the-precision-is-a-lower-bound-and-the-pictures-say-so).
-
-### How that was arrived at
-
-The sweep behind this was run against MBARI's DeepSea-MOT, the only footage here with a
-box around every animal in every frame. What it concluded is in `detector.py`, beside the
-constants it decided; `collect score` re-measures it end to end, and that is the number on
-the collection page.
-
-All five annotated DeepSea-MOT sequences, 300 native-resolution frames, every detection
-kept down to a floor of 0.001 so the threshold could be swept afterwards rather than
-guessed. Recall is measured at three precisions, because "without false positives" is not
-one number - the report keeps everything and the viewer has a threshold a reader can move,
-so the useful statement is how much can be found while staying this clean.
-
-| how the frame is read | r@p99 | r@p95 | r@p90 | most it ever finds | cost |
-| --- | --- | --- | --- | --- | --- |
-| 640 px | 0.409 | 0.549 | 0.569 | 0.749 | 1x |
-| 960 px | 0.350 | 0.584 | 0.671 | 0.835 | 2x |
-| 1280 px | **0.464** | 0.596 | 0.653 | 0.859 | 3.6x |
-| 1920 px, i.e. native | 0.240 | 0.438 | 0.531 | 0.842 | 4.6x |
-| 640 + 960 + 1280, fused | 0.424 | **0.634** | **0.700** | 0.855 | 6.7x |
-| overlapping tiles at native scale | 0.041 | 0.478 | 0.616 | 0.838 | 10x |
-
-Four things came out of this, and two of them were surprises.
-
-**Full resolution is the worst way to read the frame.** Not the slowest-and-best - the
-worst, by a wide margin. The model has a scale it expects animals to arrive at, roughly
-two thirds of HD, and feeding it more pixels than that pushes every animal past the size
-its anchors were trained for.
-
-**So tiling does not work, which is the obvious thing to try for small animals.** Cut the
-frame into overlapping tiles, detect at native scale, merge with suppression across the
-seams: 0.478 against 0.634, for three times the compute of the thing that wins, and it
-collapses to 0.041 at 99% precision. It helped on the two midwater sequences, where the
-animals are small and far apart, and wrecked both benthic ones, where a seam cuts animals
-in half and a carpet of sea pens fills a tile edge to edge. Merging by containment as well
-as overlap removes the halves; it cannot put back what the tile never saw whole.
-
-**Fusing sizes is the version of that idea that works**, because it changes the scale the
-animal arrives at without cutting anything up. A size that did not see an animal counts as
-a vote of zero and the confidence becomes the mean, so agreement between sizes lifts a box
-and a lone sighting sinks - which is the precision half. The union of what the sizes found
-is the recall half. Every sequence improved, midwater most: 0.498 to 0.604.
-
-**Ignoring the label while suppressing is worth more than it sounds.** This checkpoint
-knows 499 classes and cannot tell many of them apart, so class-aware suppression returns
-the same animal five times under five names and counts each as a separate find. Ignoring
-the label took r@p95 from 0.531 to 0.596 and improved all five sequences. YOLOv5's default
-cap of 300 boxes had to go too - an annotated seabed holds around fifty animals a frame.
-
-### What did not work
-
-**Corroboration between consecutive frames.** A real animal is still there a thirtieth of
-a second later and a speck of noise is not, so requiring a second look to agree ought to
-be free precision, and it is also what the two-pass design already pays for. Measured
-against the following two frames of every scored frame it is worth +0.007 at 95% precision,
-inside the noise, for 3.4x the inference. Weighting by persistence instead of filtering on
-it is actively harmful - 0.634 to 0.348 - and that is the informative result: the confident
-mistakes here are *persistent*. Which leads to the last finding.
-
-### The precision is a lower bound, and the pictures say so
-
-Cropping the most confident boxes with no annotation under them and looking at them:
-
-- eight of the top twelve are one long thin animal on the seabed of `BD`, called
-  `Funiculina-Balticina complex` at 0.32 to 0.59, its box drifting frame by frame as the
-  camera moves over it. Pulled back, the seabed around it is *covered* in sea pens. The
-  bright ones are annotated. This one is dimmer, and is not.
-- three more are one bright shrimp - `Eusergestes similis`, 0.44 to 0.60 - crossing three
-  frames of `MWD`, also unannotated.
-
-So the boxes being counted as mistakes at the top of the ranking are real animals of
-exactly the annotated kind. DeepSea-MOT is a tracking benchmark and annotates 94 tracks in
-`BD`; it is not a claim that nothing else is in frame. Every precision here should be read
-as a floor, and 99% precision is not reachable against this file no matter what the
-detector does.
-
-### What a published proxy costs
-
-NOAA publishes its ROV video as 640x360 proxies - it is the only version there is. Shrinking
-the annotated sequences to that size and re-measuring says what that costs and how to read
-them:
-
-| | r@p95 | most it ever finds |
-| --- | --- | --- |
-| native, one size at 1280 | 0.596 | 0.859 |
-| native, three sizes fused | 0.634 | 0.855 |
-| proxy, one size at 640 | 0.581 | 0.782 |
-| proxy, three sizes fused | 0.595 | 0.803 |
-| proxy, upscaled to 1280 | 0.561 | 0.806 |
-
-The proxy costs about six points of reachable recall, and **upscaling it is worse than not
-bothering** - there is no detail in it for a larger input to find. So the cruises are read
-at two sizes rather than three (`--detector-sizes 640,960`), which is the second pass for
-what the third was not worth.
-
-## Collecting an archive
-
-One dive is a demo. NOAA Ocean Exploration publishes on the order of ten thousand hours
-across 119 cruises and nobody has watched most of it, so the collection is data rather
-than a shell script:
-
-```yaml
-# src/pixel_patrol_deepsea/expeditions.yaml
-- id: EX2107
-  name: Windows to the Deep 2021
-  listing: https://www.ncei.noaa.gov/data/oceans/oer/video/EX2107/Video/
-  depth: 2                     # levels between the listing and the recordings
-  pattern: "*ROVHD_Low.mp4"
-```
-
-Adding an entry there is the whole of "collect this too". Six verbs do the work, each
-one thing so a scheduler can redo only what changed:
-
-```bash
-python -m pixel_patrol_deepsea.collect list   EX2107 -o manifests/EX2107.json
-python -m pixel_patrol_deepsea.collect choose EX2107 -m manifests/EX2107.json -o chosen/EX2107.json \
-    --dives 3 --per-dive 3
-python -m pixel_patrol_deepsea.collect one    <url>  -o parts/EX2107/<name>.parquet -e EX2107
-python -m pixel_patrol_deepsea.collect merge  EX2107 parts/EX2107/*.parquet -o parquet/EX2107.parquet
-python -m pixel_patrol_deepsea.collect score  EX2107 collection/
-python -m pixel_patrol_deepsea.collect site   collection/
-```
-
-`run` is all of that for one expedition on one machine, and it differs from `one` in a
-loop in the two ways that decide whether a night was well spent — it **chooses** the
-recordings, and it analyses several at once:
-
-```bash
-python -m pixel_patrol_deepsea.collect run EX2503 collection/ \
-    --jobs 10 --dives 4 --per-dive 6 --detector-sizes 640,960
-```
-
-Choosing matters more than it sounds. EX2503 publishes 127 five-minute recordings for a
-single dive — ten and a half hours for one of sixteen dives — and a deep dive spends hours
-descending through open water and publishes every minute of it. Each dive's own report
-states when the vehicle reached the bottom and when it left, and what its maximum depth
-was, so `--dives 4` takes the four deepest and `--per-dive 6` takes six recordings spread
-across their bottom time. Reading that costs one ranged read of a text file per dive
-(`locations.noaa_dive_summary`), not a download of the dive.
-
-`choose` is the same decision as a step of its own, for when the scheduler is not this
-process — it writes the subset as a manifest of its own and leaves the listing alone,
-because the catalogue page counts what an expedition published, not what we picked out of
-it. **The archive writes those reports in two notations**: cruises from 2021 on say
-`Max Vehicle Depth` in decimal degrees, and 2016 to 2019 say `Max. depth` in
-degrees-and-minutes. Reading only the newer one does not give a cruise without depths, it
-gives a cruise whose descent is analysed — which is what happened to EX1903L2 and EX1605L1
-until both notations were read. EX1605L1 turned out to hold the deepest dive in the
-catalogue, 4996 m, which nothing here knew while its reports were unreadable.
-
-`--jobs` is bounded by memory, not cores: a worker running the fused detector on HD footage
-is resident at about 4.8 GB, so what fits at once is roughly RAM over five gigabytes.
-
-`nextflow/main.nf` runs them: `LIST → SELECT → ANALYSE → MERGE → SITE`, one parquet per
-recording merged into one per expedition. `collect site` says so and carries on if a
-report is unreadable — `publishDir` copies are not atomic, so a run that is interrupted
-mid-publish leaves a gigabyte of parquet with no `PAR1` footer, and what that used to
-look like was a traceback out of a parquet reader three minutes into a site build.
-`collect site` streams too, and had to: the tile store is cut from every merged
-report, and reading them the obvious way is `Killed` after twenty minutes with no
-page. A report is read a recording at a time - linking is per recording anyway - and
-the pictures go to a spool beside the store as they are met, so what is held is two
-numbers an animal rather than every still and clip in the collection. One more thing
-was hiding underneath: `pq.ParquetFile` pre-buffers column chunks by default and
-keeps them for as long as the file is open, so a loop that dropped every batch it
-was handed still ended up with all 3.1 GB of EX1702 in arrow buffers.
-`pre_buffer=False` is the whole fix. Measured over 35 GB of reports, 178,756
-animals: 192 seconds, peak RSS 2.71 GB, and what is left scales with the number of
-animals rather than with the weight of the footage.
-
-**`MERGE` streams**, a row group at a time,
-and that is not an optimisation: the obvious way to concatenate parquet is to read every
-part and write the pile, which needs as much memory as the expedition is big. On the
-cluster that was killed with exit 137 on EX1702 — 2.9 GB of parts against an 8 GB limit —
-*after* nineteen hours of analysis, and it aborted the whole run; GOA2004's parts are
-17 GB and would have needed a machine nobody has. Reading row groups and writing row
-groups, the peak is one row group of pictures whatever the expedition weighs, and `MERGE`
-now retries with more memory and is then ignored rather than taking the collection down
-with it. `SELECT` is `choose`, and it is there because
-without it a workflow has exactly one cheap way to sample a cruise — the first N
-recordings — and on a deep dive those are the vehicle descending. New work is found two
-ways, because they catch different things — `-resume` skips any `ANALYSE` whose inputs are
-unchanged, and a recording whose parquet is already published is skipped outright, so a
-manifest that grew by three dives means three tasks even on a fresh work directory.
-
-```bash
-nextflow run nextflow/main.nf --outdir /data/footage -profile local -resume
-nextflow run nextflow/main.nf --outdir /data/footage --expeditions EX2107 --limit 20
-nextflow run nextflow/main.nf --outdir /data/footage -profile slurm --dives 3 --perDive 3
-```
-
-On a cluster, `nextflow/submit.sbatch` is the whole of it:
-
-```bash
-BASE=/somewhere/with/room bash nextflow/cluster-setup.sh   # env, detector, nextflow, java
-source /somewhere/with/room/env.sh
-OUT=/somewhere/with/room/footage sbatch --partition=yours nextflow/submit.sbatch
-```
-
-Submit it from the repository, or pass `REPO=/path/to/pixel-patrol-deepsea`: `sbatch`
-copies the submit script into SLURM's spool directory and runs it from there, so the
-script cannot find the workflow by looking next to itself.
-
-The job it submits is the *driver*: one core running Nextflow, which submits one job
-per recording and waits. Submitting that rather than running it on a login node is the
-difference between a collection that survives a dropped session and one that does not.
-It checks the things that would otherwise show up as a thousand identical failures
-twenty minutes into a queue — that the interpreter can import the package, that the
-detector is in a cache it can reach — and re-submitting after any interruption picks up
-where it stopped. `PROFILE=local` runs the same thing on one machine, which is the
-cheapest way to find out the environment is wrong before a queue tells you.
-
-`OUT` and `WORK` are yours to choose and both need to be visible from every compute
-node. What they hold is small and permanent — a five-minute cruise recording makes 3 to
-8 MB of parquet, so the ~290 recordings of a default run are a few gigabytes including
-the copy Nextflow keeps in `WORK` — plus something large and brief: each running task
-stages its recording into its own directory under `WORK`, thins it, analyses it and
-deletes it. That is 68 MB for a NOAA proxy recording and 906 MB for one of the Axial
-camera's, roughly doubled while the thinned copy exists, and it is *per running task*.
-A hundred concurrent tasks want tens of gigabytes of headroom in `WORK` that are gone
-again by the end of the run.
-
-Node-local disk is the better home for that and is not where it lives, because the nodes
-that provoked this had a `/tmp` of a few gigabytes shared by as many tasks as the node
-had cores, which fills at about the thirtieth simultaneous download. `--staging /path`
-puts it back on node-local scratch where there is enough of it.
-
-`nextflow/cluster-setup.sh` installs the environment, the detector weights, the pip cache
-and Nextflow's own home under one directory you name, rather than into `$HOME` where all
-four go by default:
-
-```bash
-BASE=/somewhere/with/room bash nextflow/cluster-setup.sh
-source /somewhere/with/room/env.sh
-```
-
-Budget about 10 GB — 6.5 GB of environment and 3.4 GB of caches. Most of the first is `torch`, whose PyPI wheel depends on the CUDA runtime
-libraries on Linux whether or not there is a GPU — `TORCH_INDEX` picks a different build
-if you want one.
-
-Four things are worth knowing before submitting. `--dives`/`--perDive`/
-`--limit` default to *everything*, which for this catalogue is about eleven thousand
-recordings and some nine hundred hours. The `slurm` profile asks for a two-hour walltime
-per task, because a queue whose default is shorter than a recording is how a long
-collection dies at 40%. The detector is a 200 MB cache under `$HOME/.cache/pixel-patrol`,
-and the workflow checks it is reachable before submitting anything rather than letting a
-thousand tasks discover it one at a time. And `cleanup` is off: a recording is deleted by
-its own task either way, so cleaning the work tree saves nothing and costs `-resume` the
-cache it exists for.
-
-Run against Nextflow 26.04.6 as well as 25.10, which needed two things the older parser
-accepted: a top-level helper has to be a function rather than a closure assigned to a
-name, and a `publishDir` whose path depends on an input value has to be a closure rather
-than a string, since 26 resolves the string when the process is defined and nothing is
-bound to it yet.
-
-Without Nextflow installed, `nextflow/collect.sh` runs the same five stages in plain
-shell with the same skip-what-is-done behaviour:
-
-```bash
-LIMIT=5 nextflow/collect.sh collection/ EX2107          # five recordings, spread
-DIVES=3 PER_DIVE=3 nextflow/collect.sh collection/      # three dives each, on the bottom
-nextflow/collect.sh collection/                         # the whole catalogue
-```
-
-Merging is a concatenation, not a re-aggregation: in pixel-patrol a video file is one
-image, so every level of the tree in a part already belongs to that recording alone.
-Two recordings merged give two `obs_level` 0 rows, which is what a single run over both
-would have produced.
-
-### What "no download" does and does not mean
-
-`one` is the only verb that touches video, and it keeps none — but it does fetch one.
-The recording is downloaded whole into the task's own directory, thinned, analysed, and
-deleted with it, so a collection of any size costs one recording of transient disk per
-running task and the two-recording test above left 780 KB behind, all of it parquet.
-
-It is a download rather than a stream because the pass reads the whole recording anyway:
-thinning re-encodes it end to end, repairing a bad frame count re-encodes it end to end,
-and the detector samples moments across every slice. One sequential read of the bytes is
-what all three want; seeking into the same bytes over HTTP, hundreds of times per
-recording, is the same traffic arriving slower and with more ways to fail. The parts of
-the pass that genuinely need only a few bytes do read them that way - the frame rate
-comes from a ranged read of the header, and a dive's navigation from a ranged read into
-its ancillary zip, neither of which downloads the thing it reads.
-
-Streaming the video itself is what the `expedition` loader does, and it is a different
-shape of run: one manifest is one input with n recordings behind it, each handed to
-ffmpeg as a URL, one report for the expedition and no staging at all. It costs the
-per-recording resumability that makes a cluster run restartable, which is why the
-collection pipeline does not use it.
-
-Going further, and handing the pipeline a URL instead of a path, needs a change in
-`pixel-patrol-base` rather than here: file discovery is filesystem-bound throughout —
-`os.walk` for the tree, `os.stat` for size and modification date, `commonpath` for the
-shared root. That wants the source abstraction the S3 work is adding. Nothing is
-retained either way; the difference is one recording of scratch.
-
-## The collection page
-
-```bash
-python -m pixel_patrol_deepsea.collect site collection/
-```
-
-Writes **one** `index.html` beside a static viewer — the only page this package
-produces. It reads as a dive log, which is what it is: a header stamp, figures in a
-monospace column, hairlines between them, four numbered parts, and the pictures as a
-contact sheet. Cyan is the only accent and the footage chose it; amber is kept for the
-one thing that has to interrupt somebody.
-
-- **01 the collection** — what this is in three sentences, over the figures saying how
-  much of it there is, with the warning beside it: a prototype for pulling statistics
-  and animal names out of unwatched footage, and five lines on what that is worth.
-  Behind them, the collection's own colours (below).
-- **02 what is in it** — half a sunburst against the page's left edge, a button per
-  phylum above it (the rank the reports colour and split by), and beside it every
-  picture of whatever branch is in focus, most confident first, a screenful per fetch,
-  each tile playing the seconds around its own animal when you hover it — with the
-  confidence and how long the animal stayed in view over the top of it and the name
-  along the bottom. Clicking the middle of the ring steps back out. Three rings show
-  three levels of 373 names, so there is a box to type one into: matches come back with
-  their rank and their count, and taking one is the same as clicking its own ring.
-- **what you kept** — the sightings somebody starred, under the pictures they came
-  from, and a CSV of them.
-- **03 the expeditions** — how many of each one's recordings are listed and how many
-  were read, footage analysed, animals or slices with animals, names, and the way into
-  its own report; above them all, the report that spans every expedition, opened
-  grouped by `expedition`, with no pictures in it. The expedition's name links to the
-  ship's own page; the report is the loud one.
-- **04 whose work this is**, and an **imprint**.
-
-**Clicking a picture opens the footage there.** The archives serve their own files over
-byte ranges — NOAA's with `Access-Control-Allow-Origin: *`, and a 900 MB observatory
-recording seeks as happily as a 70 MB dive clip — so the page opens one at the second
-the animal was found, two seconds early. Nothing is copied or re-hosted:
-`tiles/index.json` carries the URL the recording was listed from and the frame its
-boxes are measured in, and where the manifest named no URL the crop is shown and the
-overlay says so.
-
-**And it keeps playing.** `tiles/reels/<recording>.json` is the other index over the
-same animals — not by taxon but by the recording they came out of, with every look the
-detector had at each: when, and where in the frame. So the overlay draws every animal
-that belongs on screen at the second being played, moving the box between the looks
-rather than pinning it where it was first drawn, and a click on any of them hands the
-stage over without interrupting the video. 1,805 reels, 106 MB, the biggest 931 KB —
-one fetch per recording somebody opens. Only the animal in focus is named on screen: a
-crowded seabed puts twenty-five boxes up at once.
-
-A sighting is a place in the page, so it is in the address bar — `#a=EX2301/…mp4/259.4`
-reopens the recording there with that animal in focus, which is what somebody sending
-the link meant to send. The star beside a tile keeps that sighting in `localStorage` —
-no account, nothing sent anywhere — and the favourites section lists them again, with a
-CSV carrying the taxon, the recording, the second, the box and the URL, which is enough
-for somebody else to find the same moment in the archive.
-
-**And a collection of them travels in a link.** There is no server here and nothing to
-host, so a favourite cannot be given an id somewhere and fetched back — but it can be
-written into the address. `#k=…` carries the four fields an animal is found again by
-(expedition, recording, second, name), deflated and base64'd; on a NOAA collection that
-is one long prefix repeated, which squeezes to about a tenth. Five sightings make a
-link of 315 characters. None of the four is a position in a file, so the store can be
-rebuilt underneath the link and it still resolves. Opening one shows *Sent to you*
-beside — not instead of — whatever the browser already had, and keeping them merges the
-two: nobody loses their own list by following a link.
-
-```bash
-python -m pixel_patrol_deepsea.banner collection/   # assets/colours.png
-```
-
-**The header is the collection.** Every recording that has been read, in the order it
-was filmed, as one vertical stripe — a band per slice, top to bottom, of the mean
-colour that recording had at that moment. Side by side they are two decades of diving:
-the blue-green columns are midwater and lit seabed, the near-black ones are transits
-and night, and the occasional warm one is a vehicle's own hardware in front of its
-lamps. Nothing is stretched to fill the palette, which is why the whole thing is so
-nearly cyan. It is computed from columns the processors already wrote — seconds, no
-footage read — because the alternative is a browser opening six gigabytes of parquet.
-
-Every link is a `?data=` URL into the viewer next to it, so opening a report needs a
-static file server and nothing else — no Python, no port, no viewer process. Nothing
-below the header is built into the HTML: it is all read from `tiles/`, so the page is
-the same size whether the collection holds one expedition or fifty. The viewer is
-**rebuilt every time**, not skipped when one is already there: the site carries its own
-copy of every widget, so a viewer left from an earlier run serves the widgets as they
-were then, and does it silently. `pixel-patrol view` needs no such step — it reads the
-plugin out of the installed package on each request, so a widget edit is live on reload.
-
-**The page does not describe an animal.** It says what the detector called it, how sure
-it was, how long it stayed in view, and where to go and read: the WoRMS record by
-identifier, and the Wikipedia article where there is one to link.
-
-```bash
-python -m pixel_patrol_deepsea.fetch_taxonomy    # lineages, from WoRMS
-python -m pixel_patrol_deepsea.fetch_wikipedia   # which names have an article
-```
-
-Both are run once and shipped with the package, so the page needs no network at all.
-The article link is fetched rather than built from the name for two reasons: a guessed
-link is often a 404 — `Paelopatides` and `Abyssocucumis abyssorum` have no article, and
-171 of 969 names have none — and following the redirects gets the plain word for a
-Latin one, so `Holothuroidea` comes back as *Sea cucumber*, which is what somebody
-clicking on it wanted. A paragraph of natural history written to fill the box would be
-the only thing on the page with no source behind it.
-
-Four things the page got wrong for a while, none of them obvious unless you looked:
-
-- **an animation that was not the animal above it.** The detector cuts one clip per
-  animal in a slice and numbers them in its own order; the store took number zero for
-  every animal, so a bottom covered in sea pens played the same sea pen twelve times.
-  A clip is matched to an animal by the box it was cut with, and an animal the slice
-  never filmed does not move at all.
-- **a ring that was not a half circle.** Each child's arc was measured against what was
-  left of the wedge rather than against the whole of it, so every child after the first
-  came out too small — at the root, Animalia took its honest four fifths and the two
-  kingdoms after it a fifth of a fifth each, leaving the drawing 151° of 180°. It was
-  invisible whenever a *no finer name* arc happened to swallow the shortfall.
-- **a wall that grew the page.** The gallery loaded as the window scrolled, which meant
-  the page had no end and the expeditions below it were unreachable. The pictures now
-  scroll in their own box, and only that box fetches more.
-- **a quarter of the coarse names shown as unplaced.** `Echinodermata`, `Chordata`,
-  `Teleostei` and twenty-three others are what the detector says when it will not
-  commit to a species, and the WoRMS fetch had dropped them, so they sat in a bucket
-  beside the phyla they belong to. `fetch_taxonomy --names` resolves a list by hand.
-
-## Where and when the footage was taken
-
-Footage without a position is footage you cannot compare with anything, and two dives in
-the same canyon ten years apart are the interesting question in a collection like this.
-None of it is in the video: these recordings carry no GPS track, no telemetry channel, and
-— checked — not even a burnt-in overlay to read. What the archives publish *beside* the
-video is enough.
-
-**The clock is the filename.** `EX2107_VID_20211027T124027Z_ROVHD_Low.mp4` and
-`CAMHDA301-20160815T000000Z.mov` both state the UTC second the recording started, so a
-slice `n` seconds in has a real time. Preferred over the container's `creation_time` even
-where that exists: the filename is what the archive indexes and what its dive logs join
-against, and it survives a transcode.
-
-**The position is one of three things**, and `location_source` always says which, because
-they are not the same claim:
-
-| | what it fixes | where it comes from |
-| --- | --- | --- |
-| a 1 Hz vehicle track | every slice, with depth | `RovTrack1Hz.csv`, inside the dive's ancillary-data zip |
-| a dive path | the dive, no depth | `*_Path.kml` — a bare line of coordinates with no times on it |
-| a deployment register | a camera that does not move | the observatory's own asset register |
-
-The first is the good one and it is real per-second navigation: on EX2107 dive 1 the depth
-climbs 172 → 201 → 230 → 866 m over the first hour, and `altitude_m` drops to a metre or
-two once the vehicle is flying the bottom — which is a decent proxy for whether a slice
-shows the seabed or open water. It is read out of a 16 MB zip over range requests, for the
-one member wanted, in about five seconds.
-
-**Both of these come in two notations, and reading only the newer one is silent.** The
-2016 cruises head their track `time (unix sec), lat (dec. deg.), ... depth (m)` and put
-depth after longitude; the 2019-and-later ones head it `UNIXTIME,DEPTH,ALT,LAT_DD,LON_DD`.
-Their dive reports differ the same way — `Max. depth` and `28°, 15.148' N` against
-`Max Vehicle Depth` and `28.2525`. A parser that knows one of the two does not announce
-that it is looking at the other; it returns a cruise with no depth, no bottom time and no
-position, and the pipeline goes on to analyse its descent. So the columns are matched by
-name rather than by position, both notations of a coordinate are read, and a moment whose
-position is `N/A` keeps its time rather than being dropped whole.
-
-The recipe lives in the catalogue rather than in code, because the answer differs per dive
-and per deployment and the archive is the one that knows it:
-
-```yaml
-  location:
-    kind: noaa-dive
-    data: https://oer.hpc.msstate.edu/okeanos/ex2107/
-```
-
-```yaml
-  location:                    # a camera bolted to the seafloor since 2015
-    kind: ooi-deployment
-    reference: RS03ASHS-PN03B-06-CAMHDA301
-```
-
-That last one is looked up per recording rather than written down, because the instrument
-is recovered and reinstalled: the 2016 recording resolves to deployment 3 at 1543 m and the
-2026 one to deployment 12 a few metres away.
-
-The processor that puts this on every slice is `slice-location`, and it is the one
-processor here that looks at no pixels at all. It cannot do the lookup itself — a processor
-is handed a block of pixels and the dimensions it sits at, not the name of the file it came
-from — so `collect one`, which handles exactly one recording and does know its URL,
-resolves it once and leaves it in the environment.
-
-The column names are not free choices. `latitude`, `longitude` and `footprint` are what
-pixel-patrol-geospatial's map widget queries for, so writing those names means the map
-appears in the viewer with nothing further to do, with the dive's own navigation drawn as
-its track. It wants all three, which is why a fixed camera gets a `Point` footprint rather
-than none.
-
-## Getting the footage
-
-### Reading a recording without keeping it
-
-`remote_file.py` hands a decoder a file that lives on a web server:
-
-```python
-import av
-from pixel_patrol_deepsea.remote_file import remote_video
-with av.open(remote_video(url)) as container: ...
-```
-
-Nothing is written to disk and only the ranges the decoder asks for are fetched.
-Measured on one 69 MB NOAA segment:
-
-| what was decoded | frames | bytes fetched |
-| --- | --- | --- |
-| the first 60 frames | 60 | 1.1 MB (1.5%) |
-| 3 s out of every 30 s | 910 | 21.8 MB (32%) |
-| 3 s out of every 10 s | 2,730 | 63.7 MB (92%) |
-| every frame | 8,989 | 69.0 MB (100%) |
-
-Two things follow. Skipping about is genuinely cheaper than reading through — a tenth
-of the footage for a third of the bytes — but it is not a tenth of the bytes, because
-a frame cannot be decoded without the ones it was predicted from, so whole groups
-come down whichever single frame you wanted. And decoding *fewer* frames does not
-help by itself: asking ffmpeg for keyframes only still reads the entire file, because
-it skips the decoding, not the reading.
-
-So for a slice of a large archive, read it remotely. For a whole recording you intend
-to analyse end to end, a transcoded local proxy is cheaper than the network: NOAA's
-8.2-hour dive is 6.8 GB as published and 370 MB at 640×360 and 10 fps, which is less
-than a *sixth* of what streaming a third of it would cost.
-
-`collect run` puts it together — choose, fetch, transcode, analyse, merge — one
-expedition at a time, and `nextflow/main.nf` runs that across the catalogue:
-
-```bash
-python -m pixel_patrol_deepsea.collect run EX2107 collection/ --jobs 4
-```
-
-## A cost worth knowing
-
-Per 30-frame HD slice, one channel: `raster-quality` **4.41 s** — of which `spectral_slope`
-is 3.77 s — against a single-size detector pass's **1.53 s**. Quality metrics cannot screen
-for the detector; the screen costs more than what it saves. `raster-quality` also runs on
-every frame of every slice, where three would give the same answer six times faster. The
-example excludes it, and the widgets fall back from `laplacian_variance` to `std_intensity`
-for the empty/dwell split.
-
-Reading a frame at three sizes and fusing them is **14.6 s** of CPU on an HD frame —
-2.2 s at 640 px, 4.4 s at 960, 8.0 s at 1280 — which is now most of the pipeline and the
-reason `--detect-every` exists. Two numbers around it are worth knowing because both were
-mistakes here:
-
-- a worker running it is resident at **4.8 GB**, so `--mb-per-task` must be 8192 and
-  parallelism is RAM over five gigabytes, not the core count;
-- the clip tracker greyscales the frame it is comparing, and doing that with a numpy mean
-  over the channel axis cost **75 ms** a frame against OpenCV's **0.4 ms**. Called for the
-  frame either side of every step of every animal's clip, that was 8 s a slice — half the
-  runtime — to save 0.05 s. It is now one conversion per frame of the slice, through
-  `cv2.cvtColor`.
-
-See the main [pixel-patrol documentation](https://github.com/ida-mdc/pixel-patrol/) for usage.
+| before pp runs | ~1,200 | which expeditions exist, which recordings to take, fetching and transcoding. PixelPatrol starts at a folder of files; this fills the folder. |
+| after pp runs | ~2,400 | passes over a finished report. Each reads a parquet pp wrote and writes a better one, and pp has no notion of a pass over its own output. |
+| the collection | ~2,700 | the landing page, the tile store behind it, the CLI, the static server. pp views *one* report; a collection of them is not a thing it has. |
+
+The middle group is the one worth a socket. Triage, identity and slimming are generic and
+none of them know anything about the sea.
+
+## Where the reasoning is
+
+Every number in this package is written down beside the thing it decided, so the code is
+the documentation for why it is the way it is:
+
+| | |
+| --- | --- |
+| why the detector reads each frame at three sizes | `detector.py` |
+| why a crop is cut with a 60% margin | `detector.py`, `crop_of` |
+| what counts as one animal seen twice | `refine.py`, `identity.py` |
+| what "frozen", "dwell" and "unnamed" mean | `triage.py` |
+| why nothing reads a report whole | `merge.py`, `catalogue_page.py` |
+| what a report is allowed to throw away | `slim.py` |
+| why the store is paged and spooled | `tiles.py` |
+| how a dive's navigation is read | `locations.py` |
+| what may be redistributed, and who to credit | `catalogue.py` |
+| how the page works | `landing.py`, `page/landing.{html,css,js}` |
+
+## Licence
+
+MIT. The footage is not ours: NOAA's is public domain, MBARI's DeepSea-MOT is CC BY-SA
+4.0, and the observatory's is open with a required acknowledgement. Every picture on the
+collection page says which.
