@@ -1990,6 +1990,18 @@ async function openShared(payload) {
  * reader opens the archive's own file and finds the same animal, whatever happens
  * to this page. */
 function asCsv(list) {
+  if (state.csvUrl) URL.revokeObjectURL(state.csvUrl);
+  state.csvUrl = URL.createObjectURL(new Blob([csvText(list)], { type: 'text/csv' }));
+  return state.csvUrl;
+}
+
+/** Those same favourites as the text of the file.
+ *
+ * Apart from `asCsv` because a blob URL is the one thing about the file a test
+ * cannot read back, and a test that writes the rows out a second time to check
+ * them is not checking anything - it reproduced this file's own frame-size bug
+ * faithfully for as long as both were wrong. */
+function csvText(list) {
   // `taxon_is_a_guess` is a column rather than a footnote because a CSV is the one
   // thing here that leaves and gets read somewhere else, by somebody who never saw
   // the disclaimer. Same for whose footage each row came from.
@@ -1999,7 +2011,11 @@ function asCsv(list) {
                 'credit', 'licence'];
   const rows = [head, ...list.map(entry => {
     const box = (entry.b || []).concat(['', '', '', '']).slice(0, 4);
-    const frame = (entry.f || []).concat(['', '']).slice(0, 2);
+    // The box's own coordinate system, which is a fact about the recording and
+    // lives with the recording. `entry.f` is where the tile's film went in the
+    // store, and writing those two offsets down as a frame size - which is what
+    // this did - makes every box in the file unreadable.
+    const frame = frameOf(entry);
     const terms = (state.index.where || {})[entry.e] || {};
     return [entry.t, 'yes, from an object detector', entry.c, entry.d, entry.n,
             entry.e, entry.r, entry.s, entry.w || '',
@@ -2007,13 +2023,10 @@ function asCsv(list) {
             ...box, ...frame, entry.v || '',
             terms.credit || '', terms.licence || ''];
   })];
-  const csv = rows.map(row => row.map(cell => {
+  return rows.map(row => row.map(cell => {
     const text = cell === undefined || cell === null ? '' : String(cell);
     return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
   }).join(',')).join('\n');
-  if (state.csvUrl) URL.revokeObjectURL(state.csvUrl);
-  state.csvUrl = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
-  return state.csvUrl;
 }
 
 /** The controls that are on the page once rather than once per tile. */

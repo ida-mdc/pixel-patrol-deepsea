@@ -1336,6 +1336,8 @@ def main(argv=None) -> int:
                                             "byte ranges and all")
     serving.add_argument("root", type=Path)
     serving.add_argument("-p", "--port", type=int, default=8000)
+    serving.add_argument("--host", default="127.0.0.1",
+                         help="0.0.0.0 to offer it to the network as well")
 
     args = parser.parse_args(argv)
     if args.verb == "list":
@@ -1363,7 +1365,7 @@ def main(argv=None) -> int:
         return score(args.expedition, args.root)
     if args.verb == "serve":
         from pixel_patrol_deepsea.serve import serve
-        return serve(args.root, args.port)
+        return serve(args.root, args.port, args.host)
     return build_site(args.root)
 
 

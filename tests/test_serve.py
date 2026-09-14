@@ -92,6 +92,18 @@ def test_a_head_admits_to_ranges_too(address):
     assert status == 200 and headers["Accept-Ranges"] == "bytes"
 
 
+def test_it_stays_on_this_machine_unless_it_is_told_otherwise(collection, monkeypatch):
+    """A collection holds three archives' footage under three sets of terms, so
+    handing it to the network is a thing to do on purpose."""
+    from pixel_patrol_deepsea import serve as module
+
+    asked = []
+    monkeypatch.setattr(module, "serve", lambda *args: asked.append(args) or 0)
+    module.main([str(collection)])
+    module.main([str(collection), "--host", "0.0.0.0"])
+    assert [call[2] for call in asked] == ["127.0.0.1", "0.0.0.0"]
+
+
 def test_a_folder_that_was_never_built_is_named_rather_than_served(tmp_path, caplog):
     assert serve(tmp_path, 0) == 1
     assert "collect site" in caplog.text

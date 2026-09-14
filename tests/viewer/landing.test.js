@@ -128,7 +128,7 @@ function page() {
     </div></div>`;
   const run = new Function('LOOKUP', 'fetch', pageScript()
     + '\n; return { state, focusOn, drawJumps, nodeAt, openStage, toggleKept, '
-    + 'kept, asCsv, wireTheStage, refreshKept, drawKept, shutStage, tileFor, '
+    + 'kept, asCsv, csvText, wireTheStage, refreshKept, drawKept, shutStage, tileFor, '
     + 'paintBoxes, boxAt, openAsked, askedFor, pickFromReel, packed, unpacked, '
     + 'linkTo, openShared, takeShared, shareThese };');
   return run(LOOKUP, store);
@@ -376,16 +376,28 @@ describe('what somebody kept', () => {
 
   it('writes a csv a stranger could use to find the moment', () => {
     api.toggleKept(ANIMALS[0], 'actiniaria', 0, 0);
-    // The page hands the browser a blob URL, which a test cannot read back, so the
-    // rows are built here the same way and the columns checked against those.
+    // The page hands the browser a blob URL, which a test cannot read back; the
+    // text it was made from is the same call one step earlier.
     expect(api.asCsv(api.kept())).toMatch(/^blob:/);
-    const rows = rowsOf(api.kept());
+    const rows = api.csvText(api.kept()).split('\n');
     expect(rows[0]).toContain('recording');
     expect(rows[0]).toContain('video');
     expect(rows[1]).toContain('EX2503_VID_20250413T012000Z_ROVHD_Low.mp4');
     expect(rows[1]).toContain('124.5');
     expect(rows[1]).toContain('100,40,180,130');
     expect(rows[1]).toContain('https://ncei/ex2503.mp4');
+  });
+
+  it('gives the box the frame it was measured in, not the tile\'s film', () => {
+    // `entry.f` is where that tile's frames went in the store. Written into the
+    // file as the frame size - which is what this did - every box in it is
+    // measured against a number that means nothing, and a reader scaling one onto
+    // a video puts the rectangle somewhere else entirely.
+    api.toggleKept(ANIMALS[0], 'actiniaria', 0, 0);
+    const row = api.csvText(api.kept()).split('\n')[1];
+    // The box, then the frame it was measured in, then the recording to scale it
+    // onto: 640x360 is what the index says EX2503 was filmed at.
+    expect(row).toContain('100,40,180,130,640,360,https://ncei/ex2503.mp4');
   });
 
   it('shows the favourites section only once there is something in it', async () => {
@@ -396,16 +408,6 @@ describe('what somebody kept', () => {
     expect(document.querySelectorAll('#keptWall .tile')).toHaveLength(1);
   });
 });
-
-/** The CSV the page would write, as rows, without going through a blob URL. */
-function rowsOf(list) {
-  const head = ['taxon', 'confidence', 'seconds_in_view', 'looks', 'expedition',
-                'recording', 'second', 'x0', 'y0', 'x1', 'y1',
-                'frame_width', 'frame_height', 'video'];
-  return [head.join(','), ...list.map(entry => [
-    entry.t, entry.c, entry.d, entry.n, entry.e, entry.r, entry.s,
-    ...(entry.b || []), ...(entry.f || []), entry.v].join(','))];
-}
 
 
 describe('the boxes, while the recording plays', () => {

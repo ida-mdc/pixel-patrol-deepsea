@@ -13,7 +13,9 @@ reading its footer and then only the row groups a query touches - 0.3 MB rather
 than 3.37 GB.
 
 This is a viewer for a collection on a laptop, not a public server: it binds to
-localhost and serves one directory.
+localhost and serves one directory. `--host 0.0.0.0` offers it to the network
+instead, which is a thing to do on purpose and not by default - a collection
+holds an archive's footage under three different sets of terms.
 """
 
 import argparse
@@ -90,14 +92,17 @@ class _Piece:
         self.handle.close()
 
 
-def serve(root: Path, port: int = 8000) -> int:
+def serve(root: Path, port: int = 8000, host: str = "127.0.0.1") -> int:
     root = Path(root)
     if not (root / "index.html").exists():
         logger.error("%s has no index.html - build it with `collect site` first", root)
         return 1
     handler = functools.partial(Ranged, directory=str(root))
-    with http.server.ThreadingHTTPServer(("127.0.0.1", port), handler) as httpd:
-        logger.info("%s at http://127.0.0.1:%d/ - ctrl-c to stop", root, port)
+    with http.server.ThreadingHTTPServer((host, port), handler) as httpd:
+        if host in ("0.0.0.0", "::"):
+            logger.info("serving %s to the whole network on port %d", root, port)
+        logger.info("%s at http://%s:%d/ - ctrl-c to stop", root,
+                    "localhost" if host in ("0.0.0.0", "::") else host, port)
         try:
             httpd.serve_forever()
         except KeyboardInterrupt:
@@ -110,8 +115,10 @@ def main(argv: Optional[list] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("root", type=Path, help="a collection built by `collect site`")
     parser.add_argument("-p", "--port", type=int, default=8000)
+    parser.add_argument("--host", default="127.0.0.1",
+                        help="0.0.0.0 to offer it to the network as well")
     args = parser.parse_args(argv)
-    return serve(args.root, args.port)
+    return serve(args.root, args.port, args.host)
 
 
 if __name__ == "__main__":
