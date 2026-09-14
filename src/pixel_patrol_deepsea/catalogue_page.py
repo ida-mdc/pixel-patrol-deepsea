@@ -40,6 +40,28 @@ HIDDEN_WIDGETS = (
 )
 
 
+def data_at(base: str, path: str) -> str:
+    """Where a heavy file lives: beside the page, or wherever it was put.
+
+    A collection is fifteen gigabytes of pictures and reports and a hundred
+    kilobytes of page. Those do not want the same home: the page is a file in a
+    repository, and the rest belongs on storage that charges nothing to hold it.
+    So the store and the reports can be addressed absolutely, and the default -
+    everything in one folder, served together - is the empty string.
+
+    The relative form is `../`-prefixed because the thing resolving it is the
+    viewer, which lives one directory down from the page. An absolute base has no
+    such question to answer.
+    """
+    return f"{base.rstrip('/')}/{path}" if base.strip() else f"../{path}"
+
+
+def tiles_at(base: str) -> str:
+    """Where the tile store is, as the page itself resolves it - from the page's
+    own directory, not the viewer's."""
+    return f"{base.rstrip('/')}/tiles" if base.strip() else "tiles"
+
+
 def _report_url(parquet: str, group: str = "") -> str:
     """A link into the static viewer beside this page, opened on what is worth reading.
 
@@ -455,12 +477,15 @@ def write_assets(root: Path) -> Path:
 
 
 def write_catalogue_page(root: Path, output: Optional[Path] = None,
-                         index: Optional[Dict] = None) -> Path:
+                         index: Optional[Dict] = None, data_url: str = "") -> Path:
     """The landing page, over the tile store if one was written.
 
     The store is read back from disk when it was not just built, so writing the
     page on its own - after an edit to it, say - still shows everything the last
     build found rather than an empty wall.
+
+    `data_url` is where the store and the reports will be served from, for a
+    collection whose page and whose gigabytes do not live in the same place.
     """
     import json
 
@@ -473,7 +498,7 @@ def write_catalogue_page(root: Path, output: Optional[Path] = None,
             except Exception:
                 index = None
     rows = read_progress(root)
-    output.write_text(render(rows, index))
+    output.write_text(render(rows, index, data_url=data_url))
     return output
 
 
@@ -481,11 +506,12 @@ def write_catalogue_page(root: Path, output: Optional[Path] = None,
 # down is one nothing downstream can recover. The wall is the other end of that
 # bargain: it shows the ones worth a person's glance and says how many it held back.
 # Same floor the report's own slider starts at.
-def render(rows: List[Progress], index: Optional[Dict] = None) -> str:
+def render(rows: List[Progress], index: Optional[Dict] = None,
+           data_url: str = "") -> str:
     """The landing page, over whatever the tile store holds."""
     from pixel_patrol_deepsea.landing import render as landing
 
-    return landing(rows, index)
+    return landing(rows, index, data_url=data_url)
 
 
 def _ratio(value) -> str:
@@ -497,10 +523,10 @@ def _clock(seconds: float) -> str:
     return f"{total // 3600}:{total % 3600 // 60:02d}:{total % 60:02d}" if total else "&ndash;"
 
 
-def _link(row: Progress) -> str:
+def _link(row: Progress, data_url: str = "") -> str:
     if row.report is None:
         return '<span class="muted small">no report yet</span>'
-    target = _report_url(f"../parquet/{row.id}.parquet")
+    target = _report_url(data_at(data_url, f"parquet/{row.id}.parquet"))
     return f'<a class="open" href="{html.escape(target, quote=True)}">Open report &rarr;</a>'
 
 

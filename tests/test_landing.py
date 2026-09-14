@@ -197,3 +197,39 @@ def test_a_name_is_never_presented_as_an_identification(tmp_path):
     # somebody who never saw the page.
     assert "is one detector's guess, not an" in page
     assert "taxon_is_a_guess" in page
+
+
+# ── a page and its gigabytes in different places ──────────────────────────────
+
+def test_by_default_everything_is_beside_the_page(tmp_path):
+    """A collection on a laptop is one folder, and that has to stay the easy case."""
+    page = render(_two_expeditions(tmp_path))
+    # The script names `window.PP_TILES` either way - what says nothing was set is
+    # that nothing assigned to it.
+    assert "window.PP_TILES =" not in page
+    assert "|| 'tiles'" in page                   # what the script falls back to
+    assert "data=../parquet/" in page
+
+
+def test_the_store_and_the_reports_can_live_somewhere_else(tmp_path):
+    """Fifteen gigabytes of pictures do not go in a repository, and a hundred
+    kilobytes of page does not need a storage facility."""
+    where = "https://hifis-storage.desy.de/Helmholtz/HIP/collaborations/PixelPatrolDeepSea"
+    page = render(_two_expeditions(tmp_path), data_url=where)
+    assert f'window.PP_TILES = "{where}/tiles"' in page
+    assert f"data={where}/parquet/" in page
+    assert "data=../parquet/" not in page
+
+
+def test_a_trailing_slash_does_not_double_up(tmp_path):
+    page = render(_two_expeditions(tmp_path), data_url="https://host/coll/")
+    assert '"https://host/coll/tiles"' in page
+    assert "//tiles" not in page.replace("https://", "")
+
+
+def test_the_taxonomy_and_the_assets_stay_with_the_page(tmp_path):
+    """The tree fetches `taxonomy.json` relative to the viewer, and the banner is
+    two megabytes - both belong wherever the page is, not on the storage."""
+    page = render(_two_expeditions(tmp_path), data_url="https://host/coll")
+    assert "assets/colours.png" in page
+    assert "https://host/coll/assets" not in page

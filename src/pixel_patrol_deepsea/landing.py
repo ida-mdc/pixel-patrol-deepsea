@@ -61,8 +61,9 @@ ASSET = "assets/pixel-patrol-deepsea.png"
 BANNER = "assets/colours.png"
 
 
-def render(rows, index: Optional[Dict] = None, scores: Optional[Dict] = None) -> str:
-    from pixel_patrol_deepsea.catalogue_page import _clock, _report_url
+def render(rows, index: Optional[Dict] = None, scores: Optional[Dict] = None,
+           data_url: str = "") -> str:
+    from pixel_patrol_deepsea.catalogue_page import _clock, _report_url, data_at, tiles_at
     from pixel_patrol_deepsea.collect import EVERYTHING
 
     listed = sum(r.listed for r in rows)
@@ -80,7 +81,8 @@ def render(rows, index: Optional[Dict] = None, scores: Optional[Dict] = None) ->
     ran = len([r for r in rows if r.processed])
     # Grouped by expedition, because the only reason to open every expedition in
     # one report is to see how they differ from each other.
-    combined = (_report_url(f"../parquet/{EVERYTHING}.parquet", group="expedition")
+    combined = (_report_url(data_at(data_url, f"parquet/{EVERYTHING}.parquet"),
+                            group="expedition")
                 if len(everything) > 1 else "")
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
@@ -178,7 +180,7 @@ def render(rows, index: Optional[Dict] = None, scores: Optional[Dict] = None) ->
     <table class="fleet-table">
       <thead><tr><th>expedition</th><th>when</th><th>analysed</th><th>footage</th>
         <th>animals</th><th>names</th><th></th></tr></thead>
-      <tbody>{"".join(_fleet_row(r) for r in rows)}</tbody>
+      <tbody>{"".join(_fleet_row(r, data_url) for r in rows)}</tbody>
     </table>
     <p class="note">“Analysed” is recordings read of recordings published. Nothing here
        was sampled at random: the deepest dives were chosen, and within them the hours
@@ -306,7 +308,7 @@ def render(rows, index: Optional[Dict] = None, scores: Optional[Dict] = None) ->
   </div>
 </div>
 <script>const LOOKUP = {_lookup(index)};</script>
-<script>{SCRIPT}</script>
+<script>{_where_the_data_is(data_url)}{SCRIPT}</script>
 </body></html>"""
 
 
@@ -382,7 +384,16 @@ def _named(row) -> str:
             f'>{title} &nearr;</a></b>')
 
 
-def _fleet_row(row) -> str:
+def _where_the_data_is(data_url: str) -> str:
+    """One line of JavaScript, when the store is not beside the page."""
+    from pixel_patrol_deepsea.catalogue_page import tiles_at
+
+    if not data_url.strip():
+        return ""
+    return f"window.PP_TILES = {json.dumps(tiles_at(data_url))};\n"
+
+
+def _fleet_row(row, data_url: str = "") -> str:
     from pixel_patrol_deepsea.catalogue_page import _clock, _link
 
     share = (row.processed / row.listed * 100) if row.listed else 0
@@ -401,7 +412,7 @@ def _fleet_row(row) -> str:
       <td class="num">{_clock(row.seconds)}</td>
       <td class="num">{animals}</td>
       <td class="num">{taxa}</td>
-      <td class="num">{_link(row)}</td>
+      <td class="num">{_link(row, data_url)}</td>
     </tr>"""
 
 
@@ -774,7 +785,10 @@ SCRIPT = r"""
    and beside it a directory per taxon holding pages of animals. Nothing is built
    into the HTML, so the page does not grow with the collection - what is on screen
    is what has been fetched. */
-const TILES = 'tiles';
+// Beside the page unless the build said otherwise. A collection is fifteen
+// gigabytes of store and reports and a hundred kilobytes of page, and those two
+// do not have to live in the same place - see `collect site --data-url`.
+const TILES = (typeof window !== 'undefined' && window.PP_TILES) || 'tiles';
 const SVGNS = 'http://www.w3.org/2000/svg';
 /* The ring's geometry, in the units the sunburst is drawn in. The hole is wide
    because it is a button - the way back out - and not just the middle. Every wedge

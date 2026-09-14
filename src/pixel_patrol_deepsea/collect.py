@@ -1135,8 +1135,16 @@ def unreadable(root: Path) -> List[Path]:
     return broken
 
 
-def build_site(root: Path) -> int:
-    """A static viewer beside the parquets, and the page that indexes them."""
+def build_site(root: Path, data_url: str = "") -> int:
+    """A static viewer beside the parquets, and the page that indexes them.
+
+    `data_url` says where the store and the reports will be served from, for a
+    collection whose page and whose gigabytes part company: the page, the viewer,
+    the taxonomy and the assets are a few tens of megabytes and go wherever pages
+    go, while `tiles/` and `parquet/` are fifteen gigabytes and go on storage.
+    The page then addresses those two absolutely and everything else beside
+    itself. Left out, everything is one folder, which is what a laptop wants.
+    """
     from pixel_patrol_base import api
 
     from pixel_patrol_deepsea.catalogue_page import write_assets, write_catalogue_page
@@ -1192,7 +1200,7 @@ def build_site(root: Path) -> int:
     except Exception as exc:
         logger.warning("could not write the tile store: %s", exc)
         index = None
-    page = write_catalogue_page(root, index=index)
+    page = write_catalogue_page(root, index=index, data_url=data_url)
     print(f"catalogue -> {page}")
     return 0
 
@@ -1337,6 +1345,9 @@ def main(argv=None) -> int:
 
     site = verbs.add_parser("site", help="build the viewer and the catalogue page")
     site.add_argument("root", type=Path)
+    site.add_argument("--data-url", default="",
+                      help="where tiles/ and parquet/ will be served from, if not "
+                           "from beside the page")
 
     serving = verbs.add_parser("serve", help="serve a built collection on localhost, "
                                             "byte ranges and all")
@@ -1375,7 +1386,7 @@ def main(argv=None) -> int:
     if args.verb == "serve":
         from pixel_patrol_deepsea.serve import serve
         return serve(args.root, args.port, args.host)
-    return build_site(args.root)
+    return build_site(args.root, args.data_url)
 
 
 if __name__ == "__main__":
