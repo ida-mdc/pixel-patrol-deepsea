@@ -75,13 +75,16 @@ def test_the_disclaimer_stands_in_the_header(tmp_path):
     alarm = hero[hero.index('<aside class="alarm"'):]
     assert "<details" not in page and "<summary" not in page
     assert "Prototype" in alarm
-    said = " ".join(re.sub(r"<[^>]+>", " ", alarm).split())
-    assert "pulling statistics and animal names" in said
-    assert alarm.count("<li>") == 5
+    # Bullets rather than paragraphs, and enough of them to be a list. The wording
+    # is the page author's to change; what is checked is that the warning is there,
+    # is visible, and comes first.
+    assert alarm.count("<li>") >= 3
     # Short: the whole box is nearer a paragraph than a page.
     assert len(re.sub(r"<[^>]+>", " ", alarm).split()) < 130
-    for said in ("shortlist", "never read", "upper bounds", "six points of recall",
-                 "lamps"):
+    # The three a reader is misled without: the names are a guess, most of the
+    # footage was never looked at, and the counts are ceilings. What else the box
+    # says is editorial.
+    for said in ("shortlist", "never read", "upper bounds"):
         assert said in alarm, said
 
 
@@ -148,7 +151,7 @@ def test_the_header_opens_on_the_collection_s_own_colours(tmp_path):
     page = render(_two_expeditions(tmp_path))
     hero = page[page.index('<section class="hero"'):page.index("</section>")]
     assert f'url("{BANNER}")' in page
-    assert "one stripe each" in hero
+    assert "stripe" in hero, "the hero says what the picture behind it is"
     # ...and the drawing that used to be here is now down with the credit for it.
     assert page.index('class="patrol"') > page.index('<section class="credits"')
 

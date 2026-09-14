@@ -135,7 +135,6 @@ def render(rows, index: Optional[Dict] = None, scores: Optional[Dict] = None,
         "where_the_data_is": _where_the_data_is(data_url),
         "expeditions": ran,
         "today": datetime.now().strftime("%Y-%m-%d"),
-        "written_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
         "footage_read": _cell(_clock(seconds), "footage read"),
         # An expedition nobody has listed yet has no denominator, and one whose
         # animals have not been counted still knows how many slices held one.

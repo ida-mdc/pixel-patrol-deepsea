@@ -13,25 +13,19 @@
   <section class="hero">
     <div class="hero-say">
       <p class="chapter">01 / the collection</p>
-      <h1>Somebody has to<br>watch the tapes.</h1>
+      <h1>Let's watch<br>deep sea tapes.</h1>
       <p class="lede">NOAA, MBARI and the cabled observatories publish their dive
-         footage in full - more hours of it than anybody is going to sit through.
-         This reads it a frame a second and asks two questions: what moved, and
-         what was it.</p>
+         footage in full. In this experiment, we are exploring automatic coverage strategies to learn more about what moved when in the footage.</p>
     </div>
     <aside class="alarm" id="warning">
-      <p class="alarm-line"><b>Prototype</b> An experiment in pulling statistics and
-         animal names out of footage nobody has time to watch. Nothing on this page
-         has been checked by a person.</p>
+      <p class="alarm-line"><b>Prototype</b></p>
       <ul>
         <li>Every name is one detector's guess: a shortlist, not an identification.</li>
         <li>Most frames were never read - a sample of dives, a look a second.</li>
         <li>Counts are upper bounds; one animal is often counted twice.</li>
-        <li>640×360 footage costs the detector about six points of recall.</li>
-        <li>Colour is the vehicle's lamps as much as the animal.</li>
       </ul>
     </aside>
-    <p class="banner-says">every recording that has been read, one stripe each, in
+    <p class="banner-says">Background: every recording as one stripe, in
        the colours it was filmed in - oldest on the left</p>
   </section>
 
@@ -47,7 +41,7 @@
       <p class="chapter">02 / what is in it</p>
       <h2>Everything that was found</h2>
       <p class="lede">Named by one object detector - a FathomNet YOLOv5 checkpoint,
-         499 classes, on a frame a second - and grouped by the ranks the World
+         499 classes, trained on mid water footage. The labels are grouped by the ranks the World
          Register of Marine Species puts above those names. Click a ring to go in
          and the middle of it to come out; hover a picture to watch it move, or
          click it to open the recording there.</p>
@@ -102,9 +96,6 @@
         <th>animals</th><th>names</th><th></th></tr></thead>
       <tbody>{{fleet}}</tbody>
     </table>
-    <p class="note">“Analysed” is recordings read of recordings published. Nothing here
-       was sampled at random: the deepest dives were chosen, and within them the hours
-       the vehicle was on the bottom.</p>
   </section>
 
   <section class="credits">
@@ -112,37 +103,26 @@
     <div class="credit-grid">
       <div>
         <h3>The footage</h3>
-        <p>Every frame was filmed, published and paid for by somebody else, and the
-           three archives here do not ask for the same thing. NOAA Ocean Exploration's
-           video is in the public domain and asks to be credited to
-           <b>NOAA Ocean Exploration</b>. MBARI's DeepSea-MOT is
-           <b>CC BY-SA 4.0</b>, so the crops taken from it carry that licence too, and
-           it is cited as Barnard et al. 2025, <i>DeepSea MOT</i>, arXiv:2509.03499.
-           The Axial Seamount camera is the Ocean Observatories Initiative's Regional
-           Cabled Array, run by the University of Washington: open with no licence
-           named, and its terms require acknowledging the <b>National Science
-           Foundation</b> and the <b>WHOI OOI Program Office</b>. Every picture on this
-           page says which of the three it is.</p>
+        <p>Filmed, published and paid for by <b>NOAA Ocean Exploration</b>, by
+           <b>MBARI</b>, and by the <b>Ocean Observatories Initiative</b>'s Regional
+           Cabled Array at the University of Washington. Every picture on this page
+           says which of the three it came from; the terms each one asks for are in
+           the imprint below.</p>
       </div>
       <div>
         <h3>The detector</h3>
         <p>A YOLOv5 checkpoint trained by <a href="https://fathomnet.org/">FathomNet</a>
-           on MBARI imagery - weights CC BY 4.0, and the code that loads them is
-           GPL-3.0. It knows 499 classes and was never trained on most of this footage.
+           on MBARI imagery. It knows 499 classes and was never trained on most of this footage.
            Nothing here is a model this project built.</p>
       </div>
       <div>
         <h3>The names</h3>
         <p><b>Every name on this page is an automated guess</b> - one object
-           detector's answer for one frame, not an identification, and wrong often
-           enough that the page says so wherever a name appears. Ranks and
-           identifiers come from the
-           <a href="https://www.marinespecies.org/">World Register of Marine Species</a>
-           (text CC BY; WoRMS Editorial Board, 2026, doi:10.14284/170), resolved once
-           per class name; article titles from
-           <a href="https://en.wikipedia.org/">Wikipedia</a> (CC BY-SA), and a name is
-           linked there only where it actually has an article. Nothing on this page
-           describes an animal in its own words.</p>
+           detector's answer for one frame, not an identification, and often
+           enough wrong. The ranks above those names come from the
+           <a href="https://www.marinespecies.org/">World Register of Marine
+           Species</a>, and the article links from
+           <a href="https://en.wikipedia.org/">Wikipedia</a>.</p>
       </div>
       <div class="credit-tool">
         <h3>This tool</h3>
@@ -184,26 +164,23 @@
            derived from that footage and are redistributed under its terms - public
            domain for NOAA Ocean Exploration, CC BY-SA 4.0 for MBARI's DeepSea-MOT
            (so these derivatives are CC BY-SA 4.0 as well), and open with a required
-           acknowledgement of the NSF and the WHOI OOI Program Office for the Ocean
-           Observatories Initiative's Regional Cabled Array at the University of
-           Washington. Cite the archive, not this page.</p>
+           acknowledgement of the <b>National Science Foundation</b> and the
+           <b>WHOI OOI Program Office</b> for the Ocean Observatories Initiative's
+           Regional Cabled Array at the University of Washington. MBARI's benchmark
+           is cited as Barnard et al. 2025, <i>DeepSea MOT</i>, arXiv:2509.03499.
+           Cite the archive, not this page.</p>
       </div>
       <div>
         <h3>What was made here</h3>
         <p>The detections, the names and the figures - from
            <a href="https://fathomnet.org/">FathomNet</a>'s YOLOv5 weights (CC BY
-           4.0), the World Register of Marine Species (CC BY) and Wikipedia's
-           article titles (CC BY-SA). They are a machine's reading of somebody
-           else's footage, offered as a prototype and not as a survey.</p>
+           4.0), the World Register of Marine Species (text CC BY; WoRMS Editorial
+           Board, 2026, doi:10.14284/170) and Wikipedia's article titles (CC BY-SA).
+           They are a machine's reading of somebody else's footage, offered as a
+           prototype and not as a survey.</p>
       </div>
     </div>
   </section>
-
-  <footer>
-    Written by <code>python -m pixel_patrol_deepsea.collect site</code> on
-    {{written_at}}. Serve this folder over HTTP and every
-    link works; there is nothing else to install.
-  </footer>
 </main>
 
 <div class="stage" id="stage" hidden>
