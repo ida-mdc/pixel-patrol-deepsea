@@ -54,26 +54,16 @@ def merge(expedition_id: str, parts: List[Path], output: Path,
     one image, so every level of the aggregation tree in a part already belongs to
     that recording alone and nothing needs re-rolling up.
 
-    Streamed, a row group at a time, because the obvious way to concatenate parquet
-    is to read them all and write the pile - and an expedition's parts are the
-    pictures. EX1702 is 2.9 GB of them and was killed at an 8 GB limit; GOA2004 is
-    17 GB and would have needed a machine nobody has. Nothing here holds more than
-    one row group, so the memory a merge needs no longer has anything to do with how
-    much was analysed.
-
     The parts are not guaranteed to share a schema: a recording with no detections
     has no detection columns, and a run from a week ago may have fewer of them than
     today's. So the schemas are unified first - by reading the schemas, which costs
     a footer each - and every batch is aligned to that before it is written.
 
     **The clip frames are left behind**, which is what `clips=False` means and why
-    it is the default. Measured across nine expeditions, the frames the gallery
-    animates with are 84% of a report: 5.49 GB of 6.55, against 1.05 GB of stills
-    and 13 MB of every number on the page. They are cut again into the tile store
-    the collection page browses, so a report carrying them is the second copy, and
-    it is the copy that has to be moved, stored and opened over a network. The
-    parts keep everything; `clips=True` puts them in the report as well, for a
-    collection of one dive on a laptop where none of that matters.
+    it is the default: they are 84% of a report, and the tile store cuts them again
+    from the parts. A report carrying them is the second copy, and the one that has
+    to be moved and opened over a network. `clips=True` keeps them, for a collection
+    of one dive on a laptop where none of that matters.
     """
     import pyarrow as pa
     import pyarrow.parquet as pq

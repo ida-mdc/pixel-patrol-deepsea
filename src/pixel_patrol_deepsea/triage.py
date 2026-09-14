@@ -261,9 +261,7 @@ def _recording_column(columns: Sequence[str]) -> str:
     return "child_id" if "child_id" in columns else "name"
 
 
-# A batch while the numbers are read, and how much of a batch is worth writing as
-# one row group. Rows carry pictures, so the second is in bytes: see `collect.merge`,
-# which cuts its row groups the same way and for the same reason.
+# How many rows to read at a time. Nine narrow columns, so this can be generous.
 READ_ROWS = 256
 
 

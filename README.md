@@ -6,18 +6,10 @@ has watched yet, where the first question is *which minutes are worth a person's
 Built and validated against raw submersible dive tapes from
 [NOAA Ocean Exploration](https://www.ncei.noaa.gov/data/oceans/oer/video/), MBARI's
 annotated [DeepSea-MOT](https://huggingface.co/datasets/MBARI-org/DeepSea-MOT) sequences,
-and the single-specimen midwater recordings published on Zenodo by Burns and Phillips
-(the `RAD2-*` records), which are read straight out of their archives without
-downloading them.
-
-Those records carry a title, three creators, a licence and nothing else — no cruise, no
-vessel, no date. Their data descriptor ([Burns et al., *Scientific Data* 11,
-2024](https://www.nature.com/articles/s41597-024-03533-4)) places the collection in the
-Eastern Pacific in August 2021, which is Schmidt Ocean's *Designing the Future 2*
-(FK210812, R/V *Falkor*, ROV SuBastian) — Brennan Phillips chief scientist, David Gruber
-co-PI, John Burns on the team. That chain comes from the paper and the expedition page,
-not from the archives themselves. `RAD2` is the Rotary Actuated Dodecahedron sampler the
-specimens were caught with.
+and the cabled camera at Axial Seamount run by the
+[Ocean Observatories Initiative](https://oceanobservatories.org/). Seventeen expeditions,
+274 hours, 2000 to 2026 — none of it copied: every recording is read from the archive
+that published it.
 
 ## Installing
 
@@ -142,6 +134,27 @@ so it is a midwater model applied to midwater footage.
   read at a glance and several recordings compare side by side. A ribbon underneath marks
   where the animals were; hovering reads back the timecode, the count and the species.
 
+## Where the code is
+
+PixelPatrol has three sockets — a **processor** measures a block of pixels, a **loader**
+turns a file into records, a **viewer extension** adds widgets — and this package fills
+all three. Walking the import graph out from the entry points in `plugin_registry`, that
+accounts for 3,203 lines of Python and the 3,749-line viewer extension: every processor
+above, the maths they call, the detector wrapper, the navigation lookup, the manifest
+loader, every widget.
+
+The other 6,259 lines sit outside, in three groups, because there is no socket for them:
+
+| | lines | what it is |
+| --- | --- | --- |
+| before pp runs | ~1,200 | which expeditions exist, which recordings to take, fetching and transcoding them. PixelPatrol starts at a folder of files; this is what fills the folder. |
+| after pp runs | ~2,400 | passes over a finished report — merge, triage, identity, slimming, scoring. Each reads a parquet pp wrote and writes a better one, and pp has no notion of a pass over its own output. |
+| the collection | ~2,700 | the landing page, the tile store behind it, the colour banner, the CLI, the static server. pp views *one* report; a collection of them is not a thing it has. |
+
+The middle group is the one worth a socket. Triage, identity and slimming are generic —
+judge what a recording was doing, decide which detections are the same animal, drop the
+pictures a report holds twice — and none of them know anything about the sea.
+
 ## Keeping the video remote
 
 Previews come from the parquet, so the report is fully usable with no access to the footage
@@ -215,9 +228,10 @@ aggregation tree over image dimensions, and an animal is not one of those axes.
 
 ## A free ground truth, and what it says
 
-The `RAD2-*` records are named after the animal in them — `RAD2-005 Atolla sp. video and
-image data` — which makes each one a labelled test the detector never saw. Over the five
-clips fetched so far, 748 refined sightings:
+Some archives name a record after the animal in it, which makes it a labelled test the
+detector never saw. Five such midwater clips — the `RAD2-*` specimen records published on
+Zenodo, no longer part of this catalogue but the measurement stands — gave 748 refined
+sightings:
 
 | record | detector's best call | the record's own answer | |
 | --- | --- | --- | --- |
@@ -233,18 +247,9 @@ larvacean whose inner and outer mucus filters it separates as distinct classes. 
 wrong, at 0.94 and higher, on both siphonophores and on the lobate ctenophore, where it
 reaches for `trachylinae` every time.
 
-So a confident name is not a correct name, and the confidence sort ranks *what to look at*
-rather than *what it is*. Run the comparison yourself against whatever the fetch produced:
-
-```bash
-python deepsea_report.py --view --no-view --check-names
-```
-
-The other consequence is upstream: a clip has to be cut where the named specimen is rather
-than where the detector is loudest — an Atolla record cut at the frame a passing shrimp
-scored 0.9 on is not a clip of Atolla. The probes prefer a moment showing the species the
-record is named after, and fall back to the most confident moment only when they never
-see it.
+So a confident name is not a correct name, and the confidence sort ranks *what to look
+at* rather than *what it is*. That is why every name this package writes — in a report, on
+the page, in an exported CSV — says it is a guess.
 
 ## Finding as many as possible without saying anything that is not there
 
@@ -613,7 +618,9 @@ one thing that has to interrupt somebody.
   picture of whatever branch is in focus, most confident first, a screenful per fetch,
   each tile playing the seconds around its own animal when you hover it — with the
   confidence and how long the animal stayed in view over the top of it and the name
-  along the bottom. Clicking the middle of the ring steps back out.
+  along the bottom. Clicking the middle of the ring steps back out. Three rings show
+  three levels of 373 names, so there is a box to type one into: matches come back with
+  their rank and their count, and taking one is the same as clicking its own ring.
 - **what you kept** — the sightings somebody starred, under the pictures they came
   from, and a CSV of them.
 - **03 the expeditions** — how many of each one's recordings are listed and how many
@@ -636,7 +643,7 @@ same animals — not by taxon but by the recording they came out of, with every 
 detector had at each: when, and where in the frame. So the overlay draws every animal
 that belongs on screen at the second being played, moving the box between the looks
 rather than pinning it where it was first drawn, and a click on any of them hands the
-stage over without interrupting the video. 285 reels, 9.5 MB, the biggest 193 KB —
+stage over without interrupting the video. 1,805 reels, 106 MB, the biggest 931 KB —
 one fetch per recording somebody opens. Only the animal in focus is named on screen: a
 crowded seabed puts twenty-five boxes up at once.
 
@@ -787,18 +794,6 @@ its track. It wants all three, which is why a fixed camera gets a `Point` footpr
 than none.
 
 ## Getting the footage
-
-`remote_archive.py` reads video out of a huge remote zip without downloading it. The
-specimen records on Zenodo are 7–22 GB each and hold a single 4K recording;
-a zip keeps its index at the end and these store the video uncompressed, so the wanted
-seconds can be addressed directly and written into a sparse local file. Twenty seconds of
-a 7.5 GB archive costs a few hundred megabytes rather than all of it.
-
-Zenodo throttles this, and the shape of the refusal is worth knowing: the record
-metadata and the zip index come back fine while the byte ranges answer `504 Gateway
-Time-out`, for hours at a time and only on some records. It is load, not a block. The
-backoff retries five times per request and then gives up on that record rather than the
-run; the answer to a record that keeps failing is to come back later.
 
 ### Reading a recording without keeping it
 
