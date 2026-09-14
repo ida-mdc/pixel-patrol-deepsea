@@ -712,19 +712,24 @@ async function collectEvents(ctx, recordings) {
 
 /** Stills for the events, straight out of the parquet.
  *
- * The slice-thumbnail processor writes one small JPEG per slice, so a preview is a
- * lookup rather than a seek into a remote recording. That is the difference between
- * a gallery that fills instantly and one that spends 43 MB of range requests
- * filling a single screen. An event covering several slices animates by cycling the
- * stills it already has.
+ * A preview is a lookup rather than a seek into a remote recording. That is the
+ * difference between a gallery that fills instantly and one that spends 43 MB of
+ * range requests filling a single screen.
+ *
+ * Only where the report still carries a picture per slice. A slimmed one does
+ * not: `detection_crop` was a duplicate of a crop already in the detections, and
+ * the whole-frame thumbnail was only ever shown on stretches where nothing was
+ * named - which is not what this gallery is for. The animals' own crops are read
+ * by `fetchEventAnimals`, and they are what a tile is made of.
  */
 async function fetchEventStills(ctx, events) {
-  if (!ctx.schema.allCols.includes('slice_thumbnail')) return new Map();
+  const held = ['detection_crop', 'slice_thumbnail']
+    .filter(name => ctx.schema.allCols.includes(name));
+  if (!held.length) return new Map();
   const { q } = ctx.sql;
-  // A close-up of the animal beats a wide shot of dark water, so the crop is
-  // preferred wherever the detector left one.
-  const crop = ctx.schema.allCols.includes('detection_crop')
-    ? `COALESCE(${q('detection_crop')}, ${q('slice_thumbnail')})` : q('slice_thumbnail');
+  // A close-up of the animal beats a wide shot of dark water, so the crop comes
+  // first wherever the detector left one.
+  const crop = held.length > 1 ? `COALESCE(${q(held[0])}, ${q(held[1])})` : q(held[0]);
   const wanted = new Map();               // recording name -> set of dim_t
   for (const event of events) {
     const name = event.recording.name;
@@ -736,7 +741,7 @@ async function fetchEventStills(ctx, events) {
     const table = await ctx.query(`
       SELECT ${q('dim_t')} AS t, ${crop} AS still
       FROM ${sliceTable(ctx)}
-      WHERE ${recordingKey(ctx)} = ${literal(name)} AND ${q('slice_thumbnail')} IS NOT NULL
+      WHERE ${recordingKey(ctx)} = ${literal(name)} AND ${crop} IS NOT NULL
         AND ${q('dim_t')} IN (${[...times].join(', ')})`);
     stills.set(name, decodeStills(ctx, table));
   }
@@ -797,7 +802,7 @@ async function previewShots(ctx, most) {
     const shots = [];
     for (const row of rows) {
       for (const animal of parseAnimals(row.detections)) {
-        shots.push({ src: `data:image/jpeg;base64,${animal.crop}`, label: animal.class });
+        shots.push({ src: pictureUrl(animal.crop), label: animal.class });
         if (shots.length >= most) return shots;
       }
     }
@@ -811,6 +816,19 @@ async function previewShots(ctx, most) {
     LIMIT ${most}`);
   return [...decodeStills(ctx, table).values()]
     .map(bytes => ({ src: URL.createObjectURL(new Blob([bytes], { type: 'image/jpeg' })) }));
+}
+
+/** A crop as something an `<img>` will take.
+ *
+ * Sniffed rather than assumed. A report written before the crops were slimmed
+ * carries JPEG and one written after carries WebP, both base64 in the same
+ * field, and a WebP served as `image/jpeg` is at the mercy of whatever the
+ * browser decides to do about the lie. WebP begins `RIFF`, which is `UklGR` in
+ * base64; JPEG begins with the two bytes `FFD8`, which is `/9j/`.
+ */
+export function pictureUrl(crop) {
+  const kind = String(crop || '').startsWith('UklGR') ? 'webp' : 'jpeg';
+  return `data:image/${kind};base64,${crop}`;
 }
 
 export function parseAnimals(json) {
@@ -1065,7 +1083,7 @@ function appendAnimalTile(grid, shots) {
   const steady = framesAreSteady(playing);
   const images = playing.map((animal) => {
     const image = new Image();
-    image.src = `data:image/jpeg;base64,${animal.crop}`;
+    image.src = pictureUrl(animal.crop);
     image.decoding = 'async';
     image.dataset.fit = steady ? 'cover' : 'contain';
     return image;
@@ -1096,7 +1114,7 @@ function animalImages(event, animals) {
   const steady = framesAreSteady(frames);
   return frames.map((animal) => {
     const image = new Image();
-    image.src = `data:image/jpeg;base64,${animal.crop}`;
+    image.src = pictureUrl(animal.crop);
     image.decoding = 'async';
     // A steady clip can fill the tile; crops of differing shapes have to be letter-
     // boxed or they jump about, which is the lesser of the two evils.

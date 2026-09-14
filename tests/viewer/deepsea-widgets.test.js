@@ -5,7 +5,7 @@ import { findWindows, WINDOW_KINDS, eventsToCsv, renderSpeciesFilter,
          branchColours, scaleColour, measuredColours, oneEach, asRate, verdictSource,
          sayWhatTheRateDid, taxonColour, compositionTraces, accumulationTraces,
          profileTraces, howFlat, intoDives, appendEventStrip, fetchTimelines,
-         verdictSource, framesToPlay }
+         verdictSource, framesToPlay, pictureUrl }
   from '../../src/pixel_patrol_deepsea/viewer/plugin_deepsea.js';
 
 /** A timeline of per-slice movement values, one slice every `step` frames. */
@@ -563,6 +563,19 @@ describe("the frames one event's tile plays", () => {
       { t: 0, second: 0, box: [9, 9, 9, 9], class: 'urchin', conf: 0.5, crop: 'theirs' },
     ]]]);
     expect(animalFrames(event, animals, 8).map(a => a.crop)).toEqual(['mine']);
+  });
+});
+
+describe('a crop as a picture', () => {
+  it('calls a webp a webp', () => {
+    // Slimmed reports carry WebP in the same field older ones carry JPEG in, and
+    // a WebP labelled image/jpeg is at the mercy of the browser's good nature.
+    expect(pictureUrl('UklGRhoAAABXRUJQ')).toMatch(/^data:image\/webp;base64,/);
+  });
+
+  it('calls everything else a jpeg, which is what it was', () => {
+    expect(pictureUrl('/9j/4AAQSkZJRg')).toMatch(/^data:image\/jpeg;base64,/);
+    expect(pictureUrl('')).toMatch(/^data:image\/jpeg;base64,/);
   });
 });
 

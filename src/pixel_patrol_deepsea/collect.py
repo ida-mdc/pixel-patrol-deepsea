@@ -9,8 +9,9 @@ what changed:
     python -m pixel_patrol_deepsea.collect site  collection/
     python -m pixel_patrol_deepsea.collect serve collection/
 
-`judge` is the odd one out: it rewrites reports that were written under older
-rules, reading no footage and nothing but the numbers already in the file.
+`judge` and `slim` are the odd ones out: they rewrite reports that are already
+written, reading no footage. `judge` re-decides what the footage was doing;
+`slim` throws away the pictures a report holds twice.
 
 `one` is the expensive verb and the only one that touches video. It stages the
 recording into a scratch directory, analyses it, and deletes it - so a run of any
@@ -1325,6 +1326,11 @@ def main(argv=None) -> int:
     judging.add_argument("target", type=Path,
                          help="a parquet, or a collection root to walk")
 
+    slimming = verbs.add_parser("slim", help="drop the pictures a report holds twice "
+                                            "and write the rest at the size they were seen")
+    slimming.add_argument("target", type=Path,
+                          help="a parquet, or a collection root to walk")
+
     scoring = verbs.add_parser("score", help="check an expedition against its ground truth")
     scoring.add_argument("expedition")
     scoring.add_argument("root", type=Path)
@@ -1359,6 +1365,9 @@ def main(argv=None) -> int:
         return identify_reports(args.target)
     if args.verb == "judge":
         return judge_reports(args.target)
+    if args.verb == "slim":
+        from pixel_patrol_deepsea.slim import slim_reports
+        return slim_reports(args.target)
     if args.verb == "merge":
         return merge(args.expedition, args.parts, args.output, clips=args.with_clips)
     if args.verb == "score":
