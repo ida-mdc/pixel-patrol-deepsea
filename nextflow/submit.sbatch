@@ -125,7 +125,7 @@ echo "   nextflow       : $version"
   exit 1
 }
 "$PY" -c "
-from pixel_patrol_deepsea.collect import ffmpeg
+from pixel_patrol_deepsea.analyse import ffmpeg
 print('   ffmpeg         : ' + ffmpeg())
 " || {
   echo "Install one into the environment the tasks will use:" >&2

@@ -19,7 +19,6 @@ several minutes in, which says nothing about which file or what to do about it.
 
 import json
 import logging
-import sys
 from pathlib import Path
 from typing import List, Optional
 

@@ -120,7 +120,7 @@ def test_analysing_without_a_detector_has_to_be_asked_for(monkeypatch, tmp_path)
     """
     import pytest
 
-    from pixel_patrol_deepsea import collect, detector
+    from pixel_patrol_deepsea import analyse, detector
 
     def missing():
         raise RuntimeError("no detector configured")
@@ -128,11 +128,11 @@ def test_analysing_without_a_detector_has_to_be_asked_for(monkeypatch, tmp_path)
     monkeypatch.setattr(detector, "load_detector", missing)
     monkeypatch.setattr(detector, "is_available", lambda: False)
     with pytest.raises(SystemExit, match="no detector"):
-        collect.analyse_one("https://example/x.mp4", tmp_path / "x.parquet", "DSMOT",
+        analyse.analyse_one("https://example/x.mp4", tmp_path / "x.parquet", "DSMOT",
                             fps=10, slice_frames=10, detector="general",
                             detector_frames=1)
     # ...and saying so explicitly is allowed, because it is a real thing to want
-    collect._insist_on_the_detector("none")
+    analyse._insist_on_the_detector("none")
 
 
 def test_a_detector_that_is_there_but_will_not_load_is_not_good_enough(monkeypatch):
@@ -143,7 +143,7 @@ def test_a_detector_that_is_there_but_will_not_load_is_not_good_enough(monkeypat
     """
     import pytest
 
-    from pixel_patrol_deepsea import collect, detector
+    from pixel_patrol_deepsea import analyse, detector
 
     def broken():
         raise ImportError("No module named 'requests'")
@@ -151,7 +151,7 @@ def test_a_detector_that_is_there_but_will_not_load_is_not_good_enough(monkeypat
     monkeypatch.setattr(detector, "load_detector", broken)
     monkeypatch.setattr(detector, "is_available", lambda: True)
     with pytest.raises(SystemExit) as refused:
-        collect._insist_on_the_detector("general")
+        analyse._insist_on_the_detector("general")
     said = str(refused.value)
     assert "will not load" in said and "requests" in said
     assert str(detector.CACHE) in said
@@ -160,7 +160,7 @@ def test_a_detector_that_is_there_but_will_not_load_is_not_good_enough(monkeypat
 def test_the_message_names_the_cache_it_looked_in(monkeypatch):
     import pytest
 
-    from pixel_patrol_deepsea import collect, detector
+    from pixel_patrol_deepsea import analyse, detector
 
     def missing():
         raise RuntimeError("nothing here")
@@ -168,7 +168,7 @@ def test_the_message_names_the_cache_it_looked_in(monkeypatch):
     monkeypatch.setattr(detector, "load_detector", missing)
     monkeypatch.setattr(detector, "is_available", lambda: False)
     with pytest.raises(SystemExit) as refused:
-        collect._insist_on_the_detector("general")
+        analyse._insist_on_the_detector("general")
     said = str(refused.value)
     assert str(detector.CACHE) in said
     assert "XDG_CACHE_HOME" in said

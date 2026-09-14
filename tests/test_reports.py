@@ -213,27 +213,27 @@ def test_no_longitudes_at_all_is_not_an_exception():
 def test_ffmpeg_is_looked_for_rather_than_assumed(monkeypatch, tmp_path):
     """A missing ffmpeg used to surface as FileNotFoundError from inside subprocess,
     once per task, after the recording had already been fetched over the network."""
-    from pixel_patrol_deepsea import collect
+    from pixel_patrol_deepsea import analyse
 
     stated = tmp_path / "my-ffmpeg"
     stated.write_text("")
     monkeypatch.setenv("PIXEL_PATROL_FFMPEG", str(stated))
-    collect.ffmpeg.cache_clear()
-    assert collect.ffmpeg() == str(stated)
+    analyse.ffmpeg.cache_clear()
+    assert analyse.ffmpeg() == str(stated)
 
     monkeypatch.delenv("PIXEL_PATROL_FFMPEG")
-    monkeypatch.setattr(collect.shutil, "which", lambda _name: "/usr/bin/ffmpeg")
-    collect.ffmpeg.cache_clear()
-    assert collect.ffmpeg() == "/usr/bin/ffmpeg"
+    monkeypatch.setattr(analyse.shutil, "which", lambda _name: "/usr/bin/ffmpeg")
+    analyse.ffmpeg.cache_clear()
+    assert analyse.ffmpeg() == "/usr/bin/ffmpeg"
 
 
 def test_no_ffmpeg_anywhere_says_how_to_get_one(monkeypatch):
     import builtins
 
-    from pixel_patrol_deepsea import collect
+    from pixel_patrol_deepsea import analyse
 
     monkeypatch.delenv("PIXEL_PATROL_FFMPEG", raising=False)
-    monkeypatch.setattr(collect.shutil, "which", lambda _name: None)
+    monkeypatch.setattr(analyse.shutil, "which", lambda _name: None)
     real_import = builtins.__import__
 
     def without_imageio(name, *args, **kwargs):
@@ -242,10 +242,10 @@ def test_no_ffmpeg_anywhere_says_how_to_get_one(monkeypatch):
         return real_import(name, *args, **kwargs)
 
     monkeypatch.setattr(builtins, "__import__", without_imageio)
-    collect.ffmpeg.cache_clear()
+    analyse.ffmpeg.cache_clear()
     with pytest.raises(RuntimeError, match="conda-forge ffmpeg"):
-        collect.ffmpeg()
-    collect.ffmpeg.cache_clear()
+        analyse.ffmpeg()
+    analyse.ffmpeg.cache_clear()
 
 
 def test_a_rebuilt_plugin_gets_a_url_the_browser_treats_as_new(tmp_path):
