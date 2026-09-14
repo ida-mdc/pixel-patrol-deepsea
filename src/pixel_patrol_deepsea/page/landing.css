@@ -1,0 +1,380 @@
+:root {
+  --abyss: #04101c; --abyss-2: #071a2b; --ink: #e8f4ff; --dim: #89a5bc;
+  /* The accent is the colour of the footage itself. Every metre of depth takes
+     more of the red out, so a deep-sea frame is cyan whatever is in it - measured
+     across this collection, the hue sits between 150 and 240 degrees. */
+  --glow: #35d6f5; --warn: #ffb020;
+  /* The one thing on the page that is not the footage's own colour, which is the
+     point of it: a report to open is not a taxon to click, and cyan on cyan made
+     the two the same thing. */
+  --coral: #ff7a6a;
+  --line: rgba(140,190,220,.16); --card: rgba(255,255,255,.03);
+  /* Figures, labels and stamps are monospace throughout: this is a record of work
+     and it should read like the log it is. */
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body { margin: 0; background: var(--abyss); color: var(--ink);
+       font: 16px/1.65 system-ui, -apple-system, "Segoe UI", sans-serif;
+       -webkit-font-smoothing: antialiased; }
+h1, h2, h3 { line-height: 1.12; letter-spacing: -.015em; margin: 0; font-weight: 600; }
+a { color: var(--glow); }
+
+/* ── the header stamp ─────────────────────────────────────────────────────── */
+.bar { display: flex; justify-content: space-between; gap: 1rem; align-items: baseline;
+       padding: .7rem 6vw; border-bottom: 1px solid var(--line);
+       font: .68rem/1 var(--mono); letter-spacing: .16em; text-transform: uppercase;
+       color: var(--dim); background: var(--abyss-2); }
+.bar b { color: var(--glow); font-weight: 600; letter-spacing: .18em; }
+.bar .stamp { font-variant-numeric: tabular-nums; text-align: right; }
+
+/* ── 01, and the figures under it ─────────────────────────────────────────── */
+.chapter { font: .68rem/1 var(--mono); letter-spacing: .2em; text-transform: uppercase;
+           color: var(--glow); margin: 0 0 1.1rem; }
+.chapter::before { content: ""; display: inline-block; width: 2rem; height: 1px;
+                   background: var(--glow); vertical-align: .28em; margin-right: .7rem;
+                   opacity: .55; }
+/* The collection's own colours behind the words: one stripe per recording, in the
+   order they were filmed, scrimmed hard enough to read over. It is the data and not
+   a texture - the near-black columns are transits and night, and the warm ones are
+   a vehicle's own hardware in front of its lamps. */
+.hero { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+        align-items: center; gap: 3rem; padding: 3.2rem 6vw 3.4rem;
+        position: relative; overflow: hidden;
+        background-image:
+          linear-gradient(100deg, rgba(4,16,28,.95) 0%, rgba(4,16,28,.8) 32%,
+                          rgba(4,16,28,.5) 62%, rgba(4,16,28,.34) 100%),
+          linear-gradient(180deg, rgba(4,16,28,.3), rgba(4,16,28,.05) 45%,
+                          rgba(4,16,28,.55)),
+          url("assets/colours.png"); background-size: cover;
+        background-position: center; }
+.hero-say { max-width: 38rem; }
+.hero h1 { font-size: clamp(1.9rem, 3.4vw, 2.7rem); }
+.lede { color: var(--dim); max-width: 34rem; }
+.hero .lede { margin: 1.2rem 0 0; color: #b9d2e4; }
+.banner-says { position: absolute; left: 6vw; bottom: .6rem; margin: 0;
+               max-width: 30rem; color: rgba(180,205,225,.7);
+               font: .62rem/1.4 var(--mono); letter-spacing: .06em; }
+.cta { display: inline-block; font: .72rem/1 var(--mono); letter-spacing: .14em;
+       text-transform: uppercase; text-decoration: none; color: var(--glow);
+       border: 1px solid var(--glow); border-left-width: 3px; padding: .7rem 1rem;
+       background: rgba(53,214,245,.06); }
+.cta:hover { background: rgba(53,214,245,.16); }
+.cta-note { color: var(--dim); font-size: .84rem; margin: .8rem 0 0; max-width: 30rem; }
+.readout { display: grid; grid-template-columns: repeat(4, 1fr);
+           border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.readout .cell { padding: .9rem 1.4rem; border-left: 1px solid var(--line); }
+.readout .cell:first-child { border-left: 0; padding-left: 6vw; }
+.readout b { display: block; font: 1.4rem/1.2 var(--mono); letter-spacing: -.02em;
+             font-variant-numeric: tabular-nums; }
+.readout span { display: block; margin-top: .35rem; color: var(--dim);
+                font: .64rem/1 var(--mono); letter-spacing: .16em;
+                text-transform: uppercase; }
+
+/* ── the disclaimer ───────────────────────────────────────────────────────── */
+/* Six headed paragraphs of caveat, above the fold, was more words than the page
+   itself and read as a legal notice - which is how a legal notice gets skipped.
+   One line in the warning colour is harder to miss than six, and the six are still
+   here for whoever opens them. */
+/* The warning stands in the header beside the title, where a reader meets it before
+   anything it is a warning about - and where, on a desktop, there was space doing
+   nothing. */
+.alarm { padding: .85rem 1.1rem .95rem; color: #ffe9c9; justify-self: end;
+         max-width: 32rem; border: 1px solid rgba(255,176,32,.4);
+         border-left: 3px solid var(--warn); background: rgba(24,16,6,.82); }
+.alarm-line { margin: 0; font-size: .92rem; }
+.alarm b { color: var(--warn); font: .68rem/1 var(--mono); letter-spacing: .18em;
+           text-transform: uppercase; margin-right: .7rem; }
+/* Behind a summary, the six were behind a summary: read by nobody. They are one
+   line each now and they are simply there. */
+.alarm ul { margin: .6rem 0 0; padding: 0; list-style: none;
+            display: grid; gap: .25rem; font-size: .82rem;
+            color: rgba(255,233,201,.78); }
+.alarm li { padding-left: 1rem; position: relative; }
+.alarm li::before { content: "—"; position: absolute; left: 0; color: var(--warn);
+                    opacity: .7; }
+
+/* ── 02 the taxonomy, and the contact sheet beside it ─────────────────────── */
+.explore { padding: 3rem 6vw; border-top: 1px solid var(--line); }
+.explore h2, .fleet h2 { font-size: clamp(1.3rem, 2.6vw, 1.9rem); }
+.explore-head .lede { margin: .7rem 0 1.2rem; }
+.jumps { display: flex; flex-wrap: wrap; gap: .4rem; margin: 0 0 .8rem; }
+.jumps .jump, .crumbs button {
+  background: transparent; color: var(--dim); border: 1px solid var(--line);
+  border-radius: 2px; padding: .32rem .6rem; cursor: pointer;
+  font: .72rem/1 var(--mono); letter-spacing: .04em; }
+.jumps .jump span { color: var(--ink); margin-left: .5rem;
+                    font-variant-numeric: tabular-nums; }
+.jumps .jump:hover, .crumbs button:hover { border-color: var(--glow); color: var(--ink); }
+.jumps .jump.on { border-color: var(--glow); color: var(--ink);
+                  background: rgba(53,214,245,.1); }
+.jumps .jump.odd { border-color: rgba(255,176,32,.45); color: #e9bd7c; }
+.jumps .jump.odd span { color: #f0c274; }
+.jumps .all { border-style: dashed; }
+/* Three hundred and seventy-three names, and the rings only show three deep: a
+   reader who knows what they are looking for should not have to hunt for it. */
+.find { position: relative; margin: 0 0 .8rem; max-width: 26rem; }
+.find input { width: 100%; background: transparent; color: var(--ink);
+  border: 1px solid var(--line); border-radius: 2px; padding: .36rem .6rem;
+  font: .74rem/1.2 var(--mono); letter-spacing: .04em; }
+.find input::placeholder { color: #55708a; }
+.find input:focus { outline: none; border-color: var(--glow); }
+.found { position: absolute; z-index: 30; left: 0; right: 0; top: calc(100% + 2px);
+  margin: 0; padding: .2rem; list-style: none; max-height: 17rem; overflow-y: auto;
+  background: var(--abyss-2); border: 1px solid var(--glow);
+  box-shadow: 0 10px 30px rgba(0,0,0,.6); }
+.found li { display: flex; gap: .6rem; align-items: baseline; cursor: pointer;
+  padding: .3rem .45rem; font: .74rem/1.3 var(--mono); color: var(--dim); }
+.found li .what { color: var(--ink); flex: 1; }
+.found li .rank { font-size: .64rem; letter-spacing: .06em; text-transform: uppercase; }
+.found li .n { color: var(--ink); font-variant-numeric: tabular-nums; }
+.found li.at, .found li:hover { background: rgba(53,214,245,.12); }
+.found li.none { cursor: default; color: var(--dim); }
+.found li.none:hover { background: transparent; }
+.crumbs { display: flex; flex-wrap: wrap; gap: .3rem; align-items: center;
+          margin-bottom: 1.2rem; min-height: 1.6rem; }
+.crumbs .sep { color: #44596b; font: .72rem var(--mono); }
+.crumbs .only { border-color: #4a5f72; }
+
+/* A third of the page for the ring, measured from the edge it starts at. The ring
+   is half a circle with its flat side on the page's own left border: a whole circle
+   in this column is small and surrounded by nothing, and the half is the same
+   drawing at twice the radius. */
+.explore-body { display: grid; grid-template-columns: minmax(200px, .85fr) minmax(0, 2.4fr);
+                gap: 2rem; align-items: start; }
+.sun { position: relative; margin-left: -6vw; }
+/* Half a circle is twice as tall as it is wide, so it is the window and not the
+   column that decides how big the ring gets - and the column is cut to suit it. */
+.sun svg { width: 100%; height: auto; display: block; max-height: min(76vh, 40rem); }
+.sun path { cursor: pointer; transition: opacity .15s; }
+.sun path:hover { opacity: .78; }
+/* The hole is the way back up. Drawn as a target rather than left as empty space,
+   because the ring it sits in is the one thing on the page that goes deeper. */
+.sun .hole { fill: rgba(53,214,245,.05); stroke: var(--line); stroke-width: .5;
+             cursor: default; }
+.sun .hole.up { fill: rgba(53,214,245,.12); cursor: pointer; }
+.sun .hole.up:hover { fill: rgba(53,214,245,.22); }
+.sun .back { fill: var(--glow); font-family: var(--mono); font-size: 5px;
+             letter-spacing: .3px; pointer-events: none; }
+/* One size, one line, one height. Two sizes and a wrapping name meant the ring
+   below jumped up and down as the pointer moved across it. */
+.sun-read { margin: 0 0 .5rem; height: 1.8rem; display: flex; gap: .55rem;
+            align-items: baseline; white-space: nowrap; overflow: hidden;
+            font: .95rem/1.8rem var(--mono); }
+.sun-read b { font-weight: 600; font-variant-numeric: tabular-nums; }
+.sun-read span { color: var(--dim); overflow: hidden; text-overflow: ellipsis; }
+.sun-read.hovering span { color: var(--ink); }
+
+/* The pictures scroll in their own box. A wall that grows without end grows the
+   page without end: everything below it was unreachable once a few thousand animals
+   had loaded, and scrolling anywhere near the ring fetched more of them. */
+.wall { max-height: min(88vh, 56rem); overflow-y: auto; overscroll-behavior: contain;
+        border: 1px solid var(--line); padding: 6px; background: #020a12;
+        display: grid; gap: 6px; align-content: start;
+        grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+        scrollbar-width: thin; scrollbar-color: #2a4356 transparent; }
+.wall .empty { color: var(--dim); grid-column: 1 / -1; font-size: .9rem; }
+.tile { position: relative; margin: 0; overflow: hidden; background: #00121f;
+        aspect-ratio: 1; cursor: pointer; align-self: start; }
+/* The crops are whatever size the animal was on screen. Fill the tile from the
+   column width - stretched in both axes the aspect ratio is ignored and a row of
+   small crops collapses. */
+.tile img { position: absolute; inset: 0; width: 100%; height: 100%;
+            object-fit: cover; display: block; }
+/* How sure the detector was and how long the animal stayed in view at the top, the
+   name at the bottom, and nothing at all until the pointer is on it. */
+.tile figcaption, .tile .meta { position: absolute; opacity: 0;
+            transition: opacity .12s; padding: .3rem .4rem; color: #dcefff; }
+.tile figcaption { inset: auto 0 0; font-size: .68rem; line-height: 1.2;
+            background: linear-gradient(transparent, rgba(0,8,16,.94)); }
+.tile .meta { inset: 0 0 auto; display: flex; justify-content: space-between;
+            font: .64rem/1 var(--mono); letter-spacing: .04em;
+            background: linear-gradient(rgba(0,8,16,.9), transparent); }
+.tile .meta b { color: var(--glow); font-variant-numeric: tabular-nums; }
+.tile .meta span { color: #bad4e7; font-variant-numeric: tabular-nums; }
+.tile:hover figcaption, .tile:hover .meta,
+.tile:focus-within figcaption, .tile:focus-within .meta { opacity: 1; }
+.sentinel { grid-column: 1 / -1; height: 1px; }
+/* A tile is a way in, not a picture: clicking it opens the second of footage it was
+   cut from. The star keeps it, and a kept star stays lit when the pointer leaves. */
+.tile .star { position: absolute; right: 0; bottom: 0; opacity: 0; border: 0;
+              background: none; color: #cfe9f7; cursor: pointer; padding: .2rem .35rem;
+              font-size: .9rem; line-height: 1; transition: opacity .12s; }
+.tile .star:hover { color: var(--glow); }
+.tile .star.on { color: var(--warn); }
+.tile:hover .star, .tile:focus-within .star, .tile .star.on { opacity: 1; }
+.tile figcaption { padding-right: 1.4rem; }
+
+/* ── the stage ───────────────────────────────────────────────────────────── */
+/* A 100-pixel crop is not evidence of anything. The seconds around it are, and the
+   archive serves its own file over byte ranges, so the page can open one at the
+   second the animal was found without copying a frame of it. */
+.stage { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center;
+         background: rgba(2,8,14,.86); padding: 4vh 4vw;
+         backdrop-filter: blur(2px); }
+.stage[hidden] { display: none; }
+.stage-box { width: min(72rem, 100%); max-height: 92vh; overflow: auto;
+             background: var(--abyss-2); border: 1px solid var(--line); }
+.stage-head { display: flex; align-items: center; gap: .7rem; margin: 0;
+              padding: .55rem .9rem; border-bottom: 1px solid var(--line); }
+/* The crop that was clicked, kept in the corner: at a metre of seabed a box is easy
+   to lose, and this is what the reader came in holding. */
+.stage-crop { width: 2.4rem; height: 2.4rem; object-fit: cover; background: #00121f;
+              flex: none; }
+.stage-crop[hidden] { display: none; }
+.stage-head b { font-size: 1rem; margin-right: .5rem; }
+.stage-head .stage-said { display: block; min-width: 0; }
+.stage-head span { color: var(--dim); font: .72rem var(--mono); letter-spacing: .04em;
+                   font-variant-numeric: tabular-nums; }
+#stageWhere { display: block; margin-top: .2rem; color: #9fc2da; }
+#stageWhere .sep { color: #44596b; margin: 0 .1rem; }
+#stageWhere .reel { color: var(--dim); }
+.stage-head .star, .stage-head .shut { margin-left: auto; background: none; border: 0;
+              color: var(--dim); cursor: pointer; font-size: 1.1rem; line-height: 1;
+              padding: 0 .2rem; }
+.stage-head .shut { margin-left: .2rem; }
+.stage-head .star.on { color: var(--warn); }
+.stage-head .star:hover, .stage-head .shut:hover { color: var(--ink); }
+.stage-play { position: relative; background: #000; aspect-ratio: 16 / 9; }
+.stage-play video, .stage-play img { position: absolute; inset: 0; width: 100%;
+              height: 100%; object-fit: contain; display: block; background: #000; }
+.stage-play svg { position: absolute; inset: 0; width: 100%; height: 100%;
+                  pointer-events: none; }
+/* Every animal the detector found in this recording, drawn where it is now. The
+   one in focus is the bright one; the rest are there to be clicked. */
+.stage-play svg { pointer-events: none; }
+.stage-play svg rect { fill: none; stroke: rgba(140,190,220,.55); stroke-width: 1.5;
+                       vector-effect: non-scaling-stroke; cursor: pointer;
+                       pointer-events: all; }
+.stage-play svg rect:hover { stroke: var(--ink); }
+.stage-play svg rect.here { stroke: var(--glow); stroke-width: 2.5; }
+.stage-play svg text { fill: rgba(200,225,240,.85); font-family: var(--mono);
+                       font-size: 9px; paint-order: stroke; stroke: rgba(0,8,16,.85);
+                       stroke-width: 3px; pointer-events: none; }
+.stage-play svg text.here { fill: var(--glow); }
+.stage-play.no-box svg { display: none; }
+.stage-foot { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem 1.2rem;
+              margin: 0; padding: .7rem .9rem; color: var(--dim);
+              font: .72rem var(--mono); letter-spacing: .04em;
+              border-top: 1px solid var(--line); }
+.stage-foot label { display: flex; align-items: center; gap: .4rem; cursor: pointer; }
+.stage-foot .quiet { padding: .35rem .6rem; letter-spacing: .08em; }
+.stage-foot a { text-decoration: none; }
+.stage-note { color: var(--warn); }
+/* Whose footage this is, and what the name on it is worth. Under the picture
+   rather than in a page-long disclaimer somewhere above it. */
+.stage-terms { margin: 0; padding: .5rem .9rem .6rem; border-top: 1px solid var(--line);
+               color: var(--dim); font: .68rem/1.5 var(--mono); letter-spacing: .04em; }
+.stage-terms .credit { color: #9fc2da; }
+.stage-terms .guess { color: var(--warn); }
+.stage-terms .sep { color: #44596b; margin: 0 .15rem; }
+
+/* ── 05 what somebody kept ────────────────────────────────────────────────── */
+.kept { padding: 3rem 6vw; border-top: 1px solid var(--line); }
+.kept h2 { font-size: clamp(1.3rem, 2.6vw, 1.9rem); }
+.kept .lede { margin: .7rem 0 1.1rem; }
+.kept-does { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem;
+             margin: 0 0 1rem; }
+.keep-these { border-color: var(--glow); color: var(--glow); }
+.kept-link { display: flex; flex-wrap: wrap; align-items: center; gap: .8rem;
+             margin: 0 0 1.2rem; }
+.kept-link[hidden] { display: none; }
+.kept-link input { flex: 1 1 28rem; min-width: 0; background: #020a12; color: var(--ink);
+                   border: 1px solid var(--line); border-radius: 2px; padding: .5rem .6rem;
+                   font: .72rem var(--mono); }
+.kept-link span { color: var(--dim); font: .68rem var(--mono); letter-spacing: .1em;
+                  text-transform: uppercase; }
+.kept-wall { max-height: 30rem; }
+.quiet { background: none; border: 1px solid var(--line); border-radius: 2px;
+         color: var(--dim); cursor: pointer; padding: .5rem .8rem;
+         font: .7rem var(--mono); letter-spacing: .12em; text-transform: uppercase; }
+.quiet:hover { color: var(--ink); border-color: var(--dim); }
+.about { margin-top: 1.2rem; border: 1px solid var(--line); border-radius: 2px;
+         padding: .9rem 1rem; background: var(--card); }
+.about h3 { font-size: 1.05rem; margin-bottom: .25rem; }
+.about .rank { color: var(--dim); font: .62rem var(--mono); letter-spacing: .14em;
+               text-transform: uppercase; margin-left: .4rem; }
+.about .count { color: var(--glow); margin: 0 0 .7rem;
+                font: .8rem var(--mono); font-variant-numeric: tabular-nums; }
+.about .hint { color: var(--dim); font-size: .88rem; margin: 0 0 .6rem; }
+.about .links { display: flex; flex-direction: column; gap: .4rem; margin: 0; }
+.about .links a { font: .72rem var(--mono); letter-spacing: .04em;
+                  text-decoration: none; }
+.about .links a:hover { text-decoration: underline; }
+
+/* ── 03 the expeditions ───────────────────────────────────────────────────── */
+.fleet { padding: 3rem 6vw; border-top: 1px solid var(--line); }
+.fleet h2 { margin-bottom: 1.2rem; }
+.fleet-table { width: 100%; border-collapse: collapse; font-size: .92rem; }
+.fleet-table th { text-align: left; color: var(--dim); font-weight: 400;
+                  font: .64rem var(--mono); letter-spacing: .14em;
+                  text-transform: uppercase;
+                  border-bottom: 1px solid var(--line); padding: .5rem .6rem; }
+.fleet-table td { border-bottom: 1px solid var(--line); padding: .6rem;
+                  vertical-align: top; }
+.fleet-table .num { white-space: nowrap; font-family: var(--mono); font-size: .85rem;
+                    font-variant-numeric: tabular-nums; }
+.fleet-table .sub { display: block; color: var(--dim); font-size: .74rem;
+                    font-family: var(--mono); }
+/* The report is the point of the row. The expedition's own page is a courtesy
+   beside it - it was the louder of the two, which had it backwards. */
+.fleet-table a.open { text-decoration: none; border: 1px solid var(--coral);
+                      border-radius: 2px; padding: .34rem .7rem; font-size: .72rem;
+                      white-space: nowrap; background: rgba(255,122,106,.14);
+                      letter-spacing: .06em; color: var(--coral); }
+.fleet-table a.open:hover { background: rgba(255,122,106,.28); }
+.fleet-table a.mission { color: var(--ink); text-decoration: none; }
+.fleet-table a.mission:hover { color: var(--coral); }
+.together { display: flex; flex-wrap: wrap; align-items: center; gap: .9rem;
+            margin: 0 0 1.6rem; }
+.together .cta { padding: .8rem 1.1rem; color: var(--coral);
+                 border-color: var(--coral); background: rgba(255,122,106,.1); }
+.together .cta:hover { background: rgba(255,122,106,.22); }
+.together span { color: var(--dim); font-size: .84rem; max-width: 30rem; }
+.note { color: var(--dim); font-size: .85rem; margin-top: 1rem; max-width: 46rem; }
+
+/* ── 04 credit ────────────────────────────────────────────────────────────── */
+.credits { padding: 3rem 6vw; border-top: 1px solid var(--line);
+           background: linear-gradient(180deg, rgba(53,214,245,.04), transparent 55%); }
+.credit-grid { display: grid; gap: 1.4rem 2.4rem;
+               grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); }
+.credit-grid h3 { font-size: .78rem; margin-bottom: .4rem; color: var(--glow);
+                  font-family: var(--mono); letter-spacing: .14em;
+                  text-transform: uppercase; font-weight: 400; }
+.credit-grid p { color: var(--dim); font-size: .89rem; margin: 0; }
+/* Black line art on white, which is the wrong way round down here. Inverted, the
+   paper is very nearly black but not quite - and `screen` lifted that last level or
+   two, which on a page this dark is a visible rectangle around the drawing. The
+   contrast step clips the paper to exactly black, where screening it is a no-op. */
+.patrol { display: block; width: 100%; max-width: 15rem; margin-top: .8rem;
+          filter: invert(1) contrast(1.2) brightness(1.04);
+          mix-blend-mode: screen; opacity: .92; }
+.imprint { padding: 2.5rem 6vw 3rem; border-top: 1px solid var(--line); }
+.imprint-grid { display: grid; gap: 1.4rem 2.4rem;
+                grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); }
+.imprint-grid h3 { font-size: .72rem; margin-bottom: .4rem; color: var(--dim);
+                   font-family: var(--mono); letter-spacing: .14em;
+                   text-transform: uppercase; font-weight: 400; }
+/* Scoped to the grid: `.imprint p` also matched the chapter line above it, zeroed
+   its margin, and printed the two on top of each other. */
+.imprint-grid p { color: var(--dim); font-size: .82rem; margin: 0; }
+footer { padding: 2rem 6vw 3.5rem; color: var(--dim); font-size: .82rem;
+         border-top: 1px solid var(--line); }
+code { background: var(--card); padding: .1rem .35rem; font-family: var(--mono);
+       font-size: .78rem; }
+
+@media (max-width: 1100px) {
+  .readout { grid-template-columns: repeat(2, 1fr); }
+  .readout .cell:nth-child(3) { border-left: 0; padding-left: 6vw; }
+}
+@media (max-width: 900px) {
+  .hero { grid-template-columns: 1fr; gap: 1.5rem; padding: 2rem 6vw 2.6rem; }
+  .alarm { justify-self: stretch; max-width: none; }
+  .banner-says { position: static; text-align: left; margin-top: .6rem; }
+  .explore-body { grid-template-columns: 1fr; }
+  .sun svg { max-height: 22rem; }
+  /* One column, and the page's own scroll is the only one worth having. */
+  .wall { max-height: none; overflow: visible; }
+}

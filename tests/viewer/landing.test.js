@@ -16,13 +16,15 @@ import { join } from 'node:path';
 
 // From the project root, where vitest runs: in a DOM environment `import.meta.url`
 // is an http URL and readFileSync will not take one.
-const SOURCE = join(process.cwd(), 'src/pixel_patrol_deepsea/landing.py');
+const SOURCE = join(process.cwd(), 'src/pixel_patrol_deepsea/page/landing.js');
 
 /** The page's script, out of the Python that writes it. */
+/** The page's script, read from the file it lives in.
+ *
+ * It used to be cut back out of `landing.py` with a string split, because that is
+ * where it was kept. It is a `.js` file now, so this is just reading it. */
 function pageScript() {
-  const python = readFileSync(SOURCE, 'utf8');
-  const after = python.split('SCRIPT = r"""')[1];
-  return after.slice(0, after.lastIndexOf('"""'));
+  return readFileSync(SOURCE, 'utf8');
 }
 
 /* A collection with two kingdoms, four phyla and the bucket for names the register
