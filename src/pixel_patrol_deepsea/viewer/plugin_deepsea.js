@@ -478,28 +478,6 @@ function renderTimelinePlot(host, ctx, timeline, windows, fps, onPick,
   return div;
 }
 
-function renderEvidence(host, recording, window, fps, footageBase) {
-  const startSeconds = toSeconds(window.fromT, fps);
-  const heading = `<div class="small text-muted mb-2">`
-    + `${WINDOW_KINDS[window.kind]?.label ?? 'Window'} at <strong>${formatClock(startSeconds, fps)}</strong>`
-    + ` · ${formatDuration(toSeconds(window.toT, fps) - startSeconds, fps, window.slices)}</div>`;
-  host.innerHTML = heading + (footageBase
-    ? videoHtml(footageBase, recording, startSeconds)
-    : '<div class="no-data">Set a footage base URL below to watch this window.</div>');
-}
-
-function videoHtml(base, recording, startSeconds) {
-  const url = footageUrl(base, recording, startSeconds);
-  return `<video controls crossorigin="anonymous" preload="metadata" src="${escapeAttribute(url)}"`
-    + ` style="max-width:100%;max-height:320px;display:block;margin-bottom:6px"></video>`
-    + `<a href="${escapeAttribute(url)}" target="_blank" rel="noopener" class="small">`
-    + `Open the recording at this point in a new tab</a>`;
-}
-
-function footageUrl(base, recording, startSeconds) {
-  return `${recordingUrl(base, recording)}#t=${Math.max(0, Math.floor(startSeconds))}`;
-}
-
 function recordingUrl(base, recording) {
   const known = String(recording.path ?? '');
   // Anything read out of a manifest carries the address it was streamed from, so
@@ -521,32 +499,11 @@ function initialFootageBase() {
   catch { return ''; }
 }
 
-function renderFootageInput(host, initial, onChange) {
-  const wrap = document.createElement('div');
-  wrap.className = 'mb-2';
-  wrap.innerHTML = '<label class="form-label small mb-1">Footage base URL '
-    + '<span class="text-muted">(optional) &mdash; where the recordings are served from, '
-    + 'so clicking a tile plays that stretch of the original video. The report itself '
-    + 'needs none of this: the tiles come out of the parquet. Give it the folder the '
-    + 'recordings sit in, e.g. <code>https://example.org/dives/</code>, and the '
-    + 'recording name is appended.</span></label>';
-  const input = document.createElement('input');
-  input.type = 'url';
-  input.className = 'form-control form-control-sm';
-  input.placeholder = 'https://example.org/videos';
-  input.value = initial ?? '';
-  input.addEventListener('change', () => onChange(input.value.trim()));
-  wrap.appendChild(input);
-  host.appendChild(wrap);
-}
-
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 const toSeconds   = (t, fps) => (fps ? t / fps : t);
 const fromSeconds = (s, fps) => (fps ? s * fps : s);
 const literal     = (value) => `'${String(value).replace(/'/g, "''")}'`;
-const escapeAttribute = (value) => String(value).replace(/"/g, '&quot;');
-
 function percentile(values, p) {
   if (!values.length) return 0;
   const sorted = [...values].sort((a, b) => a - b);
@@ -1589,23 +1546,6 @@ export function describeMoment(row) {
   return ` · ${animals}${name}${sure}`;
 }
 
-/** Minute markers under the strip, so a position can be read without hovering. */
-function minuteTicks(barcode, totalSeconds, scale, fps) {
-  const step = tickStep(totalSeconds);
-  const axis = document.createElement('div');
-  axis.style.cssText = `position:relative;height:12px;width:${Math.round(barcode.columns.length * scale)}px`;
-  for (let at = 0; at <= totalSeconds; at += step) {
-    const label = document.createElement('span');
-    label.textContent = formatClock(at, fps).replace(/^00:/, '');
-    label.style.cssText = `position:absolute;font-size:9px;color:#adb5bd;transform:translateX(-50%);`
-      + `left:${(at / barcode.secondsPerBucket) * scale}px`;
-    axis.appendChild(label);
-  }
-  return axis;
-}
-
-const tickStep = (totalSeconds) => (totalSeconds > 2400 ? 600 : totalSeconds > 600 ? 300 : 60);
-
 function escapeHtmlText(value) {
   const node = document.createElement('span');
   node.textContent = String(value);
@@ -1630,12 +1570,6 @@ function triageHeadline(summaries) {
   return { total, dead, held, deadShare: total ? dead / total : 0 };
 }
 
-
-// Everything `findWindows` and `summariseRecording` read, and nothing else. The
-// rest of a timeline row - the peak, the confidence, the camera speed, the depth,
-// the clock - belongs to the widgets that draw them, and over every slice of a
-// collection it is a third of a million values fetched to be ignored.
-const SUMMARY_FIELDS = ['structure', 'detections', 'movers', 'top_class'];
 
 let summariesFor = null;        // one report's summaries, kept while it is open
 
@@ -2408,9 +2342,6 @@ const VERDICT_NOTES = {
   active: { text: WINDOW_KINDS.active.desc,
             hintUp: 'more transit and cuts', hintDown: 'steadier footage' },
 };
-
-// Which field of a recording's summary holds each verdict's seconds.
-const VERDICT_FIELD = { frozen: 'dead', dwell: 'held', empty: 'empty', active: 'busy' };
 
 /** The per-slice columns worth a distribution, and what each one triages.
  *
@@ -3473,11 +3404,6 @@ async function drawAxis(panel, ctx, taxonomy, rank, counting) {
     showlegend: true,
     legend: { orientation: 'h', y: -0.18, x: 0, yanchor: 'top' },
   });
-}
-
-/** The axis to open on, and the bucket size that suits the span it covers. */
-async function defaultAxis(ctx) {
-  return axisFor(ctx, 'clock');
 }
 
 /** Seconds of footage in each bucket, so a count can be turned into a rate.
