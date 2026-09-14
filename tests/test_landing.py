@@ -90,11 +90,8 @@ def test_the_taxonomy_is_grouped_the_way_the_reports_group_it(tmp_path):
 
     That put a kingdom, a phylum and a class beside each other with nothing saying
     so, and no way back to everything. Phylum is the rank the reports colour and
-    split by, and `GROUP_RANK` is where that is written down.
+    split by, and it is the one the row of ways in is built from.
     """
-    from pixel_patrol_deepsea.catalogue_page import GROUP_RANK
-
-    assert GROUP_RANK == "phylum"
     page = render(_two_expeditions(tmp_path))
     assert "grouped by the ranks the World" in page
     # The kingdom's children are the phyla, and everything is one of the buttons.
