@@ -196,9 +196,10 @@ def test_a_name_is_never_presented_as_an_identification(tmp_path):
     said = " ".join(re.sub(r"<[^>]+>", " ", page).split())
     assert "Every name on this page is an automated guess" in said
     assert "not an identification" in said
-    # ...in the overlay over the picture itself, and in the CSV that leaves with
-    # somebody who never saw the page.
-    assert "is one detector's guess, not an" in page
+    # ...over the picture itself, wherever the page chooses to put the qualifier -
+    # it has been a sentence under the credit and it is now a prefix on the name -
+    # and in the CSV that leaves with somebody who never saw the page.
+    assert "Detector guess:" in page or "one detector's guess" in page
     assert "taxon_is_a_guess" in page
 
 
