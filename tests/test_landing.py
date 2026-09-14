@@ -233,3 +233,23 @@ def test_the_taxonomy_and_the_assets_stay_with_the_page(tmp_path):
     page = render(_two_expeditions(tmp_path), data_url="https://host/coll")
     assert "assets/colours.png" in page
     assert "https://host/coll/assets" not in page
+
+
+def test_a_hole_the_page_does_not_fill_is_an_error_rather_than_a_page(tmp_path):
+    """`{{animals}}` printed across a published page is worse than a build that
+    stopped, which is the whole reason the template refuses an unknown name."""
+    import pytest
+
+    from pixel_patrol_deepsea import landing
+
+    with pytest.raises(KeyError, match="style"):
+        landing._fill("landing.html", {"nonesuch": 1})
+
+
+def test_the_page_is_a_html_file_with_holes_in_it():
+    """It was a 232-line f-string. Anyone who knows HTML can now open it."""
+    from pixel_patrol_deepsea.landing import PAGE
+
+    page = (PAGE / "landing.html").read_text()
+    assert page.startswith("<!doctype html>")
+    assert "{{fleet}}" in page and "{{script}}" in page
