@@ -891,6 +891,23 @@ function framesAreSteady(frames) {
   return frames.length > 1 && frames.every(a => a.clip);
 }
 
+/** What a tile actually shows: a clip plays, anything else is one picture.
+ *
+ * A clip is consecutive frames a tenth of a second apart cut with one box, and it
+ * plays as the movement it is. Per-detection crops are not that. They are the same
+ * animal cut to a different box seconds apart - or, across an event, different
+ * animals - so cycling three of them is three unrelated pictures of three sizes
+ * flashing past: motion that is not in the footage, and nothing a reader can hold
+ * still long enough to recognise. Reports carry no clips unless they were merged
+ * with them, so in practice this is every tile in an expedition's own report.
+ */
+export function framesToPlay(frames) {
+  if (framesAreSteady(frames)) return frames;
+  const best = frames.reduce(
+    (a, b) => (a && Number(a.conf ?? 0) >= Number(b.conf ?? 0) ? a : b), null);
+  return best ? [best] : frames.slice(0, 1);
+}
+
 /** Slice positions to preview: the whole event when short, evenly spread when long. */
 function stillTimes(event) {
   const step = Math.max(1, Math.round(event.slices / GALLERY_FRAMES));
@@ -945,9 +962,14 @@ export function animateStills(host, images) {
 function stillsToImages(event, stills) {
   const forRecording = stills.get(event.recording.name);
   if (!forRecording) return [];
+  // One still, not a pass through the event. These are whole frames of the same
+  // scene taken seconds apart: cycled at eight a second they strobe rather than
+  // move, and the tile is a click away from the footage itself. The first one that
+  // was stored, so the picture is the moment the caption gives.
   return stillTimes(event)
     .map(t => forRecording.get(t))
     .filter(Boolean)
+    .slice(0, 1)
     .map((bytes) => {
       const img = new Image();
       img.src = URL.createObjectURL(new Blob([bytes], { type: 'image/jpeg' }));
@@ -1006,15 +1028,15 @@ function renderEventCard(grid, event, fps, stills, animals, footageBase, cleanup
   card.appendChild(caption);
   grid.appendChild(card);
 
-  const images = animalImages(event, animals) ;
-  const frames = images.length > 1 ? images : stillsToImages(event, stills);
+  const images = animalImages(event, animals);
+  const frames = images.length ? images : stillsToImages(event, stills);
   if (frames.length) cleanups.push(animateStills(shot, frames));
   else shot.textContent = footageBase ? 'click to play' : 'no stills stored';
 
   card.addEventListener('click', () => expandEvent(card, event, fps, footageBase));
 }
 
-/** One tile showing one animal, playing whatever crops of it the report holds.
+/** One tile showing one animal, from the crops of it the report holds.
  *
  * The same shape as a gallery card without the event around it: the timeline
  * clicks on a moment rather than on a stretch, so there is no kind, no duration
@@ -1027,16 +1049,21 @@ function appendAnimalTile(grid, shots) {
   const shot = document.createElement('div');
   shot.className = 'pp-shot';
   card.appendChild(shot);
+  const playing = framesToPlay(shots);
   const named = shots.find(s => s.class)?.class;
   const sure = shots.map(s => Number(s.conf)).filter(Number.isFinite);
+  // How many looks the detector got, which is a fact about the sighting whether or
+  // not they are being played back.
+  const looks = playing.length > 1 ? `${playing.length} frames`
+    : `seen in ${shots.length} frame${shots.length === 1 ? '' : 's'}`;
   card.appendChild(Object.assign(document.createElement('figcaption'), {
     innerHTML: (named ? `<span class="pp-name">${escapeHtmlText(named)}`
       + (sure.length ? ` <em>${Math.max(...sure).toFixed(2)}</em>` : '') + '</span>' : '')
-      + `<span class="pp-when">${shots.length} frame${shots.length === 1 ? '' : 's'}</span>`,
+      + `<span class="pp-when">${looks}</span>`,
   }));
   grid.appendChild(card);
-  const steady = framesAreSteady(shots);
-  const images = shots.map((animal) => {
+  const steady = framesAreSteady(playing);
+  const images = playing.map((animal) => {
     const image = new Image();
     image.src = `data:image/jpeg;base64,${animal.crop}`;
     image.decoding = 'async';
@@ -1065,7 +1092,7 @@ function appendStillTile(host, image, when) {
 
 /** An <img> per frame of this event's animal, from the crops in the report. */
 function animalImages(event, animals) {
-  const frames = animalFrames(event, animals, ANIMAL_FRAMES);
+  const frames = framesToPlay(animalFrames(event, animals, ANIMAL_FRAMES));
   const steady = framesAreSteady(frames);
   return frames.map((animal) => {
     const image = new Image();

@@ -318,6 +318,42 @@ describe('how a gallery tile is built', () => {
   });
 });
 
+describe('a tile of a report merged without its clip frames', () => {
+  // Which is every expedition's own report: the clip frames are 84% of one and
+  // only the collection keeps them. What is left per animal is a crop or three,
+  // each cut to its own box seconds apart, and cycling those is a flicker between
+  // three differently sized pictures rather than anything the animal did.
+  const gallery = widgets.find(w => w.id === 'temporal-gallery');
+
+  const crops = (...confs) => JSON.stringify(
+    confs.map((conf, i) => ({ class: 'beroe', conf, box: [i, i, i + 9, i + 9],
+                              crop: `crop-${conf}` })));
+
+  const withCrops = () => {
+    const ctx = context();
+    const rows = ctx.queryRows;
+    return { ...ctx,
+      schema: { ...ctx.schema, allCols: [...ctx.schema.allCols, 'detections'] },
+      async queryRows(sql) {
+        // The animals query, not the timeline's `"detection_count" AS detections`.
+        if (sql.includes('"detections" AS detections')) {
+          return [{ t: 150, detections: crops(0.5, 0.91, 0.7) },
+                  { t: 180, detections: crops(0.8) }];
+        }
+        return rows(sql);
+      } };
+  };
+
+  it('shows one picture, and it is the most convincing crop', async () => {
+    const container = document.createElement('div');
+    await gallery.render(container, withCrops());
+    const card = container.querySelector('figure.pp-event');
+    const shown = card.querySelectorAll('img');
+    expect(shown).toHaveLength(1);
+    expect(shown[0].src).toBe('data:image/jpeg;base64,crop-0.91');
+  });
+});
+
 describe('a report with the colour axis kept whole', () => {
   // The barcode is drawn by the timeline now: a colour strip of one recording
   // is the same act of exploring it as the curve underneath.

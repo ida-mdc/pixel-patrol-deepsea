@@ -5,7 +5,7 @@ import { findWindows, WINDOW_KINDS, eventsToCsv, renderSpeciesFilter,
          branchColours, scaleColour, measuredColours, oneEach, asRate, verdictSource,
          sayWhatTheRateDid, taxonColour, compositionTraces, accumulationTraces,
          profileTraces, howFlat, intoDives, appendEventStrip, fetchTimelines,
-         verdictSource }
+         verdictSource, framesToPlay }
   from '../../src/pixel_patrol_deepsea/viewer/plugin_deepsea.js';
 
 /** A timeline of per-slice movement values, one slice every `step` frames. */
@@ -563,6 +563,31 @@ describe("the frames one event's tile plays", () => {
       { t: 0, second: 0, box: [9, 9, 9, 9], class: 'urchin', conf: 0.5, crop: 'theirs' },
     ]]]);
     expect(animalFrames(event, animals, 8).map(a => a.crop)).toEqual(['mine']);
+  });
+});
+
+describe('what a tile plays', () => {
+  const clip = (second) => ({ clip: true, of: 0, second, conf: 0.8, crop: `c${second}` });
+
+  it('plays a clip, which is the one thing here that is film', () => {
+    const frames = [clip(0), clip(0.1), clip(0.2)];
+    expect(framesToPlay(frames)).toHaveLength(3);
+  });
+
+  it('holds still on one crop when the frames are not a clip', () => {
+    // An expedition's own report is merged without clip frames - they are 84% of it
+    // - so this is every tile in one. Three per-detection crops cut to three boxes
+    // seconds apart flicker without moving, which is worse than a picture.
+    const frames = [{ conf: 0.4, crop: 'a' }, { conf: 0.9, crop: 'b' }, { conf: 0.7, crop: 'c' }];
+    expect(framesToPlay(frames).map(f => f.crop)).toEqual(['b']);
+  });
+
+  it('keeps a crop that has no confidence written beside it', () => {
+    expect(framesToPlay([{ crop: 'only' }]).map(f => f.crop)).toEqual(['only']);
+  });
+
+  it('has nothing to show when there is nothing', () => {
+    expect(framesToPlay([])).toEqual([]);
   });
 });
 
