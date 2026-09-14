@@ -105,13 +105,15 @@ def test_a_single_slice_with_an_animal_in_it_is_not():
 def test_seconds_rather_than_slices_because_reports_hold_both():
     line = _line([(0.0, 100, 0, 0, None)] * 10, step=10)
     verdicts = summarise(line, fps=10)
-    assert verdicts.seconds["frozen"] == pytest.approx(9.0)
+    # Ten slices, ten frames apart, ten frames a second: a second of footage each,
+    # and every one of them frozen.
+    assert verdicts.seconds["frozen"] == pytest.approx(10.0)
     assert verdicts.total_seconds == pytest.approx(10.0)
 
 
 def test_without_a_frame_rate_the_numbers_are_frames():
     line = _line([(0.0, 100, 0, 0, None)] * 5, step=10)
-    assert summarise(line, fps=None).seconds["frozen"] == pytest.approx(40.0)
+    assert summarise(line, fps=None).seconds["frozen"] == pytest.approx(50.0)
 
 
 def test_the_percentile_is_the_viewer_s_to_the_letter():
@@ -149,9 +151,157 @@ def test_no_kind_totals_more_than_the_recording_is_long():
     assert verdicts.seconds["frozen"] <= verdicts.total_seconds
 
 
+def test_the_verdicts_together_never_total_more_than_the_footage():
+    """What the plots read, and what they showed when this was wrong.
+
+    The seconds used to be summed over windows. Windows are merged across gaps of
+    up to ten slices and one species' run interleaves with another's, so two
+    windows can cover the same slice and the gaps between them belong to whatever
+    was in them. The shares that came out were over 100% - 143% of one GOA2004
+    recording - which reads as a broken widget, and is.
+    """
+    # Two species alternating every other slice, the way a busy benthic transect
+    # looks, with a dead stretch and a held shot in the middle of it.
+    animals = [(5.0, 100, 1, 0, "sea pen" if i % 2 else "urchin") for i in range(20)]
+    line = _line(animals[:8] + [(0.0, 100, 0, 0, None)] * 4
+                 + [(0.2, 100, 0, 0, None)] * 4 + animals[8:])
+    verdicts = summarise(line, fps=30)
+    assert sum(verdicts.seconds.values()) <= verdicts.total_seconds + 1e-9
+    # ...and the windows still merge across those gaps, which is what they are for.
+    assert len([w for w in verdicts.windows if w.kind == "subject"]) < 20
+
+
 def test_without_a_detail_measurement_a_still_camera_is_a_dwell():
     """`empty` needs something to compare against. With no laplacian_variance and no
     std_intensity in the report there is no baseline, and calling every held shot
     empty would be worse than calling none of them that."""
     blind = _line([(0.5, None, 0, 0, None)] + [(5.0, None, 0, 0, None)] * 20)
     assert verdict_per_slice(blind)[0] == "dwell"
+
+
+# ── writing the verdicts into a report ────────────────────────────────────────
+
+def _report(path, recordings=2, slices=20):
+    """A report shaped like one `collect one` writes: slices, and one aggregate
+    row per recording with no slice index on it."""
+    import polars as pl
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    rows = {"name": [], "dim_t": [], "frame_difference": [], "std_intensity": [],
+            "detection_count": [], "moving_object_count": [], "detection_top_class": [],
+            "fps": [], "obs_level": [], "slice_thumbnail": []}
+    for r in range(recordings):
+        for i in range(slices):
+            rows["name"].append(f"dive{r}.mp4")
+            rows["dim_t"].append(i * 30)
+            rows["frame_difference"].append(0.0 if i < 6 else 5.0)
+            rows["std_intensity"].append(100.0)
+            rows["detection_count"].append(1.0 if i > 14 else 0.0)
+            rows["moving_object_count"].append(0.0)
+            rows["detection_top_class"].append("beroe" if i > 14 else None)
+            rows["fps"].append(30.0)
+            rows["obs_level"].append(1)
+            rows["slice_thumbnail"].append(b"\xff\xd8" + bytes([i % 251]) * 2000)
+        rows["name"].append(f"dive{r}.mp4")
+        rows["dim_t"].append(None)
+        for column, value in (("frame_difference", 2.0), ("std_intensity", 100.0),
+                              ("detection_count", 0.2), ("moving_object_count", 0.0),
+                              ("detection_top_class", None), ("fps", 30.0),
+                              ("obs_level", 0)):
+            rows[column].append(value)
+        rows["slice_thumbnail"].append(None)
+    table = pl.DataFrame(rows).to_arrow()
+    table = table.replace_schema_metadata({b"pp_project_name": b"Windows to the Deep"})
+    pq.write_table(table, path)
+    return path
+
+
+def test_a_judged_report_says_what_every_slice_was_doing(tmp_path):
+    from pixel_patrol_deepsea.triage import describe
+    import polars as pl
+
+    report = _report(tmp_path / "EX2107.parquet")
+    assert describe(report) == 2
+    out = pl.read_parquet(report)
+    assert out.height == 42
+    judged = out.filter(pl.col("dim_t").is_not_null())
+    assert set(judged["slice_verdict"].to_list()) >= {"frozen", "subject"}
+
+
+def test_the_seconds_go_on_the_recording_s_own_row_and_nowhere_else(tmp_path):
+    from pixel_patrol_deepsea.triage import describe
+    import polars as pl
+
+    report = _report(tmp_path / "EX2107.parquet")
+    describe(report)
+    out = pl.read_parquet(report)
+    said = out.filter(pl.col("footage_seconds").is_not_null())
+    assert said.height == 2 and said["obs_level"].to_list() == [0, 0]
+    # Twenty slices thirty frames apart at thirty frames a second is twenty seconds.
+    assert said["footage_seconds"].to_list() == [20.0, 20.0]
+    kinds = ["frozen", "subject", "unnamed", "dwell", "empty", "active"]
+    for row in said.iter_rows(named=True):
+        assert sum(row[f"verdict_seconds_{k}"] for k in kinds) <= row["footage_seconds"]
+
+
+def test_judging_a_report_twice_replaces_the_verdicts_rather_than_repeating_them(tmp_path):
+    """The rules change, and every report written under the old ones is re-judged.
+    Two columns of one name is a file that reads back as whichever the reader picks."""
+    from pixel_patrol_deepsea.triage import describe
+    import pyarrow.parquet as pq
+
+    report = _report(tmp_path / "EX2107.parquet")
+    describe(report)
+    describe(report)
+    names = pq.read_schema(report).names
+    assert names.count("slice_verdict") == 1
+    assert names.count("verdict_seconds_frozen") == 1
+
+
+def test_judging_keeps_what_the_report_already_carried(tmp_path):
+    from pixel_patrol_deepsea.triage import describe
+    import polars as pl
+    import pyarrow.parquet as pq
+
+    report = _report(tmp_path / "EX2107.parquet")
+    before = pl.read_parquet(report)
+    describe(report)
+    after = pl.read_parquet(report)
+    assert after["slice_thumbnail"].to_list() == before["slice_thumbnail"].to_list()
+    # The viewer reads the title out of the file's own metadata.
+    assert (pq.read_schema(report).metadata or {})[b"pp_project_name"] == b"Windows to the Deep"
+
+
+def test_a_report_is_never_read_whole_to_judge_it(tmp_path, monkeypatch):
+    """GOA2004 is 3.37 GB of pictures and 442,338 rows, and the verdicts are made
+    of nine columns of numbers. Reading the pictures to judge the numbers is a
+    machine nobody has."""
+    import polars
+    import pyarrow.parquet
+
+    from pixel_patrol_deepsea import triage
+
+    def refuse(*args, **kwargs):
+        raise AssertionError("the whole report was read into memory")
+
+    monkeypatch.setattr(pyarrow.parquet, "read_table", refuse)
+    monkeypatch.setattr(polars, "read_parquet", refuse)
+    # A batch of sixteen rows and a row group of 20 kB, so that a test's worth of
+    # data is cut the way an expedition's is.
+    monkeypatch.setattr(triage, "READ_ROWS", 16)
+    monkeypatch.setattr(triage, "WRITE_BYTES", 20_000)
+    report = _report(tmp_path / "EX2107.parquet", recordings=2, slices=40)
+    assert triage.describe(report) == 2
+    assert pyarrow.parquet.ParquetFile(report).num_row_groups > 1
+
+
+def test_a_report_with_nothing_to_judge_is_left_alone(tmp_path):
+    from pixel_patrol_deepsea.triage import describe
+    import polars as pl
+    import pyarrow.parquet as pq
+
+    path = tmp_path / "thin.parquet"
+    pl.DataFrame({"name": ["a"], "dim_t": [0]}).write_parquet(path)
+    assert describe(path) == 0
+    assert pq.read_schema(path).names == ["name", "dim_t"]

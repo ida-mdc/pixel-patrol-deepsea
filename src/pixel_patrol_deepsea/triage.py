@@ -52,9 +52,13 @@ MERGE_GAP_ROWS = 10
 VERDICTS = ("frozen", "subject", "unnamed", "dwell", "empty", "active")
 
 
-@dataclass
+@dataclass(slots=True)
 class Slice:
-    """One slice of a timeline, as the verdict needs it."""
+    """One slice of a timeline, as the verdict needs it.
+
+    With slots, because a report is judged one whole recording at a time and
+    GOA2004 is 442,338 of these at once.
+    """
     t: int
     movement: float
     structure: Optional[float] = None
@@ -210,16 +214,29 @@ def summarise(timeline: Sequence[Slice], fps: Optional[float]) -> Verdicts:
 
     Seconds rather than slices, because a report holds recordings sampled at
     different rates and a share of slices is not a share of footage.
+
+    Counted a slice at a time and not a window at a time. A window is a stretch
+    worth opening: short runs of the same kind are merged across gaps of up to ten
+    slices so that a find is one entry in the gallery rather than five, and runs of
+    two species interleave. Both are right for a gallery and wrong for an
+    accounting - the merged gaps belong to whatever was actually in them, and two
+    species' windows cover the same footage twice. Summed that way the verdicts
+    came to more than the recording was long: one EX2107 recording of 300 seconds
+    reported 340 seconds of `subject`, and a share of a recording plotted as 113%.
+    A slice belongs to exactly one verdict, so counting slices cannot do that.
     """
     windows = find_windows(timeline)
+    per_slice = verdict_per_slice(timeline)
     step = (timeline[1].t - timeline[0].t) if len(timeline) > 1 else 1
     to_seconds = (lambda frames: frames / fps) if fps else (lambda frames: float(frames))
-    seconds = {kind: 0.0 for kind in VERDICTS}
-    for window in windows:
-        seconds[window.kind] = seconds.get(window.kind, 0.0) + to_seconds(
-            window.to_t - window.from_t)
-    return Verdicts(per_slice=verdict_per_slice(timeline), windows=windows,
-                    seconds=seconds,
+    # Slices first and seconds after, so that forty thirds of a second add up to
+    # the recording's own length rather than to a hair over it.
+    counted: Dict[str, int] = {}
+    for kind in per_slice:
+        if kind:                        # a slice in none of the six counts for none
+            counted[kind] = counted.get(kind, 0) + 1
+    seconds = {kind: to_seconds(counted.get(kind, 0) * step) for kind in VERDICTS}
+    return Verdicts(per_slice=per_slice, windows=windows, seconds=seconds,
                     total_seconds=to_seconds(len(timeline) * step))
 
 
@@ -242,61 +259,85 @@ def _recording_column(columns: Sequence[str]) -> str:
     return "child_id" if "child_id" in columns else "name"
 
 
+# A batch while the numbers are read, and how much of a batch is worth writing as
+# one row group. Rows carry pictures, so the second is in bytes: see `collect.merge`,
+# which cuts its row groups the same way and for the same reason.
+READ_ROWS = 256
+WRITE_BYTES = 48_000_000
+
+
 def describe(report: Path) -> int:
     """Judge every slice in a report and write the verdicts into it.
 
     Returns how many recordings were judged. Per slice, what it was doing; per
     recording, how many seconds each verdict accounts for, on the aggregate row
-    the pipeline already writes for it. Rewritten through arrow so the `pp_*`
-    metadata survives, for the same reason `identity` does it that way.
+    the pipeline already writes for it.
+
+    Two passes, and neither holds the report. The first reads the nine columns a
+    verdict is made of - numbers, a few bytes a row - and decides everything. The
+    second copies the file through, adding the answers to each row group as it
+    goes. Reading it whole instead is what a report's pictures make impossible:
+    GOA2004 is 3.37 GB on disk, several times that in memory, and judging it that
+    way is a machine nobody has. Written beside the report and moved over it at
+    the end, because the copy is reading the original while it runs.
+
+    Rewritten through arrow so the `pp_*` metadata survives, for the same reason
+    `identity` does it that way.
     """
-    import polars as pl
+    import pyarrow as pa
     import pyarrow.parquet as pq
 
-    table = pl.read_parquet(report)
-    needed = {"dim_t", "frame_difference", "obs_level"}
-    if not needed <= set(table.columns):
+    source = pq.ParquetFile(report, pre_buffer=False)
+    have = list(source.schema_arrow.names)
+    if not {"dim_t", "frame_difference", "obs_level"} <= set(have):
         return 0
-    key = _recording_column(table.columns)
-    detail = next((c for c in ("laplacian_variance", "std_intensity")
-                   if c in table.columns), None)
-
-    def column(name):
-        return table.get_column(name).to_list() if name in table.columns else [None] * table.height
-
-    names = [str(v) if v is not None else "" for v in column(key)]
-    moments = column("dim_t")
-    movement = column("frame_difference")
-    structure = column(detail) if detail else [None] * table.height
-    detections = column("detection_count")
-    movers = column("moving_object_count")
-    top = column("detection_top_class")
-    rates = column("fps")
-    levels = column("obs_level")
+    key = _recording_column(have)
+    detail = next((c for c in ("laplacian_variance", "std_intensity") if c in have), None)
+    asked = [key, "dim_t", "frame_difference", detail, "detection_count",
+             "moving_object_count", "detection_top_class", "fps", "obs_level"]
+    wanted = list(dict.fromkeys(c for c in asked if c and c in have))
 
     # Slices by recording, in the order they were filmed, remembering which row
     # each came from so the verdict can be written back to it.
     lines: Dict[str, List[tuple]] = {}
-    for row in range(table.height):
-        if moments[row] is None or movement[row] is None:
-            continue
-        lines.setdefault(names[row], []).append((row, Slice(
-            t=int(moments[row]), movement=float(movement[row]),
-            structure=None if structure[row] is None else float(structure[row]),
-            detections=None if detections[row] is None else float(detections[row]),
-            movers=None if movers[row] is None else float(movers[row]),
-            top_class=None if top[row] is None else str(top[row]))))
+    names: List[str] = []
+    levels: List[Optional[int]] = []
+    rates: Dict[str, float] = {}
+    row = 0
+    for batch in source.iter_batches(batch_size=READ_ROWS, columns=wanted):
+        held = {name: batch.column(name).to_pylist() if name in wanted
+                else [None] * batch.num_rows for name in set(asked) if name}
+        for i in range(batch.num_rows):
+            name = "" if held[key][i] is None else str(held[key][i])
+            names.append(name)
+            levels.append(held["obs_level"][i])
+            rate = held["fps"][i]
+            if rate and name not in rates:
+                rates[name] = float(rate)
+            moment, movement = held["dim_t"][i], held["frame_difference"][i]
+            if moment is not None and movement is not None:
+                structure = held[detail][i] if detail else None
+                lines.setdefault(name, []).append((row + i, Slice(
+                    t=int(moment), movement=float(movement),
+                    structure=None if structure is None else float(structure),
+                    detections=(None if held["detection_count"][i] is None
+                                else float(held["detection_count"][i])),
+                    movers=(None if held["moving_object_count"][i] is None
+                            else float(held["moving_object_count"][i])),
+                    top_class=(None if held["detection_top_class"][i] is None
+                               else str(held["detection_top_class"][i])))))
+        row += batch.num_rows
 
-    per_slice: List[Optional[str]] = [None] * table.height
+    height = row
+    per_slice: List[Optional[str]] = [None] * height
     per_recording: Dict[str, Verdicts] = {}
     for recording, rows in lines.items():
         rows.sort(key=lambda pair: pair[1].t)
-        timeline = [pair[1] for pair in rows]
-        fps = next((float(rates[pair[0]]) for pair in rows if rates[pair[0]]), None)
-        verdicts = summarise(timeline, fps)
+        verdicts = summarise([pair[1] for pair in rows], rates.get(recording))
         per_recording[recording] = verdicts
-        for (row, _slice), verdict in zip(rows, verdicts.per_slice):
-            per_slice[row] = verdict
+        for (at, _slice), verdict in zip(rows, verdicts.per_slice):
+            per_slice[at] = verdict
+    del lines
 
     if not per_recording:
         return 0
@@ -304,26 +345,57 @@ def describe(report: Path) -> int:
     # The seconds go on the recording's own aggregate row - the one with no slice
     # index - and nowhere else: repeated down every slice they would be summed by
     # something eventually, and a recording's total is not a sum over its slices.
-    totals = {name: [None] * table.height for name in VERDICT_COLUMNS}
-    for row in range(table.height):
-        if levels[row] != 0:
+    totals = {name: [None] * height for name in VERDICT_COLUMNS}
+    for at in range(height):
+        if levels[at] != 0:
             continue
-        found = per_recording.get(names[row])
+        found = per_recording.get(names[at])
         if not found:
             continue
-        totals[FOOTAGE_SECONDS][row] = found.total_seconds
+        totals[FOOTAGE_SECONDS][at] = found.total_seconds
         for kind in VERDICTS:
-            totals[seconds_column(kind)][row] = found.seconds.get(kind, 0.0)
+            totals[seconds_column(kind)][at] = found.seconds.get(kind, 0.0)
 
-    table = table.with_columns([
-        pl.Series(SLICE_VERDICT, per_slice, dtype=pl.Utf8),
-        *[pl.Series(name, values, dtype=pl.Float64) for name, values in totals.items()],
-    ])
-    arrow = table.to_arrow()
-    arrow = arrow.replace_schema_metadata({
-        **(pq.read_schema(report).metadata or {}),
-        **(arrow.schema.metadata or {}),
-    })
-    pq.write_table(arrow, report)
+    answers = {SLICE_VERDICT: pa.array(per_slice, type=pa.string())}
+    answers.update({name: pa.array(values, type=pa.float64())
+                    for name, values in totals.items()})
+    _rewrite_with(report, source, answers)
     logger.info("%s: %d recordings judged", report.name, len(per_recording))
     return len(per_recording)
+
+
+def _rewrite_with(report: Path, source, answers: Dict[str, "object"]) -> None:
+    """Copy a report through, carrying one more column per answer.
+
+    A judged report is judged again whenever the rules change, so a column that is
+    already there is replaced rather than written twice - two columns of the same
+    name is a file that reads back as whichever one the reader happens to pick.
+    """
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    keep = [name for name in source.schema_arrow.names if name not in answers]
+    schema = pa.schema([source.schema_arrow.field(name) for name in keep]
+                       + [pa.field(name, values.type) for name, values in answers.items()],
+                       metadata=source.schema_arrow.metadata)
+    beside = report.with_name(report.name + ".judging")
+    at, buffered, held = 0, [], 0
+    try:
+        with pq.ParquetWriter(beside, schema) as writer:
+            for batch in source.iter_batches(batch_size=READ_ROWS, columns=keep):
+                table = pa.Table.from_arrays(
+                    [batch.column(name) for name in keep]
+                    + [values.slice(at, batch.num_rows) for values in answers.values()],
+                    schema=schema)
+                at += batch.num_rows
+                buffered.append(table)
+                held += table.nbytes
+                if held >= WRITE_BYTES:
+                    writer.write_table(pa.concat_tables(buffered))
+                    buffered, held = [], 0
+            if buffered:
+                writer.write_table(pa.concat_tables(buffered))
+    except BaseException:
+        beside.unlink(missing_ok=True)
+        raise
+    beside.replace(report)

@@ -9,6 +9,9 @@ what changed:
     python -m pixel_patrol_deepsea.collect site  collection/
     python -m pixel_patrol_deepsea.collect serve collection/
 
+`judge` is the odd one out: it rewrites reports that were written under older
+rules, reading no footage and nothing but the numbers already in the file.
+
 `one` is the expensive verb and the only one that touches video. It stages the
 recording into a scratch directory, analyses it, and deletes it - so a run of any
 length costs one recording of disk rather than the whole archive. Under Nextflow
@@ -463,6 +466,47 @@ def _process(folder: Path, output: Path, expedition_id: str, url: str,
 
 # ── identify ──────────────────────────────────────────────────────────────────
 
+def judge_reports(target: Path) -> int:
+    """Judge reports that were written under an older set of rules.
+
+    Only the triage - what each slice of footage was doing, and how many seconds
+    of each verdict a recording holds. Nothing is re-read and no footage is
+    touched: the verdicts are made of nine columns of numbers that are already in
+    the file, so this is minutes over a whole collection rather than the weeks the
+    analysis took.
+
+    Separate from `identify` because the two are needed at different times. A
+    change to the rules here means every report ever written says the wrong thing
+    about its own footage, and re-deriving the animal identities as well is work
+    nobody asked for on files measured in gigabytes.
+    """
+    from pixel_patrol_deepsea.triage import describe
+
+    reports = _reports_under(target)
+    if not reports:
+        print(f"no reports under {target}", file=sys.stderr)
+        return 1
+    judged = 0
+    for report in reports:
+        try:
+            recordings = describe(report)
+        except Exception as exc:
+            print(f"{report}: {exc}", file=sys.stderr)
+            continue
+        judged += recordings
+        print(f"{report.relative_to(target) if target.is_dir() else report.name}: "
+              f"{recordings} recordings judged")
+    print(f"{len(reports)} reports, {judged} recordings judged")
+    return 0
+
+
+def _reports_under(target: Path) -> List[Path]:
+    """Every report at or under a path - but not the sightings written beside them."""
+    return ([target] if target.is_file()
+            else sorted(p for p in target.rglob("*.parquet")
+                        if p.parent.name != "sightings"))
+
+
 def identify_reports(target: Path) -> int:
     """Bring reports up to date with what `collect one` writes now.
 
@@ -474,9 +518,7 @@ def identify_reports(target: Path) -> int:
     from pixel_patrol_deepsea.identity import identify
     from pixel_patrol_deepsea.triage import describe
 
-    reports = ([target] if target.is_file()
-               else sorted(p for p in target.rglob("*.parquet")
-                           if p.parent.name != "sightings"))
+    reports = _reports_under(target)
     if not reports:
         print(f"no reports under {target}", file=sys.stderr)
         return 1
@@ -1278,6 +1320,11 @@ def main(argv=None) -> int:
     naming.add_argument("target", type=Path,
                         help="a parquet, or a collection root to walk")
 
+    judging = verbs.add_parser("judge", help="re-judge what the footage in a report "
+                                            "was doing, without touching anything else")
+    judging.add_argument("target", type=Path,
+                         help="a parquet, or a collection root to walk")
+
     scoring = verbs.add_parser("score", help="check an expedition against its ground truth")
     scoring.add_argument("expedition")
     scoring.add_argument("root", type=Path)
@@ -1308,6 +1355,8 @@ def main(argv=None) -> int:
                               args.detector_sizes, args.detect_every)
     if args.verb == "identify":
         return identify_reports(args.target)
+    if args.verb == "judge":
+        return judge_reports(args.target)
     if args.verb == "merge":
         return merge(args.expedition, args.parts, args.output, clips=args.with_clips)
     if args.verb == "score":
