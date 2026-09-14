@@ -96,6 +96,25 @@ def test_how_many_slices_have_a_thumbnail_comes_out_of_the_footer(tmp_path):
     assert summarise(path).stills == summarise(path, pictures=True).stills == 3
 
 
+def test_a_slimmed_report_counts_the_pictures_it_still_has(tmp_path):
+    """`collect slim` drops the whole-frame thumbnails, because the gallery never
+    showed one where an animal was named. Counting them after that says a report
+    with half a million crops in it has no pictures at all."""
+    import json
+
+    import polars as pl
+
+    rows = _slices(["beroe", None, "shrimp"])
+    for row in rows:
+        row.pop("slice_thumbnail"), row.pop("detection_crop")
+        row["detections"] = (json.dumps([{"class": row["detection_top_class"],
+                                          "conf": 0.7, "crop": "UklGRgAA"}])
+                             if row["detection_top_class"] else None)
+    path = tmp_path / "slim.parquet"
+    pl.DataFrame(rows).write_parquet(path)
+    assert summarise(path).stills == 2      # the two slices that named something
+
+
 def test_ignores_files_that_are_not_reports(tmp_path):
     # sightings.parquet lives beside the report and has no observation level.
     pl.DataFrame({"taxon": ["beroe"], "second": [1.0]}).write_parquet(tmp_path / "sightings.parquet")

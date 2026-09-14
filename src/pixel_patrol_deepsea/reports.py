@@ -264,26 +264,46 @@ def summarise(path: Path, pictures: bool = False) -> Optional[ReportSummary]:
     return summary
 
 
+# Where a slice's picture may be, likeliest first. The animals' own crops outlive
+# the whole-frame thumbnail: `collect slim` drops the frames, because on the 90% of
+# slices that named an animal the gallery never showed one.
+PICTURES = ("detections", "slice_thumbnail", "detection_crop")
+
+
 def _stills(path: Path, slices) -> int:
-    """How many slices carry a cached thumbnail, without reading one of them.
+    """How many slices carry a picture, without reading one of them.
 
     Every row group records how many nulls each of its columns holds, so this is
     two reads of a footer rather than a gigabyte of JPEG.
     """
+    # The footer first, and in a fixed order, because which picture columns were
+    # loaded into `slices` depends on who asked - and two callers counting
+    # different columns would report two different numbers for one report.
+    for column in PICTURES:
+        counted = _not_null_in_footer(path, column)
+        if counted is not None:
+            return counted
+    for column in PICTURES:
+        if column in slices.columns:
+            return int(slices[column].is_not_null().sum())
+    return 0
+
+
+def _not_null_in_footer(path: Path, column: str):
+    """How many rows have that column, read off the footer, or nothing if the
+    column is not in the file at all."""
     import pyarrow.parquet as pq
 
-    if "slice_thumbnail" in slices.columns:
-        return int(slices["slice_thumbnail"].is_not_null().sum())
     try:
         meta = pq.ParquetFile(path, pre_buffer=False).metadata
-        at = meta.schema.names.index("slice_thumbnail")
+        at = meta.schema.names.index(column)
     except Exception:
-        return 0
+        return None
     rows = nulls = 0
     for group in range(meta.num_row_groups):
-        column = meta.row_group(group).column(at)
+        held = meta.row_group(group).column(at)
         rows += meta.row_group(group).num_rows
-        nulls += column.statistics.null_count if column.statistics else 0
+        nulls += held.statistics.null_count if held.statistics else 0
     return max(0, rows - nulls)
 
 

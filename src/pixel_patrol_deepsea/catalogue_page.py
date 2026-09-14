@@ -684,7 +684,7 @@ def _expedition_card(row: Progress) -> str:
         <div><dt>Recordings</dt><dd>{row.processed:,} of {row.listed:,} analysed
              <div class="bar"><span style="width:{row.share * 100:.1f}%"></span></div></dd></div>
         <div><dt>Footage</dt><dd>{_clock(row.seconds)}
-             {f'<span class="muted">&middot; {row.slices:,} slices, {row.stills:,} with a cached still</span>' if row.slices else ''}</dd></div>
+             {f'<span class="muted">&middot; {row.slices:,} slices, {row.stills:,} with a picture kept</span>' if row.slices else ''}</dd></div>
         <div><dt>Animals</dt><dd>{_animals_cell(row)}</dd></div>
         <div><dt>Species</dt><dd>{_taxa_count(row)}</dd></div>
         {_where_and_when(row)}
