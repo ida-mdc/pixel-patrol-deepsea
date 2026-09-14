@@ -125,12 +125,14 @@ function page() {
       <p><button id="stageBack"></button><input type="checkbox" id="stageBox" checked>
         <a id="stageFile"></a><span id="stageNote"></span></p>
       <p id="stageTerms"></p>
-    </div></div>`;
+    </div></div>
+    <div class="find"><input id="find"><ul class="found" id="findList" hidden></ul></div>`;
   const run = new Function('LOOKUP', 'fetch', pageScript()
     + '\n; return { state, focusOn, drawJumps, nodeAt, openStage, toggleKept, '
     + 'kept, asCsv, csvText, wireTheStage, refreshKept, drawKept, shutStage, tileFor, '
     + 'paintBoxes, boxAt, openAsked, askedFor, pickFromReel, packed, unpacked, '
-    + 'linkTo, openShared, takeShared, shareThese };');
+    + 'linkTo, openShared, takeShared, shareThese, matchesFor, pickFound, '
+    + 'wireFinding, whereEachNameIs };');
   return run(LOOKUP, store);
 }
 
@@ -710,5 +712,85 @@ describe('sending a collection to somebody', () => {
   it('says nothing and breaks nothing when the link is rubbish', async () => {
     await api.openShared('zzzz-not-a-payload');
     expect(api.state.shared).toBeNull();
+  });
+});
+
+describe('finding a name', () => {
+  let api;
+  beforeEach(() => {
+    api = page();
+    api.state.index = INDEX;
+    api.wireFinding();
+  });
+
+  const type = (what) => {
+    const box = document.getElementById('find');
+    box.value = what;
+    box.dispatchEvent(new Event('input'));
+    return [...document.getElementById('findList').children]
+      .map(row => row.textContent);
+  };
+
+  it('offers the names that contain what was typed', () => {
+    expect(api.matchesFor(INDEX.taxa, 'fera').map(h => h.name))
+      .toEqual(['Porifera', 'Foraminifera']);
+  });
+
+  it('puts a name that starts with it above one that merely holds it', () => {
+    // "cnid" should reach Cnidaria before anything that has it in the middle.
+    const hits = api.matchesFor(INDEX.taxa, 'ni');
+    expect(hits[0].name).toBe('Cnidaria');
+  });
+
+  it('breaks a tie on how much of it there is', () => {
+    // Both start at the same place; thirty beats twenty.
+    const hits = api.matchesFor({ Aa: { count: 20 }, Ab: { count: 30 } }, 'a');
+    expect(hits.map(h => h.name)).toEqual(['Ab', 'Aa']);
+  });
+
+  it('cares nothing for case', () => {
+    expect(api.matchesFor(INDEX.taxa, 'ACTIN').map(h => h.name)).toEqual(['Actiniaria']);
+  });
+
+  it('finds nothing for a name nobody gave', () => {
+    expect(api.matchesFor(INDEX.taxa, 'tardigrada')).toEqual([]);
+  });
+
+  it('says so on screen rather than leaving an empty box', () => {
+    expect(type('tardigrada').join()).toContain('no name like that was given');
+  });
+
+  it('shows the rank and the count beside each name', () => {
+    const rows = type('actin');
+    expect(rows[0]).toContain('Actiniaria');
+    expect(rows[0]).toContain('Order');
+    expect(rows[0]).toContain('30');
+  });
+
+  it('opens a name on the same path its own ring would', () => {
+    // Read out of the tree, not out of the register's `above`: a species is filed
+    // under its genus and its chain stops there, so the two disagree.
+    api.pickFound('Actiniaria');
+    expect(api.state.path).toEqual(['Animalia', 'Cnidaria', 'Hexacorallia', 'Actiniaria']);
+    expect(api.state.only).toBe('Actiniaria');
+  });
+
+  it('finds a name the register could not place at all', () => {
+    api.pickFound('Undecided');
+    expect(api.state.path).toEqual(['Unplaced', 'Undecided']);
+    expect(api.state.only).toBe('Undecided');
+  });
+
+  it('knows where every name in the tree lives', () => {
+    const where = api.whereEachNameIs();
+    expect([...where.keys()].sort()).toEqual(Object.keys(INDEX.taxa).sort());
+  });
+
+  it('shuts the list once a name has been taken', () => {
+    type('actin');
+    expect(document.getElementById('findList').hidden).toBe(false);
+    api.pickFound('Actiniaria');
+    expect(document.getElementById('findList').hidden).toBe(true);
+    expect(document.getElementById('find').value).toBe('Actiniaria');
   });
 });

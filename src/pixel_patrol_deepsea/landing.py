@@ -138,6 +138,12 @@ def render(rows, index: Optional[Dict] = None, scores: Optional[Dict] = None,
          and the middle of it to come out; hover a picture to watch it move, or
          click it to open the recording there.</p>
       <nav class="jumps" id="jumps" aria-label="the phyla this collection found"></nav>
+      <div class="find" role="combobox" aria-haspopup="listbox" aria-owns="findList">
+        <input id="find" type="search" autocomplete="off" spellcheck="false"
+               placeholder="find a name" aria-autocomplete="list"
+               aria-controls="findList" aria-label="find a name the detector gave">
+        <ul class="found" id="findList" role="listbox" hidden></ul>
+      </div>
       <nav class="crumbs" id="crumbs" aria-label="the branch in focus"></nav>
     </header>
     <div class="explore-body">
@@ -532,6 +538,26 @@ a { color: var(--glow); }
 .jumps .jump.odd { border-color: rgba(255,176,32,.45); color: #e9bd7c; }
 .jumps .jump.odd span { color: #f0c274; }
 .jumps .all { border-style: dashed; }
+/* Three hundred and seventy-three names, and the rings only show three deep: a
+   reader who knows what they are looking for should not have to hunt for it. */
+.find { position: relative; margin: 0 0 .8rem; max-width: 26rem; }
+.find input { width: 100%; background: transparent; color: var(--ink);
+  border: 1px solid var(--line); border-radius: 2px; padding: .36rem .6rem;
+  font: .74rem/1.2 var(--mono); letter-spacing: .04em; }
+.find input::placeholder { color: #55708a; }
+.find input:focus { outline: none; border-color: var(--glow); }
+.found { position: absolute; z-index: 30; left: 0; right: 0; top: calc(100% + 2px);
+  margin: 0; padding: .2rem; list-style: none; max-height: 17rem; overflow-y: auto;
+  background: var(--abyss-2); border: 1px solid var(--glow);
+  box-shadow: 0 10px 30px rgba(0,0,0,.6); }
+.found li { display: flex; gap: .6rem; align-items: baseline; cursor: pointer;
+  padding: .3rem .45rem; font: .74rem/1.3 var(--mono); color: var(--dim); }
+.found li .what { color: var(--ink); flex: 1; }
+.found li .rank { font-size: .64rem; letter-spacing: .06em; text-transform: uppercase; }
+.found li .n { color: var(--ink); font-variant-numeric: tabular-nums; }
+.found li.at, .found li:hover { background: rgba(53,214,245,.12); }
+.found li.none { cursor: default; color: var(--dim); }
+.found li.none:hover { background: transparent; }
 .crumbs { display: flex; flex-wrap: wrap; gap: .3rem; align-items: center;
           margin-bottom: 1.2rem; min-height: 1.6rem; }
 .crumbs .sep { color: #44596b; font: .72rem var(--mono); }
@@ -852,6 +878,7 @@ async function boot() {
   // What was kept first: the tiles read it as they are drawn.
   refreshKept();
   drawJumps();
+  wireFinding();
   focusOn(...fromHash());
   watchTheWall();
   wireTheStage();
@@ -870,6 +897,132 @@ function nodeAt(path) {
   }
   return node;
 }
+
+/* ── finding a name ────────────────────────────────────────────────────────── */
+
+/** Where each name sits in the tree, read out of the tree itself.
+ *
+ * Not out of a taxon's `above`, which is the register's classification and is not
+ * the same thing: a species is filed under its genus and its chain stops at the
+ * genus, so `above` names the parent for some and the node itself for others. The
+ * tree already knows - every name is on exactly one node - and a path read from it
+ * is the same path a click on that ring would have produced.
+ */
+function whereEachNameIs() {
+  if (state.where) return state.where;
+  const found = new Map();
+  const walk = (node, path) => {
+    for (const taxon of node.taxa || []) found.set(taxon, path);
+    for (const child of node.children || []) walk(child, [...path, child.name]);
+  };
+  walk(state.index.tree, []);
+  state.where = found;
+  return found;
+}
+
+// Enough to choose from without becoming a second wall of its own.
+const MOST_FOUND = 12;
+
+/** The names worth offering for what has been typed, best first.
+ *
+ * A name that starts with what was typed beats one that merely contains it -
+ * "cten" should reach Ctenophora before Lyssacinosida - and among equals the
+ * commoner animal comes first, because a reader who types three letters is more
+ * likely to be after the thing there are four thousand of.
+ */
+function matchesFor(taxa, query) {
+  const wanted = query.trim().toLowerCase();
+  if (!wanted) return [];
+  const hits = [];
+  for (const [name, about] of Object.entries(taxa || {})) {
+    const at = name.toLowerCase().indexOf(wanted);
+    if (at < 0) continue;
+    hits.push({ name, count: about.count || 0, rank: about.rank || '', at });
+  }
+  hits.sort((a, b) => (a.at - b.at) || (b.count - a.count) || a.name.localeCompare(b.name));
+  return hits.slice(0, MOST_FOUND);
+}
+
+function drawFound(hits) {
+  const list = el('findList');
+  list.innerHTML = '';
+  state.foundAt = hits.length ? 0 : -1;
+  if (!hits.length) {
+    const none = document.createElement('li');
+    none.className = 'none';
+    none.textContent = 'no name like that was given';
+    list.appendChild(none);
+  }
+  hits.forEach((hit, index) => {
+    const row = document.createElement('li');
+    row.setAttribute('role', 'option');
+    row.className = index === 0 ? 'at' : '';
+    row.innerHTML = `<span class="what">${escape(hit.name)}</span>`
+      + `<span class="rank">${escape(hit.rank || 'no rank')}</span>`
+      + `<span class="n">${hit.count.toLocaleString()}</span>`;
+    row.addEventListener('mousedown', (event) => {   // before the input blurs
+      event.preventDefault();
+      pickFound(hit.name);
+    });
+    list.appendChild(row);
+  });
+  list.hidden = false;
+  state.found = hits;
+}
+
+function shutFinding() {
+  el('findList').hidden = true;
+  state.found = [];
+  state.foundAt = -1;
+}
+
+/** Show one name's animals, exactly as clicking its ring would. */
+function pickFound(name) {
+  const path = whereEachNameIs().get(name);
+  if (!path) return;
+  shutFinding();
+  el('find').value = name;
+  el('find').blur();
+  focusOn(path, name);
+}
+
+function moveFinding(by) {
+  const rows = [...el('findList').children].filter(row => !row.classList.contains('none'));
+  if (!rows.length) return;
+  state.foundAt = (state.foundAt + by + rows.length) % rows.length;
+  rows.forEach((row, index) => row.classList.toggle('at', index === state.foundAt));
+  rows[state.foundAt].scrollIntoView({ block: 'nearest' });
+}
+
+function wireFinding() {
+  const box = el('find');
+  if (!box) return;
+  box.addEventListener('input', () => {
+    const typed = box.value;
+    if (!typed.trim()) { shutFinding(); return; }
+    drawFound(matchesFor(state.index.taxa, typed));
+  });
+  box.addEventListener('keydown', (event) => {
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      if (el('findList').hidden) drawFound(matchesFor(state.index.taxa, box.value));
+      else moveFinding(event.key === 'ArrowDown' ? 1 : -1);
+      return;
+    }
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      const hit = (state.found || [])[state.foundAt];
+      if (hit) pickFound(hit.name);
+      return;
+    }
+    if (event.key === 'Escape') { box.value = ''; shutFinding(); box.blur(); }
+  });
+  box.addEventListener('blur', () => setTimeout(shutFinding, 0));
+  box.addEventListener('focus', () => {
+    if (box.value.trim()) drawFound(matchesFor(state.index.taxa, box.value));
+  });
+}
+
 
 /** Every taxon under a node - the leaves whose pages the wall will read. */
 function taxaUnder(node) {
