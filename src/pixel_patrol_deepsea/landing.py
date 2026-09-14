@@ -91,7 +91,7 @@ BANNER = "assets/colours.png"
 def render(rows, index: Optional[Dict] = None, scores: Optional[Dict] = None,
            data_url: str = "") -> str:
     from pixel_patrol_deepsea.catalogue_page import _clock, _report_url, data_at, tiles_at
-    from pixel_patrol_deepsea.collect import EVERYTHING
+    from pixel_patrol_deepsea.merge import EVERYTHING
 
     listed = sum(r.listed for r in rows)
     processed = sum(r.processed for r in rows)
