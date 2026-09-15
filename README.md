@@ -81,9 +81,10 @@ Three passes then run over the finished report, reading no footage: detections a
 into individual animals, every slice is judged for what the footage was doing (frozen,
 subject, unnamed, dwell, empty, active), and the pictures a report holds twice are dropped.
 
-## What comes out
+## The reports
 
-**A report per expedition**, opened in a static viewer with six widgets in three groups:
+One per expedition, behind the buttons on the collection page. Each opens in a static
+viewer with six widgets in three groups:
 
 | | |
 | --- | --- |
@@ -91,7 +92,8 @@ subject, unnamed, dwell, empty, active), and the pictures a report holds twice a
 | *What was found* | a gallery of ranked sightings, and the names arranged by taxonomic rank |
 | *Where and when* | a depth profile per dive, and sightings on the archive's clock |
 
-**And the collection page** above them, which is the picture at the top of this file.
+There is also one report over every expedition at once, for the questions that span them.
+It carries the counts and the positions but no pictures.
 
 ## Does it work
 
