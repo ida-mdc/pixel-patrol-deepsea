@@ -3,8 +3,11 @@
 <!-- One width for the whole page. The expedition table needs about 800 px and
      does not narrow, so a phone laid the rest of the page out at 390 and left
      the table hanging off the side. Given a width, a phone scales the page to
-     fit instead, and everything is at one scale. -->
-<meta name="viewport" content="width=900, initial-scale=1">
+     fit instead, and everything is at one scale.
+     No `initial-scale`: with both, the width sets the layout and the scale is
+     pinned at 1:1, so the page is 900 wide on a 390 screen and pans sideways
+     instead of shrinking - and the media queries see the screen, not the 900. -->
+<meta name="viewport" content="width=900">
 <title>Deep-sea footage collection</title>
 <style>
 {{style}}</style></head>
