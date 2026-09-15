@@ -9,10 +9,14 @@
 # and both small enough to keep:
 #
 #   site/collection.json   the expedition table, 90 KB - counts, depths, dates
+#   site/tiles-index.json  the taxonomy tree and the counts under the rings, 632 KB
 #   site/assets/           the colour banner and the drawing, 2 MB
 #
-# Everything else is code, or is fetched from the storage: at build time the tile
-# index, and at read time every picture.
+# The tile index is committed rather than fetched because a runner cannot reach the
+# storage: DESY answers this network in under half a second and times out from
+# GitHub's, which is a firewall on datacentre ranges rather than an outage. The
+# reader's browser fetches the pictures at read time over the same path and is fine.
+# Everything else is code.
 name: page
 
 on:
@@ -87,20 +91,24 @@ jobs:
           pip install -e . --no-deps
           pip install pyyaml pillow
 
-      - name: Check the storage is answering
+      # Whether this runner can see the storage at all, which it usually cannot.
+      # Reported and never fatal: nothing in the build needs it, the check is here
+      # so a genuine outage is visible in the log rather than only to readers.
+      - name: Ask the storage how it is
+        continue-on-error: true
         run: |
-          code=$(curl -s -o /dev/null -w '%{http_code}' "${PP_DATA_URL}tiles/index.json")
-          echo "tiles/index.json -> $code"
-          [ "$code" = 200 ] || { echo "::error::the storage is not serving the tile store"; exit 1; }
+          code=$(curl -s -o /dev/null -m 20 -w '%{http_code}' \
+                   "${PP_DATA_URL}tiles/index.json" || echo "unreachable")
+          echo "${PP_DATA_URL}tiles/index.json -> $code"
 
       - name: Build
         run: |
           mkdir -p build/tiles
           cp site/collection.json build/
           cp -r site/assets build/
-          # The taxonomy tree and the counts under the rings: 650 KB, needed to
-          # write the page and not afterwards, so it does not go in the artifact.
-          curl -sSf -o build/tiles/index.json "${PP_DATA_URL}tiles/index.json"
+          # The tile index is read to write the page and not afterwards, so it is
+          # put where the builder looks and taken out of the artifact again.
+          cp site/tiles-index.json build/tiles/index.json
           python -m pixel_patrol_deepsea.collect page build --data-url "$PP_DATA_URL"
           rm -rf build/tiles
 
