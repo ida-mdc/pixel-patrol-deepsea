@@ -1,4 +1,4 @@
-# PixelPatrol Deep-Sea (`pixel-patrol-deepsea`)
+# PixelPatrol Deep-Sea
 
 A prototype. It reads published deep-sea dive video — NOAA Ocean Exploration's tapes,
 MBARI's annotated [DeepSea-MOT](https://huggingface.co/datasets/MBARI-org/DeepSea-MOT)
@@ -94,6 +94,46 @@ viewer with six widgets in three groups:
 
 There is also one report over every expedition at once, for the questions that span them.
 It carries the counts and the positions but no pictures.
+
+## Running it on your own footage
+
+You do not need an archive or a catalogue for this. A folder of video is enough, and
+nothing is uploaded anywhere — everything below happens on your machine.
+
+```bash
+# 1. measure every slice of every recording in the folder
+python -m pixel_patrol_base.cli process my-dives/ -o my-dives.parquet \
+    --loader video --slice-size T=10 --slice-size C=-1 \
+    --processors-include raster-basic       \
+    --processors-include raster-temporal    \
+    --processors-include raster-motion      \
+    --processors-include slice-thumbnail    \
+    --processors-include slice-colour       \
+    --processors-include slice-colour-spread
+
+# 2. link the detections into individual animals, and judge what each slice was doing
+python -m pixel_patrol_deepsea.collect identify my-dives.parquet
+
+# 3. look at it
+python -m pixel_patrol_base.cli view my-dives.parquet
+```
+
+`--slice-size T=10` is how many frames make one slice — ten is a second of footage at
+10 fps. `C=-1` keeps the colour axis whole, which the detector needs to work in RGB.
+
+To name the animals as well, fetch the detector once
+(`python -m pixel_patrol_deepsea.fetch_detector`) and add
+`--processors-include raster-detections`. That is the slow part: budget a few seconds of
+CPU per second of footage, and about 5 GB of memory for the worker.
+
+Two things that are specific to the archives and will not happen here: positions and
+depths come from a dive's own navigation files, which your footage will not have, so the
+*Where and when* widgets stay empty; and clicking a tile opens the recording it came
+from, which works because the page knows the URL each was listed from — over a local
+folder there is nothing to open.
+
+Measured on two six-second clips at 640×360: 15 seconds without the detector, 14 slices,
+67 columns.
 
 ## Does it work
 
