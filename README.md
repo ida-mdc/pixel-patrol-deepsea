@@ -95,6 +95,30 @@ viewer with six widgets in three groups:
 There is also one report over every expedition at once, for the questions that span them.
 It carries the counts and the positions but no pictures.
 
+| | |
+| --- | --- |
+| ![](docs/screenshots/report-footage.png) | ![](docs/screenshots/report-taxonomy.png) |
+| **What the footage is doing.** One point per recording, as a share of its length: how much was frozen tape, how much was the camera held on something, how much held on nothing, how much was transit. The header totals it — 122:49:51 of footage here, 03:51:03 of it dead and 05:39:14 held. | **Which animals were named.** The detector's classes arranged by the ranks WoRMS puts above them, sized by how many were found. `equipment` and `marine snow` are real classes in its vocabulary — the page gathers those under a *Not an animal* branch of its own. The selector at the bottom moves the confidence floor and says what each one costs. |
+
+![](docs/screenshots/report-when.png)
+
+![](docs/screenshots/report-depth.png)
+
+**Where and when.** Animals found per year and per 250 m of depth, stacked by expedition
+— the same question asked of the clock and of the water column.
+
+![](docs/screenshots/report-map.png)
+
+**And where the dives were**, from each dive's own navigation. This widget comes from
+pixel-patrol-geospatial: writing the column names it looks for is all it takes.
+
+![](docs/screenshots/report-timeline.png)
+
+**One recording, along its length.** Movement as a curve, animals as points, the verdicts
+as bands behind them, and the recording's own colour as a strip on top. Clicking a moment
+lists what the detector found there, with how sure it was and how many frames it saw it
+in.
+
 ## Running it on your own footage
 
 You do not need an archive or a catalogue for this. A folder of video is enough, and
