@@ -124,6 +124,17 @@ in.
 You do not need an archive or a catalogue for this. A folder of video is enough, and
 nothing is uploaded anywhere — everything below happens on your machine.
 
+Python 3.12 or newer, and the framework comes from PyPI:
+
+```bash
+git clone https://github.com/ida-mdc/pixel-patrol-deepsea
+python -m venv venv && . venv/bin/activate
+pip install ./pixel-patrol-deepsea
+```
+
+That pulls in torch and its GPU wheels, so the environment ends up around 6 GB.
+Then, in a folder of your own recordings:
+
 ```bash
 # 1. measure every slice of every recording in the folder
 python -m pixel_patrol_base.cli process my-dives/ -o my-dives.parquet \
