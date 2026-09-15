@@ -1,0 +1,102 @@
+# Build the collection page and publish it to GitHub Pages.
+#
+# The page is a hundred kilobytes of HTML over fifteen gigabytes of pictures and
+# reports, and only the first of those belongs in a repository. So the weight stays
+# on the storage - PP_DATA_URL below - and this builds the light half against it:
+# the page, the viewer, the banner, the taxonomy. About 46 MB.
+#
+# Two inputs have to be in the repository for that, both written by `collect site`
+# and both small enough to keep:
+#
+#   site/collection.json   the expedition table, 90 KB - counts, depths, dates
+#   site/assets/           the colour banner and the drawing, 2 MB
+#
+# Everything else is code, or is fetched from the storage: at build time the tile
+# index, and at read time every picture.
+name: page
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/pixel_patrol_deepsea/page/**'
+      - 'src/pixel_patrol_deepsea/viewer/**'
+      - 'src/pixel_patrol_deepsea/landing.py'
+      - 'src/pixel_patrol_deepsea/catalogue_page.py'
+      - 'site/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+env:
+  PP_DATA_URL: https://hifis-storage.desy.de/Helmholtz/HIP/collaborations/PixelPatrolDeepSea/
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check out the framework this extends
+        uses: actions/checkout@v4
+        with:
+          repository: ida-mdc/pixel-patrol
+          path: pixel-patrol
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      # `--no-deps` on this package on purpose: its dependencies include torch,
+      # which is most of a gigabyte and is for reading footage. A page build reads
+      # no footage. What it does need comes with pixel-patrol-base.
+      - name: Install
+        run: |
+          pip install ./pixel-patrol/packages/pixel-patrol-base
+          pip install -e . --no-deps
+          pip install pyyaml pillow
+
+      - name: Check the storage is answering
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' "${PP_DATA_URL}tiles/index.json")
+          echo "tiles/index.json -> $code"
+          [ "$code" = 200 ] || { echo "::error::the storage is not serving the tile store"; exit 1; }
+
+      - name: Build
+        run: |
+          mkdir -p build/tiles
+          cp site/collection.json build/
+          cp -r site/assets build/
+          # The taxonomy tree and the counts under the rings: 650 KB, needed to
+          # write the page and not afterwards, so it does not go in the artifact.
+          curl -sSf -o build/tiles/index.json "${PP_DATA_URL}tiles/index.json"
+          python -m pixel_patrol_deepsea.collect page build --data-url "$PP_DATA_URL"
+          rm -rf build/tiles
+
+      - name: Say what was built
+        run: |
+          du -sh build
+          grep -o 'window.PP_TILES = "[^"]*"' build/index.html
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: build
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

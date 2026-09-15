@@ -295,3 +295,42 @@ def _track(recording, slice_t, box):
                  last_second=1.0, sightings=[best])
 
 
+
+
+# ── building the page without the collection ──────────────────────────────────
+
+def test_the_expedition_table_survives_being_written_down(tmp_path):
+    """A runner has the code and no reports. The table it needs is fifty kilobytes
+    of counts; reading it back out of 4.7 GB of parquet is what it cannot do."""
+    from pixel_patrol_deepsea.catalogue_page import (
+        PROGRESS, Progress, load_progress, save_progress,
+    )
+    from pixel_patrol_deepsea.reports import Placed
+
+    rows = [Progress(id="EX2107", title="Windows to the Deep", listed=120, processed=12,
+                     seconds=3600.5, animals=91, taxa=["Actiniaria", "Beroe"],
+                     report=tmp_path / "parquet" / "EX2107.parquet",
+                     placed=Placed(latitude=31.9, longitude=-77.2, source="dive")),
+            Progress(id="DSMOT", title="MBARI DeepSea-MOT")]
+    where = save_progress(rows, tmp_path / PROGRESS)
+    back = load_progress(where)
+    assert [r.id for r in back] == ["EX2107", "DSMOT"]
+    assert back[0].taxa == ["Actiniaria", "Beroe"] and back[0].animals == 91
+    assert back[0].placed.latitude == 31.9 and back[1].placed is None
+    assert back[0].report.name == "EX2107.parquet"
+
+
+def test_a_collection_that_is_not_here_is_read_from_the_file(tmp_path, monkeypatch):
+    """And nothing goes looking for the reports, which on a runner are not there."""
+    from pixel_patrol_deepsea import catalogue_page
+    from pixel_patrol_deepsea.catalogue_page import (
+        PROGRESS, Progress, save_progress, write_catalogue_page,
+    )
+
+    save_progress([Progress(id="EX2107", title="Windows to the Deep", listed=9,
+                            processed=9, seconds=60.0)], tmp_path / PROGRESS)
+    monkeypatch.setattr(catalogue_page, "read_progress",
+                        lambda root: (_ for _ in ()).throw(
+                            AssertionError("went looking for the reports")))
+    page = write_catalogue_page(tmp_path).read_text()
+    assert "Windows to the Deep" in page

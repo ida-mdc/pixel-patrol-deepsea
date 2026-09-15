@@ -91,10 +91,8 @@ class Progress:
     sightings: int = 0
     animals: int = 0
     vehicle: int = 0         # tracks that turned out to be the ROV's own hardware
-    best: Dict[str, object] = field(default_factory=dict)   # taxon -> best look at it
     stills: int = 0
     slices: int = 0
-    sources: List[Dict[str, str]] = field(default_factory=list)
     placed: Optional[object] = None   # where and when, from reports.Placed
     scores: List[Dict] = field(default_factory=list)   # against per-frame ground truth
     scored: int = 0          # slices a detector looked at
@@ -119,6 +117,44 @@ def read_progress(root: Path) -> List[Progress]:
     for expedition_id in sorted(seen):
         entry = catalogue.get(expedition_id)
         rows.append(_progress_of(root, expedition_id, entry))
+    return rows
+
+
+# What the expedition table is, as a file. Reading it out of the reports means
+# reading 4.7 GB of parquet, which is a minute on this machine and impossible on a
+# runner with no collection on it. Written beside the page by `collect site`, it is
+# fifty kilobytes and the page can be rebuilt from it alone.
+PROGRESS = "collection.json"
+
+
+def save_progress(rows: List[Progress], where: Path) -> Path:
+    """The expedition table, small enough to keep."""
+    import json
+    from dataclasses import asdict
+
+    def plain(row: Progress) -> Dict:
+        out = asdict(row)
+        out["report"] = row.report.name if row.report else None
+        out["placed"] = asdict(row.placed) if row.placed is not None else None
+        return out
+
+    where.write_text(json.dumps([plain(r) for r in rows], indent=1, default=str))
+    return where
+
+
+def load_progress(where: Path) -> List[Progress]:
+    """...and back, for a build that has the page but not the collection."""
+    import json
+
+    from pixel_patrol_deepsea.reports import Placed
+
+    rows = []
+    for raw in json.loads(where.read_text()):
+        placed = raw.pop("placed", None)
+        row = Progress(**{k: v for k, v in raw.items() if k != "report"})
+        row.report = Path(raw["report"]) if raw.get("report") else None
+        row.placed = Placed(**placed) if placed else None
+        rows.append(row)
     return rows
 
 
@@ -345,31 +381,6 @@ def _frame_size(report: Path) -> tuple:
     return 640, 360
 
 
-def _sources_of(report: Path, summary) -> List[Dict[str, str]]:
-    """Where this expedition's recordings came from.
-
-    The report knows, where the loader wrote a source_url onto each record - which
-    is the case for anything read out of a manifest. Otherwise fall back to the
-    sources.json a fetch script leaves behind.
-    """
-    import polars as pl
-
-    from pixel_patrol_deepsea.reports import read_sources
-
-    try:
-        table = pl.read_parquet(report, columns=["source_url"])
-        urls = sorted({u for u in table["source_url"].drop_nulls().to_list() if u})
-    except Exception:
-        urls = []
-    if urls:
-        return [{"url": url, "label": Path(url.split("?")[0]).name} for url in urls]
-    noted = read_sources(report.parent.parent)
-    if noted:
-        return [{"url": entry["url"], "label": entry.get("cited_as") or name}
-                for name, entry in sorted(noted.items()) if name in summary.names]
-    return _sources_from_manifest(report, summary)
-
-
 def _sources_from_manifest(report: Path, summary) -> List[Dict[str, str]]:
     """The URLs the manifest listed, for the recordings that got analysed.
 
@@ -415,8 +426,6 @@ def _read_report(report: Path, row: Progress) -> None:
     row.recordings = summary.recordings
     row.stills = summary.stills
     row.slices = summary.slices
-    row.best = dict(summary.taxa)
-    row.sources = _sources_of(report, summary)
     row.placed = summary.placed
     # Animals straight out of the report, where the detector left them - minus the
     # ROV's own arm, which a fish detector reports as a fish for as long as it is
@@ -497,7 +506,13 @@ def write_catalogue_page(root: Path, output: Optional[Path] = None,
                 index = json.loads(beside.read_text())
             except Exception:
                 index = None
-    rows = read_progress(root)
+    # From the reports where they are, from the file they were saved to where they
+    # are not - which is how a runner with neither builds the same page.
+    beside = root / PROGRESS
+    rows = load_progress(beside) if beside.is_file() and not (root / "parquet").is_dir() \
+        else read_progress(root)
+    if not beside.is_file() or (root / "parquet").is_dir():
+        save_progress(rows, beside)
     output.write_text(render(rows, index, data_url=data_url))
     return output
 

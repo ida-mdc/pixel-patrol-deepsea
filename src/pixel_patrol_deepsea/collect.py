@@ -423,6 +423,37 @@ def build_site(root: Path, data_url: str = "") -> int:
     return 0
 
 
+def build_page(root: Path, data_url: str = "") -> int:
+    """The light half of a site: the page and the viewer, and no collection.
+
+    `site` needs the reports - it cuts the tile store out of them, reads the
+    expedition table out of them, draws the banner from their colours. That is
+    fifteen gigabytes and a minute of reading, and it is exactly what a runner
+    building a page does not have.
+
+    This builds the same page from what `site` left behind: `collection.json` for
+    the table, `tiles/index.json` for the taxonomy, and the code for everything
+    else. Both are small enough to keep, and the pictures stay wherever
+    `--data-url` says they are.
+    """
+    from pixel_patrol_base import api
+
+    from pixel_patrol_deepsea.catalogue_page import PROGRESS, write_catalogue_page
+
+    root.mkdir(parents=True, exist_ok=True)
+    if not (root / PROGRESS).is_file():
+        print(f"no {PROGRESS} in {root} - `collect site` writes it beside the page",
+              file=sys.stderr)
+        return 1
+    api.build_viewer(root)
+    _stamp_plugin_urls(root / "viewer")
+    _write_taxonomy(root)
+    page = write_catalogue_page(root, data_url=data_url)
+    said = "over " + data_url if data_url else "with everything beside it"
+    print(f"{page} {said}")
+    return 0
+
+
 def _stamp_plugin_urls(viewer: Path) -> None:
     """Put each plugin's own content hash in the URL the viewer asks for.
 
@@ -570,6 +601,12 @@ def main(argv=None) -> int:
                       help="where tiles/ and parquet/ will be served from, if not "
                            "from beside the page")
 
+    paging = verbs.add_parser("page", help="the page and the viewer alone, from what "
+                                          "`site` wrote beside them")
+    paging.add_argument("root", type=Path)
+    paging.add_argument("--data-url", default="",
+                        help="where tiles/ and parquet/ are served from")
+
     serving = verbs.add_parser("serve", help="serve a built collection on localhost, "
                                             "byte ranges and all")
     serving.add_argument("root", type=Path)
@@ -604,6 +641,8 @@ def main(argv=None) -> int:
         return merge(args.expedition, args.parts, args.output, clips=args.with_clips)
     if args.verb == "score":
         return score(args.expedition, args.root)
+    if args.verb == "page":
+        return build_page(args.root, args.data_url)
     if args.verb == "serve":
         from pixel_patrol_deepsea.serve import serve
         return serve(args.root, args.port, args.host)

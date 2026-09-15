@@ -50,6 +50,12 @@ $collect serve collection/                                          # look at it
 
 `run` is the expensive verb and the only one that touches video; `list`, `choose`, `one`
 and `merge` are its steps, for when a scheduler wants them separately.
+
+`collect site` also writes `collection.json` beside the page - the expedition table,
+90 KB - so the page can be rebuilt from that and the tile index alone. That is what
+`collect page` does and what the GitHub Action in `.github/workflows/` runs: the
+pictures and the reports stay on the storage, and only the 46 MB that has to be
+served from the same origin as the HTML is built.
 `nextflow/main.nf` runs those across a cluster: `LIST → SELECT → ANALYSE → MERGE → SITE`.
 
 Choosing matters more than it sounds: a deep dive spends hours descending through open
