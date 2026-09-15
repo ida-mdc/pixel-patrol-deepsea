@@ -372,7 +372,11 @@ body { min-width: 900px; }
   .readout { grid-template-columns: repeat(2, 1fr); }
   .readout .cell:nth-child(3) { border-left: 0; padding-left: 6vw; }
 }
-@media (max-width: 900px) {
+/* 899, not 900: the page declares itself 900 wide, so a phone's viewport is exactly
+   900 and `max-width: 900px` would fire on it - stacking the sunburst above the wall
+   on the one device the two-column layout matters most on. The ring controls the
+   gallery, and its column is the part of the page you scroll past the wall with. */
+@media (max-width: 899px) {
   .hero { grid-template-columns: 1fr; gap: 1.5rem; padding: 2rem 6vw 2.6rem; }
   .alarm { justify-self: stretch; max-width: none; }
   .banner-says { position: static; text-align: left; margin-top: .6rem; }
