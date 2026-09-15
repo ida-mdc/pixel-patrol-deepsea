@@ -1,10 +1,10 @@
 """The expeditions we collect from, and how to find their videos.
 
 Analysing one dive is a demo; analysing an archive is the point. NOAA Ocean
-Exploration alone publishes on the order of ten thousand hours across a hundred
-and nineteen cruises, and nobody has watched most of it. That only becomes
-tractable if the list of what exists is data rather than a shell script, so it
-lives in `expeditions.yaml` and this module reads it.
+Exploration alone publishes a hundred and nineteen cruises, and this collection
+has read 1,811 recordings of the 18,301 those expeditions list. At that size the
+list of what exists has to be data rather than a shell script, so it lives in
+`expeditions.yaml` and this module reads it.
 
 Discovery is deliberately separate from analysis. Listing an expedition costs a
 handful of HTTP requests and tells you what is there; analysing it costs hours.

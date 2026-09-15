@@ -1,9 +1,10 @@
 # PixelPatrol Deep-Sea (`pixel-patrol-deepsea`)
 
-A prototype. It reads deep-sea video nobody has watched — NOAA Ocean Exploration's dive
-tapes, MBARI's annotated [DeepSea-MOT](https://huggingface.co/datasets/MBARI-org/DeepSea-MOT)
-sequences, the cabled camera at Axial Seamount — and answers the first question anyone has
-of ten thousand hours of footage: **which minutes are worth a person's time.**
+A prototype. It reads published deep-sea dive video — NOAA Ocean Exploration's tapes,
+MBARI's annotated [DeepSea-MOT](https://huggingface.co/datasets/MBARI-org/DeepSea-MOT)
+sequences, the cabled camera at Axial Seamount — measures what moved in every slice,
+runs an object detector over a frame a second, and puts the result on one page that can
+be searched.
 
 Seventeen expeditions, 274 hours, 2000 to 2026. Nothing is copied: every recording is read
 from the archive that published it, and the collection page opens the archive's own file at
@@ -36,7 +37,7 @@ except the naming of animals.
 ## Using it
 
 An expedition is an entry in `expeditions.yaml` — a listing URL, how deep to walk it, which
-files to take. Adding one is the whole of "collect this too".
+files to take. That entry is all that "collect this too" requires.
 
 ```bash
 collect="python -m pixel_patrol_deepsea.collect"
@@ -120,10 +121,10 @@ benchmark does not label — it tracks a chosen set of animals rather than claim
 else is in frame.
 
 **A confident name is not a correct name.** Against five midwater clips named after the
-specimen in them, the detector was right twice — emphatically right where the animal is in
-its vocabulary, and wrong at 0.94 on both siphonophores and a lobate ctenophore, reaching
-for `trachylinae` every time. The confidence sort ranks *what to look at*, not *what it
-is*, which is why every name this package writes says it is a guess.
+specimen in them, the detector was right on two: correct where the animal is in its
+vocabulary, and wrong at 0.94 on both siphonophores and on a lobate ctenophore, reaching
+for `trachylinae` each time. Confidence ranks what to look at, not what it is, which is
+why every name this package writes says it is a guess.
 
 `collect score` re-measures all of it against whatever ground truth an expedition has.
 
