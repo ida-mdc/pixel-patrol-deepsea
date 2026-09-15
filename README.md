@@ -14,14 +14,14 @@ It is an extension for [PixelPatrol](https://github.com/ida-mdc/pixel-patrol) �
 that measure each slice of footage, a loader that reads an expedition manifest, and widgets
 for the static viewer.
 
-## Look at it
+## The collection page
 
-### **[→ the collection page](https://ida-mdc.github.io/pixel-patrol-deepsea/)**
+**[https://ida-mdc.github.io/pixel-patrol-deepsea/](https://ida-mdc.github.io/pixel-patrol-deepsea/)**
 
 Every animal the detector found, arranged by the ranks the World Register of Marine
-Species puts above the names it used. Pick a name, or click into the rings, and the wall
-fills with every sighting of it — most confident first. Hovering a tile plays the seconds
-around that animal; clicking it opens the archive's own recording at that moment, with the
+Species puts above the names it used. Picking a name, or clicking into the rings, fills
+the wall with the sightings of it, most confident first. Hovering a tile plays the seconds
+around that animal; clicking it opens the archive's own recording at that moment with the
 detector's box drawn over the frame.
 
 One name, one page of its wall:
@@ -32,28 +32,27 @@ One name, one page of its wall:
 
 ![](docs/screenshots/wall-anemones.jpg)
 
-### Read this before you believe any of it
+### Disclaimer
 
-If you came here as someone who knows these animals, the page is useful to you in one
-direction only: it will show you where to look. It will not tell you what you are looking
-at.
+The classification is a [FathomNet](https://fathomnet.org)-trained YOLOv5 checkpoint —
+499 classes, trained on MBARI imagery, run over one frame a second of footage it was not
+trained on. The ranks above those names come from the
+[World Register of Marine Species](https://www.marinespecies.org/); the names themselves
+come from the model.
 
-- **Every name is one detector's guess.** A FathomNet YOLOv5 checkpoint, one frame at a
-  time, on footage it was not trained on. Read a name as a shortlist of one, not as an
-  identification — and see the numbers below for how often it is wrong at high confidence.
-- **The counts are ceilings, not censuses.** One animal drifting through five slices can
-  be counted more than once, and the detector reads one frame a second.
-- **Most of the footage was never read.** The deepest dives were chosen and sampled within
-  their bottom time: 1,811 recordings of the 18,301 those expeditions publish.
-- **Nothing on the page has been checked by a person.** Look at the third wall above —
-  among the anemones there is a frame of somebody's orange hard hat on deck. That is the
-  error rate being visible rather than hidden, and it is the honest state of it.
-- **The ranks are borrowed, the names are not.** Ranks and identifiers come from WoRMS;
-  the names they organise come from the model.
+- A name on the page is that model's output for a single frame. It is not an
+  identification.
+- Counts are upper bounds. One animal crossing several slices can be counted more than
+  once.
+- Coverage is a sample: 1,811 recordings of the 18,301 these expeditions publish, taking
+  the deepest dives first and sampling within their bottom time.
+- Nothing is manually curated. No sighting has been verified or corrected one by one.
+- Measured against the one benchmark here with a box around every animal, the detector
+  finds 0.68 of them at 0.91 precision — see [Does it work](#does-it-work) for the rest
+  of that, including where it is confidently wrong.
 
-Corrections are worth more to this than anything else in it. If a wall is wrong in a way
-that matters, the sighting has a permanent link — the star button collects them and the
-page exports them as CSV with the recording, the timecode and the box.
+Every sighting has a permanent link. Starred sightings export as CSV with the recording,
+the timecode and the box.
 
 ## Installing
 
