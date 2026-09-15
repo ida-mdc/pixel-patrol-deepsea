@@ -569,18 +569,25 @@ const PREVIEW_HEIGHT = 168;
  * And the precision column is a floor rather than a figure: cropping the confident
  * boxes DeepSea-MOT has no annotation under shows real sea pens and shrimp the
  * benchmark did not label, so the true precision is higher than any of these.
+ *
+ * Which is why none of it is in the labels below. The figures are one benchmark's -
+ * five annotated MBARI sequences, mostly midwater, at the resolution MBARI
+ * published them at - and a dropdown on a report says them about the report it is
+ * sitting on. On a 2004 tape of an Alaskan seamount at 360x240 nobody has measured
+ * what a floor of 0.06 does, and the selector should not imply otherwise. It names
+ * the floor; the widget's own notes say where the only numbers we have came from.
  */
-const CONFIDENCE_FLOORS = [
-  { label: 'any confidence - 91% right, 68% of them', value: 0 },
-  { label: 'over 0.04 - 95% right, 65% of them', value: 0.04 },
-  { label: 'over 0.06 - 97% right, 62% of them', value: 0.06 },
-  { label: 'over 0.37 - 99% right, 43% of them', value: 0.37 },
+export const CONFIDENCE_FLOORS = [
+  { label: 'any confidence', value: 0 },
+  { label: 'over 0.04', value: 0.04 },
+  { label: 'over 0.06', value: 0.06 },
+  { label: 'over 0.37', value: 0.37 },
 ];
 // Open on everything. The floors below say what each one costs and a reader can
 // pick one, but the report's own job is to show what it found - starting from a
 // filtered view means the first thing a reader sees is a smaller number than the
 // report actually contains, with no indication that a control did that.
-const DEFAULT_FLOOR = 0;
+export const DEFAULT_FLOOR = 0;
 
 const LENGTHS = [
   { label: 'any length', value: 1 },
@@ -1896,6 +1903,10 @@ const galleryWidget = {
     'because a one-slice stretch is a threshold crossing rather than an encounter. Both hide real',
     'things as well - loosen them and look.',
     '',
+    'What a floor costs has only been measured on five annotated MBARI sequences, mostly',
+    'midwater: 0.06 kept 62% of the animals at 97% precision there. Nobody has measured it on',
+    'this footage, and the numbers do not carry across cameras and scenes.',
+    '',
     '**Download timecodes** writes the ranked list as CSV, species and confidence included.',
   ].join('\n'),
 
@@ -2690,6 +2701,10 @@ const taxonomyWidget = {
     'phylum are grey.',
     '',
     'The **confidence floor** drops detections the detector was less sure of than the chosen value.',
+    'What that buys is unmeasured here. Where it has been measured - five MBARI sequences with',
+    'a box around every animal, mostly midwater - a floor of 0.06 kept 62% of the animals and',
+    'was right about 97% of what it kept, and a floor of 0.37 kept 43% at 99%. That is one',
+    'benchmark at one resolution, not a property of this footage.',
     '',
     '- One count is one **animal**, not one detection: a sea pen seen in forty slices is one sea pen.',
     '- Lineages come from the **World Register of Marine Species**, resolved once for the detector\'s whole vocabulary.',

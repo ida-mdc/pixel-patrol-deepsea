@@ -1,11 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { findWindows, WINDOW_KINDS, eventsToCsv, renderSpeciesFilter,
+import allWidgets, { findWindows, WINDOW_KINDS, eventsToCsv, renderSpeciesFilter,
          sliceAt, describeMoment, animateStills, keptByKind, reportFindsThings,
          keptByQuality, parseAnimals, animalFrames, sunburstOf, lineageOf, trunkOf,
          branchColours, scaleColour, measuredColours, oneEach, asRate, verdictSource,
          sayWhatTheRateDid, taxonColour, compositionTraces, accumulationTraces,
          profileTraces, howFlat, intoDives, appendEventStrip, fetchTimelines,
-         verdictSource, framesToPlay, pictureUrl, triageColumns }
+         verdictSource, framesToPlay, pictureUrl, triageColumns,
+         CONFIDENCE_FLOORS, DEFAULT_FLOOR }
   from '../../src/pixel_patrol_deepsea/viewer/plugin_deepsea.js';
 
 /** A timeline of per-slice movement values, one slice every `step` frames. */
@@ -1403,6 +1404,34 @@ describe('the per-slice measurements the triage offers', () => {
       expect(col.why.text.length).toBeGreaterThan(40);
       expect(col.why.hintUp).toBeTruthy();
       expect(col.why.hintDown).toBeTruthy();
+    }
+  });
+});
+
+describe('the confidence floor selector', () => {
+  it('names the floor and claims nothing about it', () => {
+    // The figures it used to carry - "91% right, 68% of them" - are one benchmark's,
+    // five annotated MBARI sequences at MBARI's resolution. In a dropdown sitting on
+    // a 2004 tape of an Alaskan seamount they read as a fact about that tape, and
+    // nobody has measured what a floor does there.
+    for (const floor of CONFIDENCE_FLOORS) {
+      expect(floor.label).not.toMatch(/%/);
+      expect(floor.label).not.toMatch(/right/);
+      expect(typeof floor.value).toBe('number');
+    }
+    expect(CONFIDENCE_FLOORS.map(f => f.label)).toContain('any confidence');
+  });
+
+  it('opens on everything, so the first number is the report\'s own', () => {
+    expect(DEFAULT_FLOOR).toBe(0);
+  });
+
+  it('keeps the measurement in the notes, with what it was measured on', () => {
+    const notes = allWidgets.filter(w => ['temporal-taxonomy', 'temporal-gallery'].includes(w.id));
+    expect(notes).toHaveLength(2);
+    for (const w of notes) {
+      expect(w.info).toMatch(/MBARI/);
+      expect(w.info).toMatch(/measured/);
     }
   });
 });
