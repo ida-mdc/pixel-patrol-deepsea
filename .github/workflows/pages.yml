@@ -56,12 +56,34 @@ jobs:
           python-version: '3.12'
           cache: pip
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: pixel-patrol/viewer/package-lock.json
+
+      # The viewer is a Vite app, and `viewer_dist` - the built copy that
+      # pixel-patrol-base ships and `build_viewer` copies out - is gitignored in
+      # that repository because it is build output. A fresh clone has none, so it
+      # is built here. Seven seconds.
+      - name: Build the viewer
+        working-directory: pixel-patrol/viewer
+        run: |
+          npm ci
+          npm run build
+
       # `--no-deps` on this package on purpose: its dependencies include torch,
       # which is most of a gigabyte and is for reading footage. A page build reads
       # no footage. What it does need comes with pixel-patrol-base.
+      #
+      # pixel-patrol-geospatial is here for one reason: it is the other package
+      # that declares a `pixel_patrol.viewer_extensions` entry point, and without
+      # it installed the viewer is built without the map widget - silently, which
+      # is how the collection went a fortnight with no map on it.
       - name: Install
         run: |
-          pip install ./pixel-patrol/packages/pixel-patrol-base
+          pip install ./pixel-patrol/packages/pixel-patrol-base \
+                      ./pixel-patrol/packages/pixel-patrol-geospatial
           pip install -e . --no-deps
           pip install pyyaml pillow
 
@@ -82,10 +104,20 @@ jobs:
           python -m pixel_patrol_deepsea.collect page build --data-url "$PP_DATA_URL"
           rm -rf build/tiles
 
+      # A viewer missing an extension still builds, still serves and still looks
+      # fine - it is just missing a widget. So it is counted rather than trusted.
       - name: Say what was built
         run: |
           du -sh build
           grep -o 'window.PP_TILES = "[^"]*"' build/index.html
+          test -f build/viewer/extensions/*/plugin_map_viewer.js \
+            || { echo "::error::the viewer was built without the map widget"; exit 1; }
+          python - <<'PY'
+          import json, pathlib, sys
+          listed = json.loads(pathlib.Path("build/viewer/pp_extension_urls.json").read_text())
+          print(f"{len(listed)} viewer extensions:", *listed, sep="\n  ")
+          sys.exit(0 if len(listed) >= 3 else 1)
+          PY
 
       - uses: actions/upload-pages-artifact@v3
         with:
