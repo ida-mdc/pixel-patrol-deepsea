@@ -2233,6 +2233,16 @@ function sliceSource(ctx) {
  * and a box once there are more points than are worth sending to the browser.
  * Doing that by hand is how you end up with a violin of one observation.
  */
+// What the viewer identifies a row by. Every other widget hands the distribution
+// engine a table, which carries it; this is the one that hands over a subquery, and
+// a subquery only has the columns it selects. Leaving it out cost nothing until the
+// engine picked a violin or a points plot - the two modes that ask a row where it
+// came from so a click can open it - and then the query it built could not bind,
+// which duckdb-wasm's MVP build reports as `_setThrew is not defined` rather than as
+// the missing column it is.
+const ROW_ID = 'file_row_number';
+
+
 /** Where a verdict's per-recording shares come from: the report, by name.
  *
  * This used to carry the numbers themselves. The verdicts were computed in the
@@ -2252,7 +2262,8 @@ export function verdictSource(ctx, kind) {
   return {
     table: `(SELECT ${recordingKey(ctx)} AS recording, ${groupExpr(ctx)} AS grp,
                     ${literal(label)} AS verdict,
-                    100.0 * ${q(verdictSeconds(kind))} / ${q(FOOTAGE_SECONDS)} AS share
+                    100.0 * ${q(verdictSeconds(kind))} / ${q(FOOTAGE_SECONDS)} AS share,
+                    ${q(ROW_ID)} AS ${q(ROW_ID)}
              FROM ${sliceTable(ctx)}
              WHERE ${q('dim_t')} IS NULL AND ${q(FOOTAGE_SECONDS)} > 0
                AND ${q(verdictSeconds(kind))} IS NOT NULL) AS verdicts`,

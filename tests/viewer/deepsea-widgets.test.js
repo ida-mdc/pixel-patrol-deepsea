@@ -1349,3 +1349,30 @@ describe('nothing is ever aliased `at`', () => {
   });
 });
 
+
+describe('what the triage hands the distribution engine', () => {
+  const ctx = {
+    schema: { allCols: ['name', 'dim_t', 'slice_verdict', 'footage_seconds',
+                        'verdict_seconds_frozen', 'file_row_number'] },
+    sql: { q: (n) => `"${n}"` },
+    state: {},
+  };
+
+  it('carries the row id, because a subquery only has what it selects', () => {
+    // Every other widget hands the engine a table, which has every column. This one
+    // builds a subquery, and the engine's violin and points modes ask each row where
+    // it came from - `SELECT …, "file_row_number" AS frn FROM (…)`. Without it the
+    // query cannot bind, and duckdb-wasm's MVP build reports that as
+    // `_setThrew is not defined` rather than as a missing column.
+    const source = verdictSource(ctx, 'frozen');
+    expect(source.table).toContain('"file_row_number"');
+  });
+
+  it('still selects what the plot is of', () => {
+    const source = verdictSource(ctx, 'frozen');
+    for (const wanted of ['AS recording', 'AS grp', 'AS verdict', 'AS share']) {
+      expect(source.table).toContain(wanted);
+    }
+    expect(source.where).toBe("WHERE verdict = 'Frozen'");
+  });
+});
