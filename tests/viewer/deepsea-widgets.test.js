@@ -5,7 +5,7 @@ import { findWindows, WINDOW_KINDS, eventsToCsv, renderSpeciesFilter,
          branchColours, scaleColour, measuredColours, oneEach, asRate, verdictSource,
          sayWhatTheRateDid, taxonColour, compositionTraces, accumulationTraces,
          profileTraces, howFlat, intoDives, appendEventStrip, fetchTimelines,
-         verdictSource, framesToPlay, pictureUrl }
+         verdictSource, framesToPlay, pictureUrl, triageColumns }
   from '../../src/pixel_patrol_deepsea/viewer/plugin_deepsea.js';
 
 /** A timeline of per-slice movement values, one slice every `step` frames. */
@@ -1374,5 +1374,35 @@ describe('what the triage hands the distribution engine', () => {
       expect(source.table).toContain(wanted);
     }
     expect(source.where).toBe("WHERE verdict = 'Frozen'");
+  });
+});
+
+describe('the per-slice measurements the triage offers', () => {
+  const offered = (cols) => triageColumns({ allCols: cols }).map(c => c.col);
+
+  it('offers the ones a report was measured for and no others', () => {
+    expect(offered(['frame_difference', 'depth_m'])).toEqual(['frame_difference', 'depth_m']);
+    expect(offered(['frame_difference'])).toEqual(['frame_difference']);
+  });
+
+  it('plots what was measured and went unplotted', () => {
+    // All three are in every report this collection holds and nothing showed them:
+    // the area of the movers beside their count, how far off the bottom the vehicle
+    // was, and how much colour survived the water.
+    const all = ['frame_difference', 'detection_count', 'camera_speed',
+                 'moving_object_count', 'moving_object_area', 'depth_m',
+                 'altitude_m', 'colourfulness'];
+    expect(offered(all)).toEqual(all);
+  });
+
+  it('says what each one means and which way is worse', () => {
+    for (const col of triageColumns({ allCols: ['moving_object_area', 'altitude_m',
+                                                'colourfulness'] })) {
+      expect(col.label).toBeTruthy();
+      expect(col.unit).toBeTruthy();
+      expect(col.why.text.length).toBeGreaterThan(40);
+      expect(col.why.hintUp).toBeTruthy();
+      expect(col.why.hintDown).toBeTruthy();
+    }
   });
 });

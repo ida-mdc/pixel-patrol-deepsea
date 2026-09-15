@@ -2029,8 +2029,8 @@ const triageWidget = {
   required_inputs: ['frame_difference', 'dim_<axis>'],
   inputs: ['frame_difference_max', 'laplacian_variance', 'std_intensity',
     'bright_particle_count', 'detection_count', 'detection_top_class',
-    'detection_confidence', 'detections', 'moving_object_count', 'camera_speed',
-    'depth_m', 'recorded_at',
+    'detection_confidence', 'detections', 'moving_object_count', 'moving_object_area',
+    'camera_speed', 'depth_m', 'altitude_m', 'colourfulness', 'recorded_at',
     'fps', 'name', 'path', 'child_id', 'source_url'],
   group: 'Summary',
   scope: 'slice',
@@ -2375,7 +2375,7 @@ const VERDICT_NOTES = {
  * optional, and naming a column that is not there is a SQL error rather than an
  * empty plot.
  */
-function triageColumns(schema) {
+export function triageColumns(schema) {
   const wanted = [
     { col: 'frame_difference', label: 'Movement', unit: 'mean absolute difference',
       why: { text: 'How much the picture changes between frames. This is what the '
@@ -2399,12 +2399,31 @@ function triageColumns(schema) {
                + 'animal no detector has a category for.',
              hintUp: 'more independent movers to look at',
              hintDown: 'a still scene, or only the camera moving' } },
+    { col: 'moving_object_area', label: 'How much is moving', unit: 'share of the frame',
+      why: { text: 'The area those movers cover, where the count beside it is how '
+               + 'many there are. The two together separate the two things that '
+               + 'look alike to a count: one animal crossing the frame, and a '
+               + 'snowstorm of particulate drifting through it.',
+             hintUp: 'something large in frame, or a lot of drifting matter',
+             hintDown: 'a few small movers' } },
     { col: 'depth_m', label: 'Depth', unit: 'metres',
       why: { text: 'Where the archive published navigation beside the video. Not a '
                + 'triage signal so much as the context for one: what is worth '
                + 'watching on a shelf and at four thousand metres are different '
                + 'questions.',
              hintUp: 'deeper', hintDown: 'shallower' } },
+    { col: 'altitude_m', label: 'Height off the bottom', unit: 'metres',
+      why: { text: 'How far the vehicle was above the seabed, which is the context '
+               + 'every particle measurement needs: the same drifting specks are '
+               + 'animals in open water and resuspended sediment a metre off the '
+               + 'bottom. Published by the archive, not measured here.',
+             hintUp: 'in the water column', hintDown: 'working the seabed' } },
+    { col: 'colourfulness', label: 'Colourfulness', unit: 'Hasler-Susstrunk score',
+      why: { text: 'How much colour is left in the frame. A kilometre of water and '
+               + 'a vehicle\'s own lamps take the red out of everything, so this is '
+               + 'mostly how close and how lit the subject was - and how much is '
+               + 'hanging in the water between it and the camera.',
+             hintUp: 'a close, lit subject', hintDown: 'open water, or murk' } },
   ];
   return wanted.filter(({ col }) => schema.allCols.includes(col));
 }
