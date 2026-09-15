@@ -57,7 +57,13 @@ describe('footage widgets', () => {
     expect(typeof w.label).toBe('string');
     expect(typeof w.render).toBe('function');
     expect(typeof w.requires).toBe('function');
-    expect(['Summary', 'Visualization']).toContain(w.group);
+    // Not pixel-patrol's own group names. Those are `Summary` and `Visualization`,
+    // which say where a widget sits and nothing about what it assesses; the viewer
+    // renders an unknown group as its own heading, so these say what the reader is
+    // being shown. Every widget has to be in one of them - a widget with no group
+    // lands in "Other Widgets" at the bottom, which is how one gets lost.
+    expect(['Footage quality and coverage', 'What was found', 'Where and when'])
+      .toContain(w.group);
     expect(['file', 'image', 'slice']).toContain(w.scope);
   });
 
@@ -82,6 +88,24 @@ describe('footage widgets', () => {
       for (const col of w.required_inputs ?? []) {
         expect(col).not.toMatch(/^dim_[a-z]$/);   // catalog uses the dim_<axis> pattern
       }
+    }
+  });
+});
+
+describe('what a widget is called', () => {
+  it('never calls it triage', () => {
+    // A word from a hospital. It tells a reader of a deep-sea report nothing about
+    // what is being assessed, and nothing about what to expect from the widget.
+    const said = JSON.stringify(widgets.map(w => [w.label, w.shortLabel, w.group]));
+    expect(said.toLowerCase()).not.toContain('triage');
+  });
+
+  it('says what it is about rather than what shape it is', () => {
+    // `Depth` and `When` were true and useless: every report has a depth and a
+    // clock, and neither title said what the widget makes of them.
+    for (const w of widgets) {
+      expect(w.label.length).toBeGreaterThan(5);
+      expect(['Depth', 'When', 'Summary', 'Visualization']).not.toContain(w.label);
     }
   });
 });
